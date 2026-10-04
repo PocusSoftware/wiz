@@ -7,7 +7,8 @@ Fast, macOS-only SSH client in Rust. Frontend: GPUI (pending Xcode). Backend in 
   known_hosts verification (TOFU, hard fail on changed key), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
   (remote over SSH, local via bollard).
-- Todo: `crates/app` GPUI frontend (needs Xcode + Metal toolchain), ssh-agent, jump hosts, SFTP.
+- SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop, conflict prompts, rsync hint for big transfers.
+- Todo: ssh-agent, jump hosts, startup time measurement.
 
 ## Test
 ```sh

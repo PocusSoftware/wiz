@@ -146,6 +146,7 @@ impl Render for TextInput {
             .px_2()
             .flex()
             .items_center()
+            .overflow_hidden()
             .rounded(px(2.))
             .bg(c(ELEMENT))
             .border_2()

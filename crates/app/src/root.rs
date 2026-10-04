@@ -17,6 +17,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use crate::docker_view::{DockerEvent, DockerView};
 use crate::host_form::{FormEvent, HostForm};
 use crate::runtime;
+use crate::sftp_view::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::terminal_view::TerminalView;
 use crate::theme::*;
 use crate::ui::{button, icon, icon_button, primary_button};
@@ -58,11 +59,15 @@ struct Live {
 enum Open {
     Shell,
     Docker,
+    Sftp,
+    /// Connect a host and attach it to one pane of an open SFTP tab.
+    SftpSource(gpui::WeakEntity<SftpView>, SftpSide),
 }
 
 enum TabKind {
     Terminal(Entity<TerminalView>),
     Docker(Entity<DockerView>),
+    Sftp(Entity<SftpView>),
     Logs(Vec<SharedString>),
 }
 
@@ -149,6 +154,10 @@ impl Root {
         self.home = false;
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => t.read(cx).focus(window),
+            TabKind::Sftp(v) => {
+                let h = v.read(cx).focus_handle(cx);
+                window.focus(&h)
+            }
             _ => window.focus(&self.focus),
         }
         cx.notify();
@@ -271,6 +280,91 @@ impl Root {
                     window,
                     cx,
                 );
+            }
+            Open::Sftp => {
+                let label = format!("{} · files", host.name);
+                let names: Vec<String> = self.cfg.hosts.iter().map(|h| h.name.clone()).collect();
+                cx.spawn_in(window, async move |this, cx| {
+                    let c = conn.clone();
+                    let r = runtime::spawn(async move { c.open_sftp().await }).await;
+                    this.update_in(cx, |this, window, cx| match r {
+                        Ok(sftp) => {
+                            let remote = SftpSource::Remote(RemoteRef {
+                                label: host.name.clone(),
+                                host: host.clone(),
+                                sftp: Arc::new(sftp),
+                            });
+                            let view =
+                                cx.new(|cx| SftpView::new(SftpSource::Local, remote, names, cx));
+                            cx.subscribe_in(
+                                &view,
+                                window,
+                                |this, view, ev: &SftpEvent, window, cx| {
+                                    this.on_sftp_event(view.downgrade(), ev, window, cx)
+                                },
+                            )
+                            .detach();
+                            view.update(cx, |v, cx| v.load(cx));
+                            this.push_tab(
+                                Tab {
+                                    label: label.into(),
+                                    kind: TabKind::Sftp(view),
+                                },
+                                window,
+                                cx,
+                            );
+                        }
+                        Err(e) => {
+                            this.set_status(format!("{}: {e}", host.name), true);
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+            }
+            Open::SftpSource(view, side) => {
+                cx.spawn_in(window, async move |this, cx| {
+                    let c = conn.clone();
+                    let r = runtime::spawn(async move { c.open_sftp().await }).await;
+                    this.update_in(cx, |this, _, cx| match r {
+                        Ok(sftp) => {
+                            let src = SftpSource::Remote(RemoteRef {
+                                label: host.name.clone(),
+                                host: host.clone(),
+                                sftp: Arc::new(sftp),
+                            });
+                            view.update(cx, |v, cx| v.set_source(side, src, cx)).ok();
+                        }
+                        Err(e) => {
+                            this.set_status(format!("{}: {e}", host.name), true);
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+            }
+        }
+    }
+
+    fn on_sftp_event(
+        &mut self,
+        view: gpui::WeakEntity<SftpView>,
+        ev: &SftpEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match ev {
+            SftpEvent::PickHost { side, host: None } => {
+                view.update(cx, |v, cx| v.set_source(*side, SftpSource::Local, cx))
+                    .ok();
+            }
+            SftpEvent::PickHost {
+                side,
+                host: Some(ix),
+            } => {
+                self.open_host(*ix, Open::SftpSource(view, *side), window, cx);
             }
         }
     }
@@ -493,6 +587,14 @@ impl Root {
                                     t.open_host(ix, Open::Docker, w, cx)
                                 })),
                         )
+                        .child(
+                            icon_button(("h-sftp", ix), "folder", "Files (SFTP)", MUTED).on_click(
+                                cx.listener(move |t, _, w, cx| {
+                                    cx.stop_propagation();
+                                    t.open_host(ix, Open::Sftp, w, cx)
+                                }),
+                            ),
+                        )
                         .child(div().flex_1())
                         .child(
                             icon_button(("h-edit", ix), "pencil", "Edit host", MUTED).on_click(
@@ -570,6 +672,7 @@ impl Root {
             let tab_icon = match tab.kind {
                 TabKind::Terminal(_) => "terminal",
                 TabKind::Docker(_) => "container",
+                TabKind::Sftp(_) => "folder",
                 TabKind::Logs(_) => "logs",
             };
             div()
@@ -665,6 +768,7 @@ impl Root {
         match self.tabs.get(self.active).map(|t| &t.kind) {
             Some(TabKind::Terminal(v)) => v.clone().into_any_element(),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
+            Some(TabKind::Sftp(v)) => v.clone().into_any_element(),
             Some(TabKind::Logs(lines)) => div()
                 .id("logs")
                 .size_full()

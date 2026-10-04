@@ -28,7 +28,7 @@ pub const PLACEHOLDER: u32 = 0x808085;
 pub const ACCENT: u32 = 0xf05a29;
 pub const ACCENT_TEXT: u32 = 0xf87c49;
 pub const SELECTION: u32 = 0x4a2a1e;
-pub const SELECTED_ROW: u32 = 0xf05a2940;
+pub const SELECTED_ROW: u32 = 0xf05a2966;
 pub const GREEN: u32 = 0x8fbf8a;
 pub const RED: u32 = 0xe5534b;
 pub const YELLOW: u32 = 0xe3b341;
@@ -58,7 +58,7 @@ fn pick(
 pub fn init_fonts(available: &[String], s: &ssh_core::config::Settings) {
     let _ = UI.set(pick(
         s.ui_font.as_deref(),
-        &["IBM Plex Sans", "Input Sans", "Inter"],
+        &["IBM Plex Sans", "Noto Sans", "Inter", "Input Sans"],
         available,
         ".SystemUIFont",
     ));
