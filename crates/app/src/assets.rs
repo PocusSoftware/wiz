@@ -43,7 +43,8 @@ icons!(
     "castle",
     "sliders",
     "pin",
-    "chevron-right"
+    "chevron-right",
+    "columns"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

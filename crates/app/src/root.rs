@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,7 +30,15 @@ use crate::ui::{button, icon, icon_button, primary_button};
 
 actions!(
     app,
-    [Quit, CloseTab, NextTab, PrevTab, NewHost, OpenSettings]
+    [
+        Quit,
+        CloseTab,
+        NextTab,
+        PrevTab,
+        NewHost,
+        OpenSettings,
+        SplitPane
+    ]
 );
 
 struct TrustRequest {
@@ -102,7 +110,21 @@ struct Pending {
     name: String,
     host: String,
     port: u16,
+    /// More opens clicked while this connect was running (a second shell, files...).
+    queued: Vec<Open>,
     _cancel: oneshot::Sender<()>,
+}
+
+/// Most terminals side by side in one tab.
+const MAX_PANES: usize = 4;
+
+/// A terminal tab: one shell, or several split side by side, all on one connection.
+struct TermTab {
+    panes: Vec<Entity<TerminalView>>,
+    /// Pane that had focus last; gets it back when the tab is selected.
+    focused: usize,
+    conn: Arc<Connection>,
+    password: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -127,13 +149,15 @@ enum Open {
 }
 
 enum TabKind {
-    Terminal(Entity<TerminalView>),
+    Terminal(TermTab),
     Docker(Entity<DockerView>),
     Sftp(Entity<SftpView>),
     Logs(Entity<LogView>),
 }
 
 struct Tab {
+    /// Stable across reordering and closing, unlike the index.
+    id: u64,
     label: SharedString,
     kind: TabKind,
 }
@@ -149,12 +173,15 @@ pub struct Root {
     settings: Option<Entity<SettingsView>>,
     pending: Vec<Pending>,
     next_pending: u64,
+    next_tab: u64,
     /// Host groups folded shut on the hosts page.
     collapsed: HashSet<String>,
     /// Bumped whenever the visible page changes, to replay the page fade.
     epoch: u64,
     form: Option<Entity<HostForm>>,
-    trust: Option<TrustRequest>,
+    /// Host key prompts, one shown at a time. A queue, so connecting to several new
+    /// servers at once asks about each of them in turn.
+    trust: VecDeque<TrustRequest>,
     trust_tx: UnboundedSender<TrustRequest>,
     status: Option<(SharedString, bool)>,
     focus: FocusHandle,
@@ -190,7 +217,7 @@ impl Root {
         cx.spawn(async move |this, cx| {
             while let Some(req) = trust_rx.recv().await {
                 this.update(cx, |t, cx| {
-                    t.trust = Some(req);
+                    t.trust.push_back(req);
                     cx.notify();
                 })
                 .ok()?;
@@ -208,10 +235,11 @@ impl Root {
             settings: None,
             pending: Vec::new(),
             next_pending: 0,
+            next_tab: 0,
             collapsed: HashSet::new(),
             epoch: 0,
             form: None,
-            trust: None,
+            trust: VecDeque::new(),
             trust_tx,
             status,
             focus: cx.focus_handle(),
@@ -231,8 +259,20 @@ impl Root {
 
     // ---------- tabs ----------
 
-    fn push_tab(&mut self, tab: Tab, window: &mut Window, cx: &mut Context<Self>) {
-        self.tabs.push(Tab { ..tab });
+    fn push_tab(
+        &mut self,
+        label: String,
+        kind: TabKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let id = self.next_tab;
+        self.next_tab += 1;
+        self.tabs.push(Tab {
+            id,
+            label: label.into(),
+            kind,
+        });
         self.select_tab(self.tabs.len() - 1, window, cx);
     }
 
@@ -247,7 +287,11 @@ impl Root {
         self.active = ix;
         self.page = Page::Tab;
         match &self.tabs[ix].kind {
-            TabKind::Terminal(t) => t.read(cx).focus(window),
+            TabKind::Terminal(t) => {
+                if let Some(p) = t.panes.get(t.focused).or(t.panes.first()) {
+                    p.read(cx).focus(window)
+                }
+            }
             TabKind::Sftp(v) => {
                 let h = v.read(cx).focus_handle(cx);
                 window.focus(&h)
@@ -314,8 +358,9 @@ impl Root {
             }
             self.conns.remove(&account);
         }
-        if self.pending.iter().any(|p| p.account == account) {
-            // Already connecting: a second click must not open a second session.
+        if let Some(p) = self.pending.iter_mut().find(|p| p.account == account) {
+            // Already connecting: open this one too once the connection is up.
+            p.queued.push(what);
             return;
         }
         let (cancel_tx, mut cancel_rx) = oneshot::channel();
@@ -327,6 +372,7 @@ impl Root {
             name: host.name.clone(),
             host: host.host.clone(),
             port: host.port,
+            queued: Vec::new(),
             _cancel: cancel_tx,
         });
         self.status = None;
@@ -374,7 +420,7 @@ impl Root {
                 let Some(pos) = this.pending.iter().position(|p| p.id == id) else {
                     return;
                 };
-                this.pending.remove(pos);
+                let queued = std::mem::take(&mut this.pending.remove(pos).queued);
                 let exists = this.cfg.hosts.iter().any(|h| h.account() == account);
                 match r {
                     Ok(Some((conn, pw))) if exists => {
@@ -386,7 +432,16 @@ impl Root {
                                 password: pw.clone(),
                             },
                         );
-                        this.finish_open(host, conn, pw, what, window, cx);
+                        for what in std::iter::once(what).chain(queued) {
+                            this.finish_open(
+                                host.clone(),
+                                conn.clone(),
+                                pw.clone(),
+                                what,
+                                window,
+                                cx,
+                            );
+                        }
                     }
                     Ok(_) => {}
                     Err(e) => {
@@ -412,14 +467,13 @@ impl Root {
 
     /// Answer "no" to an open host key prompt for this address.
     fn dismiss_trust(&mut self, host: &str, port: u16) {
-        if self
-            .trust
-            .as_ref()
-            .is_some_and(|t| t.host == host && t.port == port)
-            && let Some(t) = self.trust.take()
-        {
-            let _ = t.reply.send(false);
-        }
+        self.trust.retain(|t| {
+            let hit = t.host == host && t.port == port;
+            if hit {
+                let _ = t.reply.send(false);
+            }
+            !hit
+        });
     }
 
     fn finish_open(
@@ -449,14 +503,7 @@ impl Root {
                     },
                 )
                 .detach();
-                self.push_tab(
-                    Tab {
-                        label: label.into(),
-                        kind: TabKind::Docker(view),
-                    },
-                    window,
-                    cx,
-                );
+                self.push_tab(label, TabKind::Docker(view), window, cx);
             }
             Open::Sftp => {
                 let label = format!("{} · files", host.name);
@@ -487,14 +534,7 @@ impl Root {
                             )
                             .detach();
                             view.update(cx, |v, cx| v.load(cx));
-                            this.push_tab(
-                                Tab {
-                                    label: label.into(),
-                                    kind: TabKind::Sftp(view),
-                                },
-                                window,
-                                cx,
-                            );
+                            this.push_tab(label, TabKind::Sftp(view), window, cx);
                         }
                         Err(e) => {
                             this.set_status(format!("{}: {e}", host.name), true);
@@ -570,19 +610,47 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.spawn_shell(label, conn, password, command, None, window, cx);
+    }
+
+    /// Open a shell as a new tab, or as a new pane of tab `split_into` (a tab id).
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_shell(
+        &mut self,
+        label: String,
+        conn: Arc<Connection>,
+        password: Option<String>,
+        command: Option<String>,
+        split_into: Option<u64>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.spawn_in(window, async move |this, cx| {
-            let r =
-                runtime::spawn(async move { conn.open_shell(100, 30, command.as_deref()).await })
-                    .await;
+            let c = conn.clone();
+            let r = runtime::spawn(async move { c.open_shell(100, 30, command.as_deref()).await })
+                .await;
             this.update_in(cx, |this, window, cx| match r {
                 Ok(shell) => {
-                    let view = cx.new(|cx| TerminalView::new(shell, password, cx));
+                    let view = cx.new(|cx| TerminalView::new(shell, password.clone(), cx));
                     cx.observe(&view, |_, _, cx| cx.notify()).detach();
+                    let target =
+                        split_into.and_then(|id| this.tabs.iter().position(|t| t.id == id));
+                    if let Some(ix) = target
+                        && let TabKind::Terminal(t) = &mut this.tabs[ix].kind
+                    {
+                        t.panes.push(view);
+                        t.focused = t.panes.len() - 1;
+                        this.select_tab(ix, window, cx);
+                        return;
+                    }
                     this.push_tab(
-                        Tab {
-                            label: label.into(),
-                            kind: TabKind::Terminal(view),
-                        },
+                        label,
+                        TabKind::Terminal(TermTab {
+                            panes: vec![view],
+                            focused: 0,
+                            conn,
+                            password,
+                        }),
                         window,
                         cx,
                     );
@@ -595,6 +663,64 @@ impl Root {
             .ok();
         })
         .detach();
+    }
+
+    /// Index of the pane holding keyboard focus in terminal tab `t`.
+    fn focused_pane(t: &TermTab, window: &Window, cx: &App) -> usize {
+        t.panes
+            .iter()
+            .position(|p| p.focus_handle(cx).contains_focused(window, cx))
+            .unwrap_or(t.focused.min(t.panes.len().saturating_sub(1)))
+    }
+
+    /// Open another shell on the same server, beside the current one.
+    fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab {
+            return;
+        }
+        let Some(tab) = self.tabs.get(self.active) else {
+            return;
+        };
+        let TabKind::Terminal(t) = &tab.kind else {
+            return;
+        };
+        if t.panes.len() >= MAX_PANES {
+            self.set_status(format!("A tab holds at most {MAX_PANES} terminals."), true);
+            cx.notify();
+            return;
+        }
+        if t.conn.is_closed() {
+            self.set_status("The connection for this tab has closed.", true);
+            cx.notify();
+            return;
+        }
+        let (id, label, conn, pw) = (
+            tab.id,
+            tab.label.to_string(),
+            t.conn.clone(),
+            t.password.clone(),
+        );
+        self.spawn_shell(label, conn, pw, None, Some(id), window, cx);
+    }
+
+    /// ⌘W: close the focused pane of a split, otherwise the whole tab.
+    fn close_current(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let ix = self.active;
+        if let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get(ix)
+            && t.panes.len() > 1
+        {
+            let pane = Self::focused_pane(t, window, cx);
+            if let TabKind::Terminal(t) = &mut self.tabs[ix].kind {
+                t.panes.remove(pane);
+                t.focused = pane.min(t.panes.len() - 1);
+            }
+            self.select_tab(ix, window, cx);
+            return;
+        }
+        self.close_tab(ix, window, cx);
     }
 
     fn on_docker_event(
@@ -622,14 +748,7 @@ impl Root {
             DockerEvent::Logs { name, id, backend } => {
                 let (id, backend) = (id.clone(), backend.clone());
                 let view = cx.new(|cx| LogView::new(backend, id, cx));
-                self.push_tab(
-                    Tab {
-                        label: format!("{name} · logs").into(),
-                        kind: TabKind::Logs(view),
-                    },
-                    window,
-                    cx,
-                );
+                self.push_tab(format!("{name} · logs"), TabKind::Logs(view), window, cx);
             }
         }
     }
@@ -645,14 +764,7 @@ impl Root {
                         this.on_docker_event(ev, None, window, cx)
                     })
                     .detach();
-                    this.push_tab(
-                        Tab {
-                            label: "Local Docker".into(),
-                            kind: TabKind::Docker(view),
-                        },
-                        window,
-                        cx,
-                    );
+                    this.push_tab("Local Docker".into(), TabKind::Docker(view), window, cx);
                 }
                 Err(e) => {
                     this.set_status(format!("Docker: {e}"), true);
@@ -749,7 +861,11 @@ impl Root {
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         for tab in &self.tabs {
             match &tab.kind {
-                TabKind::Terminal(v) => v.update(cx, |_, cx| cx.notify()),
+                TabKind::Terminal(t) => {
+                    for p in &t.panes {
+                        p.update(cx, |_, cx| cx.notify());
+                    }
+                }
                 TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
                 TabKind::Sftp(v) => v.update(cx, |v, cx| v.settings_changed(cx)),
                 TabKind::Logs(v) => v.update(cx, |_, cx| cx.notify()),
@@ -1053,11 +1169,16 @@ impl Root {
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
-            if let TabKind::Terminal(t) = &tab.kind
-                && let Some(title) = t.read(cx).title()
-                && !title.is_empty()
-            {
-                text = format!("{text} · {}", privacy::redact(&title));
+            if let TabKind::Terminal(t) = &tab.kind {
+                if let Some(p) = t.panes.get(t.focused)
+                    && let Some(title) = p.read(cx).title()
+                    && !title.is_empty()
+                {
+                    text = format!("{text} · {}", privacy::redact(&title));
+                }
+                if t.panes.len() > 1 {
+                    text = format!("{text} ({})", t.panes.len());
+                }
             }
             let tab_icon = match tab.kind {
                 TabKind::Terminal(_) => "terminal",
@@ -1160,6 +1281,19 @@ impl Root {
                     .px(px(4.))
                     .flex()
                     .items_center()
+                    .when(
+                        self.page == Page::Tab
+                            && matches!(
+                                self.tabs.get(self.active).map(|t| &t.kind),
+                                Some(TabKind::Terminal(_))
+                            ),
+                        |d| {
+                            d.child(
+                                icon_button("split-btn", "columns", "Split terminal (⌘D)", MUTED)
+                                    .on_click(cx.listener(|t, _, w, cx| t.split(w, cx))),
+                            )
+                        },
+                    )
                     .child(
                         icon_button(
                             "hide-btn",
@@ -1206,7 +1340,21 @@ impl Root {
             _ => return self.home_view(cx),
         }
         match self.tabs.get(self.active).map(|t| &t.kind) {
-            Some(TabKind::Terminal(v)) => v.clone().into_any_element(),
+            Some(TabKind::Terminal(t)) if t.panes.len() == 1 => {
+                t.panes[0].clone().into_any_element()
+            }
+            Some(TabKind::Terminal(t)) => div()
+                .size_full()
+                .flex()
+                .children(t.panes.iter().enumerate().map(|(i, p)| {
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .when(i > 0, |d| d.border_l_1().border_color(c(BORDER)))
+                        .child(p.clone())
+                }))
+                .into_any_element(),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
             Some(TabKind::Sftp(v)) => v.clone().into_any_element(),
             Some(TabKind::Logs(v)) => v.clone().into_any_element(),
@@ -1232,7 +1380,16 @@ impl Focusable for Root {
 }
 
 impl Render for Root {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Remember which split pane has focus, for the tab title and for re-selecting the tab.
+        if self.page == Page::Tab
+            && let Some(Tab {
+                kind: TabKind::Terminal(t),
+                ..
+            }) = self.tabs.get_mut(self.active)
+        {
+            t.focused = Self::focused_pane(t, window, cx);
+        }
         static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
         if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed) {
             crate::mark("first render");
@@ -1250,7 +1407,7 @@ impl Render for Root {
                 (id, 0usize),
             )
         };
-        let trust_dialog = self.trust.as_ref().map(|req| {
+        let trust_dialog = self.trust.front().map(|req| {
             overlay(
                 "trust",
                 div()
@@ -1293,7 +1450,7 @@ impl Render for Root {
                             .gap_2()
                             .child(button("trust-no", "Cancel").on_click(cx.listener(
                                 |t, _, _, cx| {
-                                    if let Some(r) = t.trust.take() {
+                                    if let Some(r) = t.trust.pop_front() {
                                         let _ = r.reply.send(false);
                                     }
                                     cx.notify();
@@ -1301,7 +1458,7 @@ impl Render for Root {
                             )))
                             .child(primary_button("trust-yes", "Trust and connect").on_click(
                                 cx.listener(|t, _, _, cx| {
-                                    if let Some(r) = t.trust.take() {
+                                    if let Some(r) = t.trust.pop_front() {
                                         let _ = r.reply.send(true);
                                     }
                                     cx.notify();
@@ -1320,8 +1477,9 @@ impl Render for Root {
             .id("root")
             .track_focus(&self.focus)
             .key_context("Root")
+            .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
-                Page::Tab => t.close_tab(t.active, w, cx),
+                Page::Tab => t.close_current(w, cx),
                 Page::Settings => t.show_page(Page::Home, w, cx),
                 Page::Home => {}
             }))

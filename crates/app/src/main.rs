@@ -21,7 +21,7 @@ use gpui::{
     WindowOptions, point, prelude::*, px, size,
 };
 
-use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root};
+use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root, SplitPane};
 
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
 pub fn version() -> String {
@@ -88,12 +88,14 @@ fn main() {
                 KeyBinding::new("ctrl-shift-tab", PrevTab, None),
                 KeyBinding::new("cmd-n", NewHost, None),
                 KeyBinding::new("cmd-,", OpenSettings, None),
+                KeyBinding::new("cmd-d", SplitPane, None),
             ]);
             cx.set_menus(vec![Menu {
                 name: "Bastion".into(),
                 items: vec![
                     MenuItem::action("Settings...", OpenSettings),
                     MenuItem::action("New Host", NewHost),
+                    MenuItem::action("Split Terminal", SplitPane),
                     MenuItem::action("Close Tab", CloseTab),
                     MenuItem::separator(),
                     MenuItem::action("Quit", Quit),
