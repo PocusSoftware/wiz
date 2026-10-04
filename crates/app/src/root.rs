@@ -177,9 +177,12 @@ impl Root {
         if ix >= self.tabs.len() {
             return;
         }
+        // Re-selecting the current page only refocuses it; the enter animation is for changes.
+        if self.home || ix != self.active {
+            self.epoch += 1;
+        }
         self.active = ix;
         self.home = false;
-        self.epoch += 1;
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => t.read(cx).focus(window),
             TabKind::Sftp(v) => {
@@ -863,8 +866,10 @@ impl Root {
                     .hover(|s| s.bg(c(PANEL)))
                     .tooltip(crate::ui::tip("Hosts"))
                     .on_click(cx.listener(|t, _, w, cx| {
-                        t.home = true;
-                        t.epoch += 1;
+                        if !t.home {
+                            t.home = true;
+                            t.epoch += 1;
+                        }
                         w.focus(&t.focus);
                         cx.notify();
                     }))
