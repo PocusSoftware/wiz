@@ -1,0 +1,15 @@
+# Test SSH servers. Run docker/gen-keys.sh first.
+services:
+  ssh-password:
+    build: .
+    container_name: sshc-password
+    environment: { MODE: password }
+    ports: ["2222:22"]
+  ssh-key:
+    build: .
+    container_name: sshc-key
+    environment: { MODE: key }
+    ports: ["2223:22"]
+    volumes:
+      - ./keys:/keys:ro
+      - /var/run/docker.sock:/var/run/docker.sock

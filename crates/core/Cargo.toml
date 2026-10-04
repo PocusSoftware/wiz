@@ -1,0 +1,23 @@
+[package]
+name = "ssh-core"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+alacritty_terminal = "0.26.0"
+bollard = "0.21.1"
+dirs = "7.0.0"
+futures-util = "0.3.34"
+russh = "0.63.3"
+security-framework = "3.7.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "net"] }
+toml = "1.1.6"
+
+[dev-dependencies]
+crossterm = "0.29.0"
+tempfile = "3.27.0"
+tokio = { version = "1.53.2", features = ["signal"] }
