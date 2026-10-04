@@ -37,3 +37,6 @@ Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Ner
 - `cargo build --profile fast -p ssh-app` for optimized local runs (incremental, no LTO, a few seconds).
 - `cargo build --release -p ssh-app` for the shipped binary (thin LTO, one codegen unit, 1-3 minutes).
 - SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).
+
+## Data locations
+Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.ssh-client/`. Passwords and key passphrases are in the Keychain. Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.

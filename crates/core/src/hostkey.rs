@@ -29,8 +29,7 @@ pub struct HostKeyVerifier {
 
 impl HostKeyVerifier {
     pub fn default_path() -> Result<PathBuf> {
-        let dir = dirs::config_dir().ok_or_else(|| Error::Config("no config dir".into()))?;
-        Ok(dir.join(crate::APP_ID).join("known_hosts"))
+        Ok(crate::config_dir()?.join("known_hosts"))
     }
 
     /// Ok if the key is known and matches, or unknown and the user trusts it.

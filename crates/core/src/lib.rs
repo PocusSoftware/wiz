@@ -14,3 +14,14 @@ pub use error::{Error, Result};
 
 /// Keychain service name and config directory name.
 pub const APP_ID: &str = "dev.enty.ssh-client";
+
+/// Where hosts, known_hosts and settings live. `SSHC_CONFIG_DIR` overrides it (used by
+/// tests so they never touch real data).
+pub fn config_dir() -> Result<std::path::PathBuf> {
+    if let Some(d) = std::env::var_os("SSHC_CONFIG_DIR") {
+        return Ok(d.into());
+    }
+    dirs::config_dir()
+        .map(|d| d.join(APP_ID))
+        .ok_or_else(|| Error::Config("no config dir".into()))
+}

@@ -102,7 +102,21 @@ impl Root {
         let cfg = match Config::load(&cfg_path) {
             Ok(c) => c,
             Err(e) => {
-                status = Some((format!("Could not read hosts: {e}").into(), true));
+                // Keep the unreadable file: the next save would otherwise overwrite it.
+                let backup = cfg_path.with_extension("toml.bak");
+                let kept = std::fs::copy(&cfg_path, &backup).is_ok();
+                status = Some((
+                    format!(
+                        "Could not read hosts: {e}{}",
+                        if kept {
+                            format!(" (copy kept as {})", backup.display())
+                        } else {
+                            String::new()
+                        }
+                    )
+                    .into(),
+                    true,
+                ));
                 Config::default()
             }
         };

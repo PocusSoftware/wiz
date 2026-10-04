@@ -43,8 +43,7 @@ pub struct Config {
 
 impl Config {
     pub fn default_path() -> Result<PathBuf> {
-        let dir = dirs::config_dir().ok_or_else(|| Error::Config("no config dir".into()))?;
-        Ok(dir.join(crate::APP_ID).join("hosts.toml"))
+        Ok(crate::config_dir()?.join("hosts.toml"))
     }
 
     pub fn load(path: &Path) -> Result<Self> {
@@ -110,10 +109,10 @@ pub struct Settings {
 
 impl Settings {
     pub fn load() -> Self {
-        let Some(dir) = dirs::config_dir() else {
+        let Ok(dir) = crate::config_dir() else {
             return Self::default();
         };
-        let path = dir.join(crate::APP_ID).join("settings.toml");
+        let path = dir.join("settings.toml");
         std::fs::read_to_string(path)
             .ok()
             .and_then(|s| toml::from_str(&s).ok())
