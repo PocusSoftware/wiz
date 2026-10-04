@@ -245,7 +245,11 @@ impl LogView {
     ) -> Vec<gpui::Stateful<gpui::Div>> {
         let sel = self.selection();
         range
-            .filter_map(|ix| self.lines.get(ix).map(|l| (ix, l.clone())))
+            .filter_map(|ix| {
+                self.lines
+                    .get(ix)
+                    .map(|l| (ix, crate::privacy::redact(l).into_owned()))
+            })
             .map(|(ix, line)| {
                 let chars: Vec<char> = line.chars().collect();
                 // Selected column range on this line, if any.

@@ -24,6 +24,7 @@ Optional `~/Library/Application Support/dev.enty.ssh-client/settings.toml`:
 ui_font = "IBM Plex Sans"
 terminal_font = "JetBrainsMono Nerd Font"
 terminal_font_size = 13.0
+hide_sensitive = false
 ```
 Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Nerd Font, then Menlo.
 
@@ -43,3 +44,6 @@ Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.
 
 ## App bundle and icon
 `scripts/bundle.sh` builds `dist/Bastion.app` (release binary, castle icon, ad-hoc signature). The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/castle.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.
+
+## Hide sensitive information
+Settings (sliders icon in the title bar, or ⌘,) has a "Hide sensitive information" switch. It masks hostnames, IP addresses and usernames (configured hosts and users, the local user, and any IPv4 address) in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. Masking keeps text length, so layout and selections do not shift. Host and user fields in the add/edit form show bullets until focused. Copying still copies the real text.

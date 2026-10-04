@@ -10,7 +10,19 @@ use gpui::{
     TextRun, Window, canvas, div, point, prelude::*, px, size,
 };
 
+use crate::privacy;
 use crate::theme::*;
+
+/// How the input behaves when "hide sensitive information" is on and it is not focused.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Hide {
+    /// Always readable.
+    Never,
+    /// Mask known hostnames, IPs and usernames inside the text.
+    Redact,
+    /// Show only bullets.
+    Full,
+}
 
 pub struct TextInput {
     text: String,
@@ -18,6 +30,7 @@ pub struct TextInput {
     cursor: usize,
     anchor: usize,
     masked: bool,
+    hide_mode: Hide,
     placeholder: SharedString,
     focus: FocusHandle,
     /// Where the text is painted, captured during paint, for click positioning.
@@ -38,6 +51,7 @@ impl TextInput {
             cursor: 0,
             anchor: 0,
             masked,
+            hide_mode: Hide::Never,
             placeholder: placeholder.to_string().into(),
             focus: cx.focus_handle(),
             text_bounds: Rc::new(Cell::new(Bounds::default())),
@@ -45,6 +59,15 @@ impl TextInput {
             font_size: px(12.),
             dragging: false,
         }
+    }
+
+    pub fn set_hide_mode(&mut self, mode: Hide) {
+        self.hide_mode = mode;
+    }
+
+    /// True when the text is currently shown masked because of the privacy setting.
+    fn hidden_view(&self, focused: bool) -> bool {
+        !focused && privacy::hide() && !self.text.is_empty() && self.hide_mode != Hide::Never
     }
 
     pub fn value(&self) -> &str {
@@ -150,18 +173,23 @@ impl TextInput {
         true
     }
 
-    /// Display string and a map from display char index to byte index in `text`.
-    fn display(&self) -> String {
+    /// What is painted. Hidden views never show a caret or selection.
+    fn display(&self, focused: bool) -> String {
         if self.masked {
-            "•".repeat(self.text.chars().count())
-        } else {
-            self.text.clone()
+            return "•".repeat(self.text.chars().count());
         }
+        if self.hidden_view(focused) {
+            return match self.hide_mode {
+                Hide::Full => "•".repeat(self.text.chars().count()),
+                _ => privacy::redact(&self.text).into_owned(),
+            };
+        }
+        self.text.clone()
     }
 
     /// Byte index in `text` for a window x coordinate.
     fn index_for_x(&self, window: &Window, x: Pixels) -> usize {
-        let shown = self.display();
+        let shown = self.display(true);
         if shown.is_empty() {
             return 0;
         }
@@ -290,7 +318,15 @@ impl TextInput {
     }
 
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let was_focused = self.focus.is_focused(window);
         window.focus(&self.focus);
+        if self.hidden_view(was_focused) {
+            // The text was masked, so there is nothing to aim at: just reveal and edit.
+            self.move_to(self.text.len(), false);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         let idx = self.index_for_x(window, ev.position.x);
         match ev.click_count {
             0 | 1 => {
@@ -335,7 +371,8 @@ impl Render for TextInput {
         self.font = style.font();
         self.font_size = style.font_size.to_pixels(window.rem_size());
 
-        let shown = self.display();
+        let hidden = self.hidden_view(focused);
+        let shown = self.display(focused);
         // Byte offsets into `shown` (bullets are 3 bytes each).
         let to_shown = |byte: usize| -> usize {
             if self.masked {
@@ -344,9 +381,18 @@ impl Render for TextInput {
                 byte
             }
         };
-        let sel = self.selection();
-        let (s, e) = (to_shown(sel.start), to_shown(sel.end));
-        let caret_at = to_shown(self.cursor);
+        // A hidden view paints masked text whose byte offsets differ from `text`, so it must
+        // never be sliced with cursor or selection offsets.
+        let (s, e, caret_at) = if hidden {
+            (0, 0, 0)
+        } else {
+            let sel = self.selection();
+            (
+                to_shown(sel.start),
+                to_shown(sel.end),
+                to_shown(self.cursor),
+            )
+        };
         let caret = || {
             div()
                 .w(px(1.))
@@ -356,7 +402,9 @@ impl Render for TextInput {
         };
 
         let mut row = div().flex().items_center().whitespace_nowrap();
-        if self.has_selection() {
+        if hidden {
+            row = row.child(shown.clone());
+        } else if self.has_selection() {
             row = row.child(shown[..s].to_string());
             if caret_at == s && focused {
                 row = row.child(caret());

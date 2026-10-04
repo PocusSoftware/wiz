@@ -4,6 +4,7 @@ mod docker_view;
 mod host_form;
 mod input;
 mod log_view;
+mod privacy;
 mod root;
 mod rsync;
 mod runtime;
@@ -18,7 +19,7 @@ use gpui::{
     WindowOptions, point, prelude::*, px, size,
 };
 
-use root::{CloseTab, NewHost, NextTab, PrevTab, Quit, Root};
+use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root};
 
 /// Set at process start; read by the first render when SSHC_TIMING is set.
 /// Print elapsed time since start when SSHC_TIMING is set.
@@ -73,10 +74,12 @@ fn main() {
                 KeyBinding::new("ctrl-tab", NextTab, None),
                 KeyBinding::new("ctrl-shift-tab", PrevTab, None),
                 KeyBinding::new("cmd-n", NewHost, None),
+                KeyBinding::new("cmd-,", OpenSettings, None),
             ]);
             cx.set_menus(vec![Menu {
                 name: "Bastion".into(),
                 items: vec![
+                    MenuItem::action("Settings...", OpenSettings),
                     MenuItem::action("New Host", NewHost),
                     MenuItem::action("Close Tab", CloseTab),
                     MenuItem::separator(),

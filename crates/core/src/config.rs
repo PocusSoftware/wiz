@@ -105,9 +105,23 @@ pub struct Settings {
     /// Font family for terminals.
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
+    /// Mask hostnames, IPs and usernames in the UI.
+    pub hide_sensitive: Option<bool>,
 }
 
 impl Settings {
+    /// Write to `settings.toml` (atomic rename, creates the folder).
+    pub fn save(&self) -> Result<()> {
+        let dir = crate::config_dir()?;
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join("settings.toml");
+        let s = toml::to_string_pretty(self).map_err(|e| Error::Config(e.to_string()))?;
+        let tmp = path.with_extension("toml.tmp");
+        std::fs::write(&tmp, s)?;
+        std::fs::rename(tmp, path)?;
+        Ok(())
+    }
+
     pub fn load() -> Self {
         let Ok(dir) = crate::config_dir() else {
             return Self::default();

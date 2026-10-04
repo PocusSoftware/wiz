@@ -15,7 +15,7 @@ use ssh_core::config::Host;
 use ssh_core::sftp::{self, Entry, Progress, Sftp, local};
 
 use crate::anim::{fade_in, pop_in};
-use crate::input::TextInput;
+use crate::input::{Hide, TextInput};
 use crate::rsync;
 use crate::runtime;
 use crate::theme::*;
@@ -196,7 +196,11 @@ impl Pane {
         Self {
             source,
             path: String::new(),
-            input: cx.new(|cx| TextInput::new("path", false, cx)),
+            input: {
+                let input = cx.new(|cx| TextInput::new("path", false, cx));
+                input.update(cx, |i, _| i.set_hide_mode(Hide::Redact));
+                input
+            },
             raw: vec![],
             entries: vec![],
             selected: BTreeSet::new(),

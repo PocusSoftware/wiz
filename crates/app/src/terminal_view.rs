@@ -557,6 +557,19 @@ fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
         );
     }
 
+    // Mask hostnames, IPs and usernames in place (same length, so columns never shift).
+    if crate::privacy::hide() {
+        for row in lines.iter_mut() {
+            let chars: Vec<char> = row.iter().map(|(ch, _)| *ch).collect();
+            for r in crate::privacy::ranges(&chars) {
+                for i in r {
+                    if row[i].0 != '\0' {
+                        row[i].0 = crate::privacy::mask_char();
+                    }
+                }
+            }
+        }
+    }
     Snapshot {
         lines,
         cw,

@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
     Render, SharedString, Window, actions, div, prelude::*, px,
 };
-use ssh_core::config::{AuthMethod, Config, Host};
+use ssh_core::config::{AuthMethod, Config, Host, Settings};
 use ssh_core::docker::{self, Backend};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
 use ssh_core::keychain::{self, Kind};
@@ -18,13 +18,17 @@ use crate::anim::{fade_in, pop_in, stagger_in};
 use crate::docker_view::{DockerEvent, DockerView};
 use crate::host_form::{FormEvent, HostForm};
 use crate::log_view::LogView;
+use crate::privacy;
 use crate::runtime;
 use crate::sftp_view::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::terminal_view::TerminalView;
 use crate::theme::*;
-use crate::ui::{button, icon, icon_button, primary_button};
+use crate::ui::{button, checkbox, icon, icon_button, primary_button};
 
-actions!(app, [Quit, CloseTab, NextTab, PrevTab, NewHost]);
+actions!(
+    app,
+    [Quit, CloseTab, NextTab, PrevTab, NewHost, OpenSettings]
+);
 
 struct TrustRequest {
     host: String,
@@ -80,6 +84,8 @@ struct Tab {
 
 pub struct Root {
     cfg: Config,
+    settings: Settings,
+    settings_open: bool,
     cfg_path: PathBuf,
     conns: HashMap<String, Live>,
     tabs: Vec<Tab>,
@@ -120,6 +126,9 @@ impl Root {
                 Config::default()
             }
         };
+        let settings = Settings::load();
+        privacy::set_hide(settings.hide_sensitive.unwrap_or(false));
+        refresh_privacy_tokens(&cfg);
         let (trust_tx, mut trust_rx) = unbounded_channel::<TrustRequest>();
         cx.spawn(async move |this, cx| {
             while let Some(req) = trust_rx.recv().await {
@@ -134,6 +143,8 @@ impl Root {
         .detach();
         Self {
             cfg,
+            settings,
+            settings_open: false,
             cfg_path,
             conns: HashMap::new(),
             tabs: vec![],
@@ -153,6 +164,7 @@ impl Root {
     }
 
     fn save_config(&mut self) {
+        refresh_privacy_tokens(&self.cfg);
         if let Err(e) = self.cfg.save(&self.cfg_path) {
             self.set_status(format!("Could not save hosts: {e}"), true);
         }
@@ -554,6 +566,81 @@ impl Root {
         cx.notify();
     }
 
+    // ---------- settings ----------
+
+    fn set_hide_sensitive(&mut self, on: bool, cx: &mut Context<Self>) {
+        privacy::set_hide(on);
+        self.settings.hide_sensitive = Some(on);
+        if let Err(e) = self.settings.save() {
+            self.set_status(format!("Could not save settings: {e}"), true);
+        }
+        // Child views repaint from their own state, so tell each one.
+        for tab in &self.tabs {
+            match &tab.kind {
+                TabKind::Terminal(v) => v.update(cx, |_, cx| cx.notify()),
+                TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
+                TabKind::Sftp(v) => v.update(cx, |_, cx| cx.notify()),
+                TabKind::Logs(v) => v.update(cx, |_, cx| cx.notify()),
+            }
+        }
+        cx.notify();
+    }
+
+    fn settings_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.settings_open {
+            return None;
+        }
+        let hide = privacy::hide();
+        Some(
+            div()
+                .absolute()
+                .size_full()
+                // Clicking anywhere outside the panel closes it.
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        t.settings_open = false;
+                        cx.notify();
+                    }),
+                )
+                .child(pop_in(
+                    div()
+                        .absolute()
+                        .occlude()
+                        .top(px(TITLEBAR_H + 2.))
+                        .right(px(8.))
+                        .w(px(310.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded(px(2.))
+                        .bg(c(ELEVATED))
+                        .border_2()
+                        .border_color(c(BORDER))
+                        .shadow_lg()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Settings"),
+                        )
+                        .child(
+                            checkbox("hide-sensitive", hide, "Hide sensitive information")
+                                .on_click(
+                                    cx.listener(move |t, _, _, cx| t.set_hide_sensitive(!hide, cx)),
+                                ),
+                        )
+                        .child(div().text_xs().text_color(c(PLACEHOLDER)).child(
+                            "Masks hostnames, IP addresses and usernames in host cards, terminals, \
+                             logs, paths and messages. Useful for screenshots and screen sharing.",
+                        )),
+                    "settings-pop",
+                ))
+                .into_any_element(),
+        )
+    }
+
     // ---------- render ----------
 
     /// Hosts as big square cards. With a handful of servers this beats a list.
@@ -601,12 +688,9 @@ impl Root {
                         )
                         .child(div().size(px(7.)).bg(c(if live { GREEN } else { ACTIVE }))),
                 )
-                .child(
-                    div()
-                        .text_color(c(MUTED))
-                        .whitespace_nowrap()
-                        .child(format!("{}@{}:{}", h.user, h.host, h.port)),
-                )
+                .child(div().text_color(c(MUTED)).whitespace_nowrap().child(
+                    privacy::redact(&format!("{}@{}:{}", h.user, h.host, h.port)).into_owned(),
+                ))
                 .child(
                     div()
                         .flex()
@@ -709,7 +793,7 @@ impl Root {
                 && let Some(title) = t.read(cx).title()
                 && !title.is_empty()
             {
-                text = format!("{text} · {title}");
+                text = format!("{text} · {}", privacy::redact(&title));
             }
             let tab_icon = match tab.kind {
                 TabKind::Terminal(_) => "terminal",
@@ -808,6 +892,24 @@ impl Root {
                 div().id("title-drag").flex_1().h_full(),
             ))
             .child(
+                div().h_full().px(px(4.)).flex().items_center().child(
+                    icon_button(
+                        "settings-btn",
+                        "sliders",
+                        "Settings (⌘,)",
+                        if self.settings_open || privacy::hide() {
+                            ACCENT_TEXT
+                        } else {
+                            MUTED
+                        },
+                    )
+                    .on_click(cx.listener(|t, _, _, cx| {
+                        t.settings_open = !t.settings_open;
+                        cx.notify();
+                    })),
+                ),
+            )
+            .child(
                 div()
                     .flex()
                     .h_full()
@@ -889,10 +991,15 @@ impl Render for Root {
                     .border_1()
                     .border_color(c(BORDER))
                     .child(div().text_sm().child("Trust this host?"))
-                    .child(div().child(format!(
-                        "{}:{} has not been seen before.",
-                        req.host, req.port
-                    )))
+                    .child(
+                        div().child(
+                            privacy::redact(&format!(
+                                "{}:{} has not been seen before.",
+                                req.host, req.port
+                            ))
+                            .into_owned(),
+                        ),
+                    )
                     .child(
                         div()
                             .text_xs()
@@ -951,6 +1058,10 @@ impl Render for Root {
                 }
             }))
             .on_action(cx.listener(|t, _: &NewHost, w, cx| t.open_form(None, w, cx)))
+            .on_action(cx.listener(|t, _: &OpenSettings, _, cx| {
+                t.settings_open = !t.settings_open;
+                cx.notify();
+            }))
             .size_full()
             .flex()
             .font_family(ui())
@@ -977,12 +1088,13 @@ impl Render for Root {
                                 .border_t_1()
                                 .border_color(c(BORDER_VARIANT))
                                 .text_color(c(if err { RED } else { MUTED }))
-                                .child(msg),
+                                .child(privacy::redact(&msg).into_owned()),
                         )
                     }),
             )
             .children(trust_dialog)
             .children(form)
+            .children(self.settings_panel(cx))
     }
 }
 
@@ -1004,4 +1116,17 @@ fn win_button(
         .hover(move |s| s.bg(c(hover)))
         .on_click(move |_, w, _| action(w))
         .child(icon(name, 14., TEXT))
+}
+
+/// Hosts and usernames (and the local user) that "hide sensitive information" masks.
+fn refresh_privacy_tokens(cfg: &Config) {
+    let mut tokens: Vec<String> = cfg
+        .hosts
+        .iter()
+        .flat_map(|h| [h.host.clone(), h.user.clone()])
+        .collect();
+    if let Some(u) = std::env::var_os("USER") {
+        tokens.push(u.to_string_lossy().into_owned());
+    }
+    privacy::set_tokens(tokens);
 }
