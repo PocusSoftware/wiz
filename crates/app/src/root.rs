@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
-    Render, SharedString, Window, actions, div, prelude::*, px,
+    Pixels, Render, SharedString, Window, actions, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
@@ -125,7 +125,25 @@ struct TermTab {
     focused: usize,
     conn: Arc<Connection>,
     password: Option<String>,
+    /// Width of each pane as a share of the tab, summing to 1. Dividers can be dragged.
+    sizes: Vec<f32>,
 }
+
+impl TermTab {
+    fn even_sizes(&mut self) {
+        let n = self.panes.len().max(1);
+        self.sizes = vec![1.0 / n as f32; n];
+    }
+}
+
+/// A split divider being dragged: which one, and where the mouse was last.
+struct PaneDrag {
+    divider: usize,
+    last_x: Pixels,
+}
+
+/// Narrowest a pane may be dragged, as a share of the tab.
+const MIN_PANE: f32 = 0.12;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -172,6 +190,7 @@ pub struct Root {
     /// Created on first visit, then kept so the page keeps its scroll position.
     settings: Option<Entity<SettingsView>>,
     pending: Vec<Pending>,
+    pane_drag: Option<PaneDrag>,
     next_pending: u64,
     next_tab: u64,
     /// Host groups folded shut on the hosts page.
@@ -236,6 +255,7 @@ impl Root {
             pending: Vec::new(),
             next_pending: 0,
             next_tab: 0,
+            pane_drag: None,
             collapsed: HashSet::new(),
             epoch: 0,
             form: None,
@@ -642,6 +662,7 @@ impl Root {
                     {
                         t.panes.push(view);
                         t.focused = t.panes.len() - 1;
+                        t.even_sizes();
                         this.select_tab(ix, window, cx);
                         return;
                     }
@@ -652,6 +673,7 @@ impl Root {
                             focused: 0,
                             conn,
                             password,
+                            sizes: vec![1.0],
                         }),
                         window,
                         cx,
@@ -715,14 +737,58 @@ impl Root {
             && t.panes.len() > 1
         {
             let pane = Self::focused_pane(t, window, cx);
-            if let TabKind::Terminal(t) = &mut self.tabs[ix].kind {
-                t.panes.remove(pane);
-                t.focused = pane.min(t.panes.len() - 1);
-            }
-            self.select_tab(ix, window, cx);
+            self.close_pane(ix, pane, window, cx);
             return;
         }
         self.close_tab(ix, window, cx);
+    }
+
+    /// Close one pane of a split terminal tab; the last pane closes the tab.
+    fn close_pane(&mut self, ix: usize, pane: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get_mut(ix)
+        else {
+            return;
+        };
+        if t.panes.len() <= 1 {
+            self.close_tab(ix, window, cx);
+            return;
+        }
+        if pane < t.panes.len() {
+            t.panes.remove(pane);
+            t.focused = pane.min(t.panes.len() - 1);
+            t.even_sizes();
+        }
+        self.select_tab(ix, window, cx);
+    }
+
+    /// Move a split divider with the mouse.
+    fn drag_divider(&mut self, x: Pixels, window: &Window, cx: &mut Context<Self>) {
+        let Some(drag) = self.pane_drag.as_mut() else {
+            return;
+        };
+        let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get_mut(self.active)
+        else {
+            return;
+        };
+        let (a, b) = (drag.divider, drag.divider + 1);
+        if b >= t.sizes.len() {
+            return;
+        }
+        // The terminal area spans the whole window width.
+        let width = window.viewport_size().width;
+        let delta = (x - drag.last_x) / width;
+        let pair = t.sizes[a] + t.sizes[b];
+        let left = (t.sizes[a] + delta).clamp(MIN_PANE, pair - MIN_PANE);
+        t.sizes[a] = left;
+        t.sizes[b] = pair - left;
+        drag.last_x = x;
+        cx.notify();
     }
 
     fn on_docker_event(
@@ -1171,17 +1237,17 @@ impl Root {
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
-            if let TabKind::Terminal(t) = &tab.kind {
-                if let Some(p) = t.panes.get(t.focused)
-                    && let Some(title) = p.read(cx).title()
-                    && !title.is_empty()
-                {
-                    text = format!("{text} · {}", privacy::redact(&title));
-                }
-                if t.panes.len() > 1 {
-                    text = format!("{text} ({})", t.panes.len());
-                }
+            if let TabKind::Terminal(t) = &tab.kind
+                && let Some(p) = t.panes.get(t.focused)
+                && let Some(title) = p.read(cx).title()
+                && !title.is_empty()
+            {
+                text = format!("{text} · {}", privacy::redact(&title));
             }
+            let panes = match &tab.kind {
+                TabKind::Terminal(t) => t.panes.len(),
+                _ => 1,
+            };
             let tab_icon = match tab.kind {
                 TabKind::Terminal(_) => "terminal",
                 TabKind::Docker(_) => "container",
@@ -1221,7 +1287,26 @@ impl Root {
                     13.,
                     if active { ACCENT_TEXT } else { MUTED },
                 ))
-                .child(div().overflow_hidden().whitespace_nowrap().child(text))
+                .child(
+                    div()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .child(text),
+                )
+                // Pane count of a split tab, outside the text so truncation never hides it.
+                .when(panes > 1, |d| {
+                    d.child(
+                        div()
+                            .flex_none()
+                            .px(px(4.))
+                            .rounded(px(2.))
+                            .bg(c(ACTIVE))
+                            .text_xs()
+                            .text_color(c(MUTED))
+                            .child(panes.to_string()),
+                    )
+                })
                 .child(
                     icon_button(("tab-close", ix), "x", "Close (⌘W)", MUTED)
                         .size(px(16.))
@@ -1345,18 +1430,131 @@ impl Root {
             Some(TabKind::Terminal(t)) if t.panes.len() == 1 => {
                 t.panes[0].clone().into_any_element()
             }
-            Some(TabKind::Terminal(t)) => div()
-                .size_full()
-                .flex()
-                .children(t.panes.iter().enumerate().map(|(i, p)| {
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .when(i > 0, |d| d.border_l_1().border_color(c(BORDER)))
-                        .child(p.clone())
-                }))
-                .into_any_element(),
+            Some(TabKind::Terminal(t)) => {
+                let tab_ix = self.active;
+                let mut row = div()
+                    .id("split")
+                    .size_full()
+                    .flex()
+                    .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, w, cx| {
+                        if this.pane_drag.is_some() {
+                            this.drag_divider(ev.position.x, w, cx);
+                        }
+                    }))
+                    .on_mouse_up(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _: &gpui::MouseUpEvent, _, cx| {
+                            if this.pane_drag.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    );
+                for (i, p) in t.panes.iter().enumerate() {
+                    if i > 0 {
+                        let dragging = self.pane_drag.as_ref().is_some_and(|d| d.divider == i - 1);
+                        row = row.child(
+                            div()
+                                .id(("divider", i))
+                                .flex_none()
+                                .w(px(5.))
+                                .h_full()
+                                .flex()
+                                .justify_center()
+                                .cursor_col_resize()
+                                .child(div().w(px(1.)).h_full().bg(c(if dragging {
+                                    ACCENT
+                                } else {
+                                    BORDER
+                                })))
+                                .hover(|s| s.bg(c(HOVER)))
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
+                                    cx.listener(move |this, ev: &gpui::MouseDownEvent, _, cx| {
+                                        this.pane_drag = Some(PaneDrag {
+                                            divider: i - 1,
+                                            last_x: ev.position.x,
+                                        });
+                                        cx.notify();
+                                    }),
+                                ),
+                        );
+                    }
+                    let focused = i == t.focused;
+                    let title = p
+                        .read(cx)
+                        .title()
+                        .filter(|t| !t.is_empty())
+                        .map(|t| privacy::redact(&t).into_owned())
+                        .unwrap_or_else(|| "shell".into());
+                    let share = t
+                        .sizes
+                        .get(i)
+                        .copied()
+                        .unwrap_or(1.0 / t.panes.len() as f32);
+                    let pane = p.clone();
+                    row = row.child(
+                        div()
+                            .flex_basis(gpui::relative(share))
+                            .flex_shrink()
+                            .min_w_0()
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .id(("pane-head", i))
+                                    .h(px(22.))
+                                    .flex_none()
+                                    .px(px(6.))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .border_b_1()
+                                    .border_color(c(BORDER_VARIANT))
+                                    .bg(c(if focused { PANEL } else { BG }))
+                                    .text_xs()
+                                    .text_color(c(if focused { TEXT } else { PLACEHOLDER }))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |_, _, w, cx| {
+                                        w.focus(&pane.focus_handle(cx));
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        div().w(px(6.)).h(px(6.)).flex_none().bg(c(if focused {
+                                            ACCENT
+                                        } else {
+                                            ACTIVE
+                                        })),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .child(title),
+                                    )
+                                    .child(
+                                        icon_button(("pane-close", i), "x", "Close pane", MUTED)
+                                            .size(px(16.))
+                                            .on_click(cx.listener(move |this, _, w, cx| {
+                                                cx.stop_propagation();
+                                                this.close_pane(tab_ix, i, w, cx)
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    // Dim the panes that don't have the keyboard.
+                                    .when(!focused, |d| d.opacity(0.6))
+                                    .child(p.clone()),
+                            ),
+                    );
+                }
+                row.into_any_element()
+            }
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
             Some(TabKind::Sftp(v)) => v.clone().into_any_element(),
             Some(TabKind::Logs(v)) => v.clone().into_any_element(),
