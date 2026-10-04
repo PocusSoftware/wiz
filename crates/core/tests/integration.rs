@@ -435,3 +435,80 @@ async fn sftp_server_to_server_and_local_copy() {
         s.remove(p).await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
+    use ssh_core::sftp::{self, Progress};
+    use std::sync::atomic::Ordering::Relaxed;
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let c = Connection::connect(
+        &host(2223, AuthMethod::Password),
+        &Credentials::Key {
+            path: keys().join("ed25519"),
+            passphrase: None,
+        },
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let sftp = c.open_sftp().await.unwrap();
+    let base = "/home/tester/loop-test";
+    c.exec(&format!("rm -rf {base}; mkdir -p {base}/t/sub; echo data > {base}/t/sub/f.txt; ln -s .. {base}/t/sub/up; ln -s sub/f.txt {base}/t/link-to-file"))
+        .await
+        .unwrap();
+
+    // Remote -> local: the loop link is skipped, the file link is followed, totals match.
+    let local = tempfile::tempdir().unwrap();
+    let p = Progress::new();
+    sftp.download(&sftp::join(base, "t"), &local.path().join("t"), &p)
+        .await
+        .unwrap();
+    assert_eq!(
+        p.done.load(Relaxed),
+        p.total.load(Relaxed),
+        "progress must end at exactly 100%"
+    );
+    assert_eq!(p.files.load(Relaxed), 2);
+    assert!(local.path().join("t/sub/f.txt").exists());
+    assert!(local.path().join("t/link-to-file").exists());
+    assert!(!local.path().join("t/sub/up").exists());
+
+    // Remote -> remote (same server, second session) with the remote loop.
+    let sftp2 = c.open_sftp().await.unwrap();
+    let p = Progress::new();
+    sftp.copy_to(
+        &sftp::join(base, "t"),
+        &sftp2,
+        &sftp::join(base, "t-copy"),
+        &p,
+    )
+    .await
+    .unwrap();
+    assert_eq!(p.done.load(Relaxed), p.total.load(Relaxed));
+    assert!(
+        !sftp2
+            .exists(&sftp::join(base, "t-copy/sub/up"))
+            .await
+            .unwrap()
+    );
+
+    // Local -> remote with a local loop.
+    let src = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(src.path().join("a")).unwrap();
+    std::fs::write(src.path().join("a/f"), "x").unwrap();
+    std::os::unix::fs::symlink(src.path(), src.path().join("a/loop")).unwrap();
+    let p = Progress::new();
+    sftp.upload(&src.path().join("a"), &sftp::join(base, "up-a"), &p)
+        .await
+        .unwrap();
+    assert_eq!(p.done.load(Relaxed), p.total.load(Relaxed));
+    assert!(!sftp.exists(&sftp::join(base, "up-a/loop")).await.unwrap());
+
+    // Local -> local with the same loop.
+    let p = Progress::new();
+    sftp::local::copy(&src.path().join("a"), &local.path().join("copy-a"), &p).unwrap();
+    assert_eq!(p.done.load(Relaxed), p.total.load(Relaxed));
+
+    sftp.remove(base).await.unwrap();
+}

@@ -13,5 +13,8 @@ alacritty_terminal = "0.26"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dirs = "7.0.0"
 gpui = "0.2.2"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSEvent", "NSApplication", "NSResponder", "NSView"] }
+raw-window-handle = "0.6"
 ssh-core = { path = "../core" }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync"] }

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
-    Render, SharedString, Window, WindowControlArea, actions, div, prelude::*, px,
+    Render, SharedString, Window, actions, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
@@ -283,7 +283,12 @@ impl Root {
             }
             Open::Sftp => {
                 let label = format!("{} · files", host.name);
-                let names: Vec<String> = self.cfg.hosts.iter().map(|h| h.name.clone()).collect();
+                let names: Vec<(String, String)> = self
+                    .cfg
+                    .hosts
+                    .iter()
+                    .map(|h| (h.account(), h.name.clone()))
+                    .collect();
                 cx.spawn_in(window, async move |this, cx| {
                     let c = conn.clone();
                     let r = runtime::spawn(async move { c.open_sftp().await }).await;
@@ -356,15 +361,25 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match ev {
-            SftpEvent::PickHost { side, host: None } => {
+            SftpEvent::PickHost {
+                side,
+                account: None,
+            } => {
                 view.update(cx, |v, cx| v.set_source(*side, SftpSource::Local, cx))
                     .ok();
             }
             SftpEvent::PickHost {
                 side,
-                host: Some(ix),
+                account: Some(acct),
             } => {
-                self.open_host(*ix, Open::SftpSource(view, *side), window, cx);
+                // Look the host up by account: the list may have changed since the tab opened.
+                match self.cfg.hosts.iter().position(|h| &h.account() == acct) {
+                    Some(ix) => self.open_host(ix, Open::SftpSource(view, *side), window, cx),
+                    None => {
+                        self.set_status("That host no longer exists.", true);
+                        cx.notify();
+                    }
+                }
             }
         }
     }
@@ -739,12 +754,9 @@ impl Root {
                     )),
             )
             .child(div().flex().h_full().children(tabs))
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .window_control_area(WindowControlArea::Drag),
-            )
+            .child(crate::window_drag::title_bar(
+                div().id("title-drag").flex_1().h_full(),
+            ))
             .child(
                 div()
                     .flex()
@@ -805,6 +817,13 @@ impl Focusable for Root {
 
 impl Render for Root {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+        if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed)
+            && std::env::var_os("SSHC_TIMING").is_some()
+            && let Some(t) = crate::START.get()
+        {
+            eprintln!("first render after {:?}", t.elapsed());
+        }
         let overlay = |child: AnyElement| {
             div()
                 .absolute()

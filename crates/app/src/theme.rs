@@ -42,30 +42,31 @@ static MONO_SIZE: OnceLock<f32> = OnceLock::new();
 fn pick(
     want: Option<&str>,
     defaults: &[&str],
-    available: &[String],
+    exists: &dyn Fn(&str) -> bool,
     fallback: &str,
 ) -> SharedString {
     want.into_iter()
         .chain(defaults.iter().copied())
-        .find(|f| available.iter().any(|a| a == f))
+        .find(|f| exists(f))
         .unwrap_or(fallback)
         .to_string()
         .into()
 }
 
-/// UI font: settings.toml, else Input Sans, else the system font.
+/// UI font: settings.toml, else IBM Plex Sans / Noto Sans, else the system font.
 /// Terminal font: settings.toml, else the Zed buffer font when installed, else Menlo.
-pub fn init_fonts(available: &[String], s: &ssh_core::config::Settings) {
+/// `exists` must be cheap: listing every installed font costs ~150 ms at startup.
+pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &ssh_core::config::Settings) {
     let _ = UI.set(pick(
         s.ui_font.as_deref(),
         &["IBM Plex Sans", "Noto Sans", "Inter", "Input Sans"],
-        available,
+        exists,
         ".SystemUIFont",
     ));
     let _ = MONO.set(pick(
         s.terminal_font.as_deref(),
         &["JetBrainsMono Nerd Font", "Input Mono"],
-        available,
+        exists,
         "Menlo",
     ));
     let _ = MONO_SIZE.set(s.terminal_font_size.unwrap_or(13.0));

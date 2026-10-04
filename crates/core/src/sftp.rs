@@ -56,6 +56,8 @@ pub struct Progress {
     pub total: AtomicU64,
     /// Files seen by the pre-scan, for the "use rsync" heuristic.
     pub files: AtomicU64,
+    /// Totals were already counted for the whole job, so per-item scans must not add again.
+    prescanned: AtomicBool,
     pub cancel: AtomicBool,
     pub current: std::sync::Mutex<String>,
 }
@@ -64,6 +66,21 @@ impl Progress {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
+    /// Count `bytes` and `files` toward the job total (ignored once prescanned).
+    fn add_totals(&self, bytes: u64, files: u64) {
+        if !self.prescanned.load(Ordering::Relaxed) {
+            self.total.fetch_add(bytes, Ordering::Relaxed);
+            self.files.fetch_add(files, Ordering::Relaxed);
+        }
+    }
+
+    /// Add to the totals up front and stop per-item scans from adding again.
+    pub fn set_prescan(&self, bytes: u64, files: u64) {
+        self.total.fetch_add(bytes, Ordering::Relaxed);
+        self.files.fetch_add(files, Ordering::Relaxed);
+        self.prescanned.store(true, Ordering::Relaxed);
+    }
+
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
     }
@@ -187,6 +204,10 @@ impl Sftp {
     }
 
     /// (bytes, files) under a remote path.
+    pub async fn scan(&self, path: &str) -> Result<(u64, u64)> {
+        self.remote_size(path).await
+    }
+
     async fn remote_size(&self, path: &str) -> Result<(u64, u64)> {
         let md = self.inner.metadata(path).await.map_err(e)?;
         if !md.is_dir() {
@@ -213,8 +234,7 @@ impl Sftp {
     /// Download `remote` (file or directory) to the exact local path `dest`.
     pub async fn download(&self, remote: &str, dest: &Path, progress: &Progress) -> Result<()> {
         let (total, files) = self.remote_size(remote).await?;
-        progress.total.fetch_add(total, Ordering::Relaxed);
-        progress.files.fetch_add(files, Ordering::Relaxed);
+        progress.add_totals(total, files);
         self.download_inner(remote, dest, progress).await
     }
 
@@ -230,6 +250,9 @@ impl Sftp {
             if md.is_dir() {
                 tokio::fs::create_dir_all(dest).await?;
                 for ent in self.list(remote).await? {
+                    if ent.is_dir && ent.is_symlink {
+                        continue; // never follow directory links: they can loop
+                    }
                     self.download_inner(&join(remote, &ent.name), &dest.join(&ent.name), progress)
                         .await?;
                 }
@@ -267,8 +290,7 @@ impl Sftp {
         progress: &Progress,
     ) -> Result<()> {
         let (total, files) = self.remote_size(src).await?;
-        progress.total.fetch_add(total, Ordering::Relaxed);
-        progress.files.fetch_add(files, Ordering::Relaxed);
+        progress.add_totals(total, files);
         self.copy_inner(src, other, dest, progress).await
     }
 
@@ -287,6 +309,9 @@ impl Sftp {
                     other.mkdir(dest).await?;
                 }
                 for ent in self.list(src).await? {
+                    if ent.is_dir && ent.is_symlink {
+                        continue;
+                    }
                     self.copy_inner(
                         &join(src, &ent.name),
                         other,
@@ -322,8 +347,7 @@ impl Sftp {
     /// Upload `local` (file or directory) to the exact remote path `dest`.
     pub async fn upload(&self, local: &Path, dest: &str, progress: &Progress) -> Result<()> {
         let (total, files) = local_size(local)?;
-        progress.total.fetch_add(total, Ordering::Relaxed);
-        progress.files.fetch_add(files, Ordering::Relaxed);
+        progress.add_totals(total, files);
         self.upload_inner(local, dest, progress).await
     }
 
@@ -342,6 +366,9 @@ impl Sftp {
                 }
                 let mut rd = tokio::fs::read_dir(local).await?;
                 while let Some(ent) = rd.next_entry().await? {
+                    if is_dir_link(&ent.path()) {
+                        continue;
+                    }
                     let name = ent.file_name().to_string_lossy().into_owned();
                     self.upload_inner(&ent.path(), &join(dest, &name), progress)
                         .await?;
@@ -412,11 +439,15 @@ pub mod local {
         Ok(std::fs::rename(from, to)?)
     }
 
+    /// (bytes, files) under a local path, skipping directory links.
+    pub fn scan(path: &Path) -> Result<(u64, u64)> {
+        local_size(path)
+    }
+
     /// Recursive copy with progress and cancel (blocking).
     pub fn copy(src: &Path, dest: &Path, progress: &Progress) -> Result<()> {
         let (total, files) = local_size(src)?;
-        progress.total.fetch_add(total, Ordering::Relaxed);
-        progress.files.fetch_add(files, Ordering::Relaxed);
+        progress.add_totals(total, files);
         copy_inner(src, dest, progress)
     }
 
@@ -427,6 +458,9 @@ pub mod local {
             std::fs::create_dir_all(dest)?;
             for ent in std::fs::read_dir(src)? {
                 let ent = ent?;
+                if is_dir_link(&ent.path()) {
+                    continue;
+                }
                 copy_inner(&ent.path(), &dest.join(ent.file_name()), progress)?;
             }
             return Ok(());
@@ -460,6 +494,12 @@ pub mod local {
     }
 }
 
+/// A symlink that points at a directory. Walkers skip these so link loops terminate.
+fn is_dir_link(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_symlink())
+        && std::fs::metadata(path).is_ok_and(|m| m.is_dir())
+}
+
 fn local_size(path: &Path) -> Result<(u64, u64)> {
     let md = std::fs::metadata(path)?;
     if !md.is_dir() {
@@ -467,7 +507,11 @@ fn local_size(path: &Path) -> Result<(u64, u64)> {
     }
     let (mut total, mut files) = (0, 0);
     for ent in std::fs::read_dir(path)? {
-        let (b, f) = local_size(&ent?.path())?;
+        let ent = ent?;
+        if is_dir_link(&ent.path()) {
+            continue;
+        }
+        let (b, f) = local_size(&ent.path())?;
         total += b;
         files += f;
     }

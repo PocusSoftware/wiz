@@ -9,6 +9,7 @@ mod sftp_view;
 mod terminal_view;
 mod theme;
 mod ui;
+mod window_drag;
 
 use gpui::{
     App, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds,
@@ -17,14 +18,35 @@ use gpui::{
 
 use root::{CloseTab, NewHost, NextTab, PrevTab, Quit, Root};
 
+/// Set at process start; read by the first render when SSHC_TIMING is set.
+/// Print elapsed time since start when SSHC_TIMING is set.
+pub fn mark(what: &str) {
+    if std::env::var_os("SSHC_TIMING").is_some()
+        && let Some(t) = START.get()
+    {
+        eprintln!("{what}: {:?}", t.elapsed());
+    }
+}
+
+pub static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
 fn main() {
+    START.get_or_init(std::time::Instant::now);
+    mark("main");
     Application::new()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
+            mark("app run");
+            mark("before fonts");
+            let ts = cx.text_system().clone();
+            // An unknown family resolves to the fallback font, so a candidate exists
+            // exactly when it resolves to something else.
+            let fallback = ts.resolve_font(&gpui::font("\u{1}no-such-font"));
             theme::init_fonts(
-                &cx.text_system().all_font_names(),
+                &|name| ts.resolve_font(&gpui::font(name.to_string())) != fallback,
                 &ssh_core::config::Settings::load(),
             );
+            mark("after fonts");
             cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([
                 KeyBinding::new("cmd-q", Quit, None),
@@ -66,6 +88,7 @@ fn main() {
                 |_, cx| cx.new(Root::new),
             )
             .unwrap();
+            mark("window opened");
             cx.activate(true);
         });
 }

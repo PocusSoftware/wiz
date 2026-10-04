@@ -88,6 +88,12 @@ impl Source {
                     user: r.host.user.clone(),
                     host: r.host.host.clone(),
                     port: r.host.port,
+                    key: match &r.host.auth {
+                        ssh_core::config::AuthMethod::Key { path } => {
+                            Some(path.to_string_lossy().into_owned())
+                        }
+                        ssh_core::config::AuthMethod::Password => None,
+                    },
                 },
             },
             dir: dir.to_string(),
@@ -95,9 +101,42 @@ impl Source {
     }
 }
 
+impl Source {
+    /// True when both sources are the same file system (copying between them can
+    /// overwrite the very files being read).
+    fn same_fs(&self, other: &Source) -> bool {
+        match (self, other) {
+            (Source::Local, Source::Local) => true,
+            (Source::Remote(a), Source::Remote(b)) => a.host.account() == b.host.account(),
+            _ => false,
+        }
+    }
+}
+
+/// Why a copy must be refused: onto itself, or a folder into its own subtree.
+fn self_copy_error(
+    same_fs: bool,
+    src_dir: &str,
+    dst_dir: &str,
+    names: &[String],
+) -> Option<String> {
+    if !same_fs {
+        return None;
+    }
+    let (s, d) = (std::path::Path::new(src_dir), std::path::Path::new(dst_dir));
+    if s == d {
+        return Some("Source and destination are the same folder.".into());
+    }
+    names
+        .iter()
+        .find(|n| d.starts_with(s.join(n)))
+        .map(|n| format!("Cannot copy {n} into itself."))
+}
+
 /// The view asks its owner to connect a host and hand back a `Source`.
 pub enum SftpEvent {
-    PickHost { side: Side, host: Option<usize> },
+    /// `None` selects the local disk, otherwise the host's account string.
+    PickHost { side: Side, account: Option<String> },
 }
 
 impl EventEmitter<SftpEvent> for SftpView {}
@@ -238,12 +277,15 @@ struct Transfer {
     last_done: u64,
     speed: f64,
     rsync: String,
+    /// An endpoint uses password auth, so rsync will prompt.
+    rsync_prompts: bool,
 }
 
 pub struct SftpView {
     left: Pane,
     right: Pane,
-    hosts: Vec<String>,
+    /// (account, display name) of every configured host.
+    hosts: Vec<(String, String)>,
     menu: Option<Side>,
     active: Side,
     prompt: Option<Prompt>,
@@ -314,7 +356,12 @@ async fn fetch(source: Source, path: String) -> Result<(String, Vec<Entry>), ssh
 }
 
 impl SftpView {
-    pub fn new(left: Source, right: Source, hosts: Vec<String>, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        left: Source,
+        right: Source,
+        hosts: Vec<(String, String)>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let this = Self {
             left: Pane::new(left, cx),
             right: Pane::new(right, cx),
@@ -360,9 +407,6 @@ impl SftpView {
             }
         })
         .detach();
-        cx.defer(|cx| {
-            let _ = cx;
-        });
         this
     }
 
@@ -742,6 +786,16 @@ impl SftpView {
         let to = from.other();
         let dest_dir = self.pane(to).path.clone();
         let dest = self.pane(to).source.clone();
+        if let Some(msg) = self_copy_error(
+            self.pane(from).source.same_fs(&dest),
+            &self.pane(from).path,
+            &dest_dir,
+            &names,
+        ) {
+            self.pane_mut(to).error = Some(msg.into());
+            cx.notify();
+            return;
+        }
         let check = names.clone();
         cx.spawn(async move |this, cx| {
             // Which names already exist at the destination?
@@ -815,10 +869,31 @@ impl SftpView {
             last_done: 0,
             speed: 0.0,
             rsync: rsync_cmd,
+            rsync_prompts: [&from_src, &to_src].iter().any(|s| {
+                matches!(s, Source::Remote(r) if matches!(r.host.auth, ssh_core::config::AuthMethod::Password))
+            }),
         });
         cx.notify();
         cx.spawn(async move |this, cx| {
             let r = runtime::spawn(async move {
+                // Count the whole selection first so the percentage and the "use rsync"
+                // hint are right from the start.
+                let (mut bytes, mut files) = (0u64, 0u64);
+                for n in &names {
+                    let sp = from_src.join(&src_dir, n);
+                    let (b, f) = match &from_src {
+                        Source::Remote(r) => r.sftp.scan(&sp).await?,
+                        Source::Local => {
+                            let p = PathBuf::from(sp);
+                            tokio::task::spawn_blocking(move || local::scan(&p))
+                                .await
+                                .map_err(|e| ssh_core::Error::Sftp(e.to_string()))??
+                        }
+                    };
+                    bytes += b;
+                    files += f;
+                }
+                progress.set_prescan(bytes, files);
                 for n in names {
                     let (sp, dp) = (from_src.join(&src_dir, &n), to_src.join(&dst_dir, &n));
                     match (&from_src, &to_src) {
@@ -1241,16 +1316,16 @@ impl SftpView {
             return None;
         }
         let current = self.pane(side).source.label();
-        let mut items: Vec<(Option<usize>, String)> = vec![(None, "Local".into())];
+        let mut items: Vec<(Option<String>, String)> = vec![(None, "Local".into())];
         items.extend(
             self.hosts
                 .iter()
                 .cloned()
-                .enumerate()
-                .map(|(i, n)| (Some(i), n)),
+                .map(|(acct, name)| (Some(acct), name)),
         );
-        let rows = items.into_iter().enumerate().map(|(n, (host, name))| {
+        let rows = items.into_iter().enumerate().map(|(n, (account, name))| {
             let is_cur = name == current;
+            let is_local = account.is_none();
             div()
                 .id((side.tag(), 5000 + n))
                 .h(px(26.))
@@ -1262,20 +1337,20 @@ impl SftpView {
                 .hover(|s| s.bg(c(ACTIVE)))
                 .on_click(cx.listener(move |t, _, _, cx| {
                     t.menu = None;
-                    cx.emit(SftpEvent::PickHost { side, host });
+                    cx.emit(SftpEvent::PickHost {
+                        side,
+                        account: account.clone(),
+                    });
                     cx.notify();
                 }))
-                .child(icon(
-                    if host.is_none() { "folder" } else { "server" },
-                    13.,
-                    MUTED,
-                ))
+                .child(icon(if is_local { "folder" } else { "server" }, 13., MUTED))
                 .child(div().flex_1().child(name))
                 .when(is_cur, |d| d.child(icon("check", 12., ACCENT_TEXT)))
         });
         Some(
             div()
                 .absolute()
+                .occlude()
                 .top(px(22.))
                 .left_0()
                 .w(px(220.))
@@ -1428,7 +1503,7 @@ impl SftpView {
                 TState::Done => GREEN,
                 _ => ACCENT,
             };
-            div()
+            let row = div()
                 .h(px(24.))
                 .px_2()
                 .flex()
@@ -1470,31 +1545,6 @@ impl SftpView {
                         .text_color(c(status.1))
                         .child(div().whitespace_nowrap().child(status.0)),
                 )
-                .when(big && running, |d| {
-                    let cmd = tr.rsync.clone();
-                    d.child(
-                        div()
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .text_color(c(YELLOW))
-                            .child(format!(
-                                "Large transfer ({} files, {}): rsync is faster",
-                                files,
-                                human_size(total)
-                            ))
-                            .child(
-                                button(("t-rsync", id as usize), "Copy rsync command").on_click(
-                                    cx.listener(move |_, _, _, cx| {
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                            cmd.clone(),
-                                        ))
-                                    }),
-                                ),
-                            ),
-                    )
-                })
                 .child(
                     icon_button(
                         ("t-x", id as usize),
@@ -1512,7 +1562,35 @@ impl SftpView {
                         }
                         cx.notify();
                     })),
-                )
+                );
+            let hint = (big && running).then(|| {
+                let cmd = tr.rsync.clone();
+                div()
+                    .px_2()
+                    .pb(px(5.))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_color(c(YELLOW))
+                    .child(format!(
+                        "Large transfer ({} files, {}): rsync is faster (needs rsync on the server){}.",
+                        files,
+                        human_size(total),
+                        if tr.rsync_prompts {
+                            ". It will ask for the password"
+                        } else {
+                            ""
+                        }
+                    ))
+                    .child(
+                        button(("t-rsync", id as usize), "Copy rsync command").on_click(
+                            cx.listener(move |_, _, _, cx| {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd.clone()))
+                            }),
+                        ),
+                    )
+            });
+            div().flex().flex_col().child(row).children(hint)
         });
         Some(
             div()
@@ -1582,5 +1660,31 @@ impl Render for SftpView {
             )
             .children(self.prompt_bar(cx))
             .children(self.transfer_bar(cx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn n(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn refuses_same_folder_and_self_nesting() {
+        assert!(self_copy_error(true, "/a/b", "/a/b", &n(&["f"])).is_some());
+        assert!(self_copy_error(true, "/a/b/", "/a/b", &n(&["f"])).is_some());
+        assert!(self_copy_error(true, "/a", "/a/dir", &n(&["dir"])).is_some());
+        assert!(self_copy_error(true, "/a", "/a/dir/deeper", &n(&["dir"])).is_some());
+    }
+
+    #[test]
+    fn allows_normal_copies() {
+        assert!(self_copy_error(true, "/a", "/b", &n(&["x"])).is_none());
+        // Prefix of the name but a different folder.
+        assert!(self_copy_error(true, "/a", "/a/dirty", &n(&["dir"])).is_none());
+        // Different file systems can use identical paths.
+        assert!(self_copy_error(false, "/a", "/a", &n(&["x"])).is_none());
     }
 }
