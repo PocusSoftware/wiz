@@ -1,5 +1,7 @@
 //! Docker management: local daemon via bollard, remote via `docker` CLI over SSH exec.
 
+use std::sync::Arc;
+
 use bollard::Docker;
 use bollard::query_parameters::{
     ListContainersOptionsBuilder, RestartContainerOptions, StartContainerOptions,
@@ -86,6 +88,22 @@ impl Local {
                     .join(", "),
             })
             .collect())
+    }
+
+    pub async fn logs(&self, id: &str, tail: u32) -> Result<String> {
+        use bollard::query_parameters::LogsOptionsBuilder;
+        use futures_util::StreamExt;
+        let opts = LogsOptionsBuilder::default()
+            .stdout(true)
+            .stderr(true)
+            .tail(&tail.to_string())
+            .build();
+        let mut stream = self.docker.logs(id, Some(opts));
+        let mut out = String::new();
+        while let Some(chunk) = stream.next().await {
+            out.push_str(&chunk?.to_string());
+        }
+        Ok(out)
     }
 
     pub async fn act(&self, id: &str, action: Action) -> Result<()> {
@@ -191,6 +209,36 @@ impl<'a> Remote<'a> {
         Ok(format!(
             "docker exec -it {id} sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
         ))
+    }
+}
+
+/// Either the local daemon or a remote host reached over an existing SSH connection.
+#[derive(Clone)]
+pub enum Backend {
+    Local(Arc<Local>),
+    Remote(Arc<Connection>),
+}
+
+impl Backend {
+    pub async fn list(&self) -> Result<Vec<Container>> {
+        match self {
+            Backend::Local(l) => l.list().await,
+            Backend::Remote(c) => Remote::new(c).list().await,
+        }
+    }
+
+    pub async fn act(&self, id: &str, action: Action) -> Result<()> {
+        match self {
+            Backend::Local(l) => l.act(id, action).await,
+            Backend::Remote(c) => Remote::new(c).act(id, action).await,
+        }
+    }
+
+    pub async fn logs(&self, id: &str, tail: u32) -> Result<String> {
+        match self {
+            Backend::Local(l) => l.logs(id, tail).await,
+            Backend::Remote(c) => Remote::new(c).logs(id, tail).await,
+        }
     }
 }
 

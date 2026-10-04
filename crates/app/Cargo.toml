@@ -9,5 +9,8 @@ name = "ssh-client"
 path = "src/main.rs"
 
 [dependencies]
+alacritty_terminal = "0.26"
+dirs = "7.0.0"
 gpui = "0.2.2"
 ssh-core = { path = "../core" }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync"] }
