@@ -40,7 +40,7 @@ pub enum TerminalEvent {
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
 
-const FONT_SIZE: f32 = 13.0;
+const FONT_SIZE: f32 = 14.0;
 
 impl TerminalView {
     pub fn new(shell: Shell, saved_password: Option<String>, cx: &mut Context<Self>) -> Self {
@@ -298,8 +298,8 @@ fn key_bytes(
 // ---------- colors ----------
 
 const ANSI: [u32; 16] = [
-    0x45475a, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xf5c2e7, 0x94e2d5, 0xbac2de, 0x585b70,
-    0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xf5c2e7, 0x94e2d5, 0xa6adc8,
+    0x0a0a0b, 0xf66335, 0xdfbda0, 0xf05a29, 0xa0a0a6, 0xf87c49, 0xb6b6bb, 0xd7d7db, 0x626269,
+    0xf87c49, 0xe8cdb6, 0xf87c49, 0xc4c4c9, 0xf9926a, 0xd7d7db, 0xfafafb,
 ];
 
 fn indexed(i: u8) -> u32 {
@@ -372,7 +372,7 @@ impl Render for TerminalView {
         let grid = canvas(
             move |bounds, window, cx| {
                 let ts = window.text_system();
-                let fid = ts.resolve_font(&font(FONT_MONO));
+                let fid = ts.resolve_font(&font(mono()));
                 let fs = px(FONT_SIZE);
                 let cw = ts.advance(fid, fs, 'm').map(|s| s.width).unwrap_or(px(8.));
                 let ch = (fs * 1.3).round();
@@ -457,7 +457,7 @@ impl Render for TerminalView {
                     div()
                         .px_3()
                         .py_1()
-                        .bg(c(SURFACE))
+                        .bg(c(PANEL))
                         .text_xs()
                         .text_color(c(YELLOW))
                         .child(match status {
@@ -518,12 +518,12 @@ fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
         }
         let selected = selection.is_some_and(|s| s.contains(cell.point));
         let at_cursor = focused && cursor_visible && cell.point == cursor_pt;
-        if selected || at_cursor {
-            std::mem::swap(&mut fg, &mut bg);
-            if at_cursor && !selected {
-                bg = TEXT;
-                fg = BG;
-            }
+        if selected {
+            bg = SELECTION;
+        }
+        if at_cursor {
+            bg = ACCENT;
+            fg = BG;
         }
         let ch_ = if f.contains(Flags::HIDDEN) {
             ' '
@@ -617,7 +617,7 @@ fn paint_grid(
             if s.dim {
                 color.a = 0.6;
             }
-            let mut f = font(FONT_MONO);
+            let mut f = font(mono());
             if s.bold {
                 f.weight = FontWeight::BOLD;
             }
@@ -658,7 +658,7 @@ fn paint_grid(
             ),
             size(cw, ch),
         );
-        window.paint_quad(outline(b, c(DIM), BorderStyle::Solid));
+        window.paint_quad(outline(b, c(ACCENT), BorderStyle::Solid));
     }
 }
 

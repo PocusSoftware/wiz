@@ -243,7 +243,7 @@ impl Render for HostForm {
         let key_mode = self.key_mode;
         let tab = |id: &'static str, text: &str, active: bool, mode: bool| {
             button(id, text)
-                .when(active, |b| b.bg(c(ACCENT)).text_color(c(PANEL)))
+                .when(active, |b| b.bg(c(ACCENT)).text_color(c(0xffffff)))
                 .on_click(cx.listener(move |t, _: &ClickEvent, _, cx| {
                     t.key_mode = mode;
                     cx.notify();
@@ -267,7 +267,7 @@ impl Render for HostForm {
             .flex_col()
             .gap_3()
             .rounded_lg()
-            .bg(c(BG))
+            .bg(c(ELEVATED))
             .border_1()
             .border_color(c(BORDER))
             .shadow_lg()

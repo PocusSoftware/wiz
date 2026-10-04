@@ -123,7 +123,7 @@ impl Render for TextInput {
         let caret = div()
             .w(px(1.))
             .h(px(15.))
-            .bg(c(if focused { TEXT } else { SURFACE }));
+            .bg(c(if focused { ACCENT_TEXT } else { ACTIVE }));
         let mut row = div()
             .flex()
             .items_center()
@@ -131,7 +131,9 @@ impl Render for TextInput {
             .child(caret)
             .child(shown(after));
         if self.text.is_empty() && !focused {
-            row = div().text_color(c(DIM)).child(self.placeholder.clone());
+            row = div()
+                .text_color(c(PLACEHOLDER))
+                .child(self.placeholder.clone());
         }
         div()
             .track_focus(&self.focus)
@@ -145,9 +147,9 @@ impl Render for TextInput {
             .flex()
             .items_center()
             .rounded_md()
-            .bg(c(PANEL))
+            .bg(c(ELEMENT))
             .border_1()
-            .border_color(c(if focused { ACCENT } else { BORDER }))
+            .border_color(c(if focused { BORDER_FOCUSED } else { BORDER }))
             .text_sm()
             .text_color(c(TEXT))
             .child(row)
