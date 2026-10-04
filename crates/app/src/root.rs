@@ -613,13 +613,6 @@ impl Root {
             .border_color(c(BORDER_VARIANT))
             .child(
                 div()
-                    .w(px(TRAFFIC_LIGHTS_W))
-                    .h_full()
-                    .flex_none()
-                    .window_control_area(WindowControlArea::Drag),
-            )
-            .child(
-                div()
                     .id("home-tab")
                     .h_full()
                     .px(px(10.))
@@ -648,6 +641,20 @@ impl Root {
                     .flex_1()
                     .h_full()
                     .window_control_area(WindowControlArea::Drag),
+            )
+            .child(
+                div()
+                    .flex()
+                    .h_full()
+                    .border_l_1()
+                    .border_color(c(BORDER_VARIANT))
+                    .child(win_button("win-min", "minus", ACTIVE, |w| {
+                        w.minimize_window()
+                    }))
+                    .child(win_button("win-max", "maximize", ACTIVE, |w| {
+                        w.zoom_window()
+                    }))
+                    .child(win_button("win-close", "x", RED, |w| w.remove_window())),
             )
     }
 
@@ -778,7 +785,7 @@ impl Render for Root {
             .on_action(cx.listener(|t, _: &NewHost, w, cx| t.open_form(None, w, cx)))
             .size_full()
             .flex()
-            .font_family(FONT_UI)
+            .font_family(ui())
             .text_size(px(12.))
             .bg(c(BG))
             .text_color(c(TEXT))
@@ -806,4 +813,24 @@ impl Render for Root {
             .children(trust_dialog)
             .children(form)
     }
+}
+
+/// Square, full-height window control for the custom title bar.
+fn win_button(
+    id: &'static str,
+    name: &str,
+    hover: u32,
+    action: impl Fn(&mut Window) + 'static,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .w(px(40.))
+        .h_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .hover(move |s| s.bg(c(hover)))
+        .on_click(move |_, w, _| action(w))
+        .child(icon(name, 14., TEXT))
 }

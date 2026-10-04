@@ -33,21 +33,51 @@ pub const RED: u32 = 0xe5534b;
 pub const YELLOW: u32 = 0xe3b341;
 
 pub const TITLEBAR_H: f32 = 30.0;
-/// Space left of the first tab for the macOS traffic lights.
-pub const TRAFFIC_LIGHTS_W: f32 = 80.0;
-pub const FONT_UI: &str = ".SystemUIFont";
 
 static MONO: OnceLock<SharedString> = OnceLock::new();
+static UI: OnceLock<SharedString> = OnceLock::new();
+static MONO_SIZE: OnceLock<f32> = OnceLock::new();
 
-/// Terminal font: the Zed buffer font when installed, else Menlo.
-pub fn init_fonts(available: &[String]) {
-    let pick = ["JetBrainsMono Nerd Font", "JetBrains Mono", "Menlo"]
-        .into_iter()
+fn pick(
+    want: Option<&str>,
+    defaults: &[&str],
+    available: &[String],
+    fallback: &str,
+) -> SharedString {
+    want.into_iter()
+        .chain(defaults.iter().copied())
         .find(|f| available.iter().any(|a| a == f))
-        .unwrap_or("Menlo");
-    let _ = MONO.set(pick.into());
+        .unwrap_or(fallback)
+        .to_string()
+        .into()
+}
+
+/// UI font: settings.toml, else Input Sans, else the system font.
+/// Terminal font: settings.toml, else the Zed buffer font when installed, else Menlo.
+pub fn init_fonts(available: &[String], s: &ssh_core::config::Settings) {
+    let _ = UI.set(pick(
+        s.ui_font.as_deref(),
+        &["Input Sans", "Inter"],
+        available,
+        ".SystemUIFont",
+    ));
+    let _ = MONO.set(pick(
+        s.terminal_font.as_deref(),
+        &["JetBrainsMono Nerd Font", "Input Mono"],
+        available,
+        "Menlo",
+    ));
+    let _ = MONO_SIZE.set(s.terminal_font_size.unwrap_or(13.0));
+}
+
+pub fn ui() -> SharedString {
+    UI.get().cloned().unwrap_or_else(|| ".SystemUIFont".into())
 }
 
 pub fn mono() -> SharedString {
     MONO.get().cloned().unwrap_or_else(|| "Menlo".into())
+}
+
+pub fn mono_size() -> f32 {
+    MONO_SIZE.get().copied().unwrap_or(13.0)
 }

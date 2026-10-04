@@ -23,7 +23,9 @@ icons!(
     "container",
     "server",
     "key",
-    "folder"
+    "folder",
+    "minus",
+    "maximize"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

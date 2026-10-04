@@ -19,7 +19,10 @@ fn main() {
     Application::new()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
-            theme::init_fonts(&cx.text_system().all_font_names());
+            theme::init_fonts(
+                &cx.text_system().all_font_names(),
+                &ssh_core::config::Settings::load(),
+            );
             cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([
                 KeyBinding::new("cmd-q", Quit, None),
@@ -53,7 +56,8 @@ fn main() {
                     titlebar: Some(TitlebarOptions {
                         title: Some("ssh-client".into()),
                         appears_transparent: true,
-                        traffic_light_position: Some(point(px(12.), px(9.))),
+                        // Native buttons are parked off-screen; the title bar draws its own.
+                        traffic_light_position: Some(point(px(-100.), px(-100.))),
                     }),
                     ..Default::default()
                 },

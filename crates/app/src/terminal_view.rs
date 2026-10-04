@@ -40,8 +40,6 @@ pub enum TerminalEvent {
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
 
-const FONT_SIZE: f32 = 13.0;
-
 impl TerminalView {
     pub fn new(shell: Shell, saved_password: Option<String>, cx: &mut Context<Self>) -> Self {
         let Shell { input, mut events } = shell;
@@ -373,7 +371,7 @@ impl Render for TerminalView {
             move |bounds, window, cx| {
                 let ts = window.text_system();
                 let fid = ts.resolve_font(&font(mono()));
-                let fs = px(FONT_SIZE);
+                let fs = px(mono_size());
                 let cw = ts.advance(fid, fs, 'm').map(|s| s.width).unwrap_or(px(8.));
                 let ch = (fs * 1.3).round();
                 let cols = (bounds.size.width / cw) as u16;
@@ -571,7 +569,7 @@ fn paint_grid(
     } = snap;
     window.paint_quad(fill(bounds, c(BG)));
     let ts = window.text_system().clone();
-    let fs = px(FONT_SIZE);
+    let fs = px(mono_size());
 
     for (r, line) in lines.iter().enumerate() {
         let y = bounds.origin.y + ch * r as f32;

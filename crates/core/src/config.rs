@@ -97,3 +97,26 @@ mod tests {
         assert_eq!(back.hosts, cfg.hosts);
     }
 }
+
+/// Optional `settings.toml` next to `hosts.toml`. Every field is optional.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Settings {
+    /// Font family for the interface.
+    pub ui_font: Option<String>,
+    /// Font family for terminals.
+    pub terminal_font: Option<String>,
+    pub terminal_font_size: Option<f32>,
+}
+
+impl Settings {
+    pub fn load() -> Self {
+        let Some(dir) = dirs::config_dir() else {
+            return Self::default();
+        };
+        let path = dir.join(crate::APP_ID).join("settings.toml");
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| toml::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+}
