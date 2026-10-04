@@ -25,6 +25,8 @@ pub struct HostForm {
     old: Option<Host>,
     /// Accounts (user@host:port) of the other saved hosts, to refuse duplicates.
     taken: Vec<String>,
+    /// Existing group names, so "prod" joins an existing "Prod" instead of making a twin.
+    groups: Vec<String>,
     name: Entity<TextInput>,
     group: Entity<TextInput>,
     host: Entity<TextInput>,
@@ -42,6 +44,7 @@ impl HostForm {
     pub fn new(
         existing: Option<(usize, Host)>,
         taken: Vec<String>,
+        groups: Vec<String>,
         cx: &mut Context<Self>,
     ) -> Self {
         let name = cx.new(|cx| TextInput::new("My server", false, cx));
@@ -81,6 +84,7 @@ impl HostForm {
             index,
             old,
             taken,
+            groups,
             name,
             group,
             host,
@@ -155,11 +159,14 @@ impl HostForm {
         } else {
             port_s.parse().map_err(|_| "Port must be 1-65535.")?
         };
-        let group = Some(get(&self.group)).filter(|g| !g.is_empty());
-        let mut name = get(&self.name);
-        if name.is_empty() {
-            name = format!("{user}@{host}");
-        }
+        let group = Some(get(&self.group)).filter(|g| !g.is_empty()).map(|g| {
+            self.groups
+                .iter()
+                .find(|e| e.to_lowercase() == g.to_lowercase())
+                .cloned()
+                .unwrap_or(g)
+        });
+        let name = get(&self.name);
         let auth = if self.key_mode {
             let p = get(&self.key_path);
             if p.is_empty() {
@@ -188,6 +195,11 @@ impl HostForm {
             auth,
         };
         new.validate()?;
+        // Filled in after validating: the length limit is for names the user typed.
+        let mut new = new;
+        if new.name.is_empty() {
+            new.name = format!("{}@{}", new.user, new.host);
+        }
         let acct = new.account();
         if self.taken.contains(&acct) {
             return Err("Another saved host already uses this user, host and port.".into());

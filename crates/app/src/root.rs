@@ -676,7 +676,13 @@ impl Root {
             .filter(|(i, _)| Some(*i) != existing)
             .map(|(_, h)| h.account())
             .collect();
-        let form = cx.new(|cx| HostForm::new(ex, taken, cx));
+        let groups = self
+            .cfg
+            .hosts
+            .iter()
+            .filter_map(|h| h.group.clone())
+            .collect();
+        let form = cx.new(|cx| HostForm::new(ex, taken, groups, cx));
         cx.subscribe_in(&form, window, |this, _, ev: &FormEvent, window, cx| {
             match ev {
                 FormEvent::Saved { host, index } => {
