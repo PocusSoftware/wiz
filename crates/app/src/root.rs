@@ -195,7 +195,11 @@ impl Root {
         cx.spawn_in(window, async move |this, cx| {
             let h = host.clone();
             let r = runtime::spawn(async move {
-                let creds = Credentials::from_keychain(&h)?;
+                // Keychain access can block on a system prompt, keep it off the async workers.
+                let hk = h.clone();
+                let creds = tokio::task::spawn_blocking(move || Credentials::from_keychain(&hk))
+                    .await
+                    .map_err(|e| ssh_core::Error::Remote(e.to_string()))??;
                 let pw = match &creds {
                     Credentials::Password(p) => Some(p.clone()),
                     _ => None,
@@ -239,6 +243,7 @@ impl Root {
         match what {
             Open::Shell => self.open_shell(host.name.clone(), conn, password, None, window, cx),
             Open::Docker => {
+                let label = format!("{} · docker", host.name);
                 let view = cx.new(|cx| DockerView::new(Backend::Remote(conn.clone()), true, cx));
                 cx.subscribe_in(
                     &view,
@@ -255,7 +260,7 @@ impl Root {
                 .detach();
                 self.push_tab(
                     Tab {
-                        label: format!("{} · docker", self.host_label(&view, cx)).into(),
+                        label: label.into(),
                         kind: TabKind::Docker(view),
                     },
                     window,
@@ -263,10 +268,6 @@ impl Root {
                 );
             }
         }
-    }
-
-    fn host_label(&self, _: &Entity<DockerView>, _: &App) -> String {
-        String::new()
     }
 
     fn open_shell(

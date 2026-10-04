@@ -54,8 +54,11 @@ impl client::Handler for Handler {
             P::PublicKey { key, .. } => key.clone(),
             P::Certificate(c) => c.public_key().clone().into(),
         };
-        // Blocking prompt is fine here: the handshake cannot continue anyway.
-        self.verifier.verify(&self.host, self.port, &pk)?;
+        // The prompt may block for the user, so keep it off the async workers.
+        let (verifier, host, port) = (self.verifier.clone(), self.host.clone(), self.port);
+        tokio::task::spawn_blocking(move || verifier.verify(&host, port, &pk))
+            .await
+            .map_err(|e| Error::Remote(e.to_string()))??;
         Ok(true)
     }
 }
@@ -155,16 +158,15 @@ impl Connection {
                     ShellInput::Resize { cols, rows } => {
                         writer.window_change(cols.into(), rows.into(), 0, 0).await
                     }
-                    ShellInput::Close => {
-                        let _ = writer.eof().await;
-                        let _ = writer.close().await;
-                        break;
-                    }
+                    ShellInput::Close => break,
                 };
                 if r.is_err() {
                     break;
                 }
             }
+            // Also reached when the UI drops its sender (tab closed): end the remote shell.
+            let _ = writer.eof().await;
+            let _ = writer.close().await;
         });
 
         tokio::spawn(async move {

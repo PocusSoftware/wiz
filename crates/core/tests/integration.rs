@@ -257,3 +257,28 @@ fn keychain_roundtrip() {
     keychain::delete(Kind::Password, &acct).unwrap();
     assert_eq!(keychain::get(Kind::Password, &acct).unwrap(), None);
 }
+
+#[tokio::test]
+async fn dropping_shell_ends_remote_process() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let h = host(2223, AuthMethod::Password);
+    let creds = Credentials::Key {
+        path: keys().join("ed25519"),
+        passphrase: None,
+    };
+    let c = Connection::connect(&h, &creds, verifier(&d, Arc::new(TrustAll)))
+        .await
+        .unwrap();
+    let mut sh = c.open_shell(80, 24, None).await.unwrap();
+    let mut term = Terminal::new(80, 24);
+    read_until(&mut sh, &mut term, "$").await;
+    sh.send("sleep 4242\n").await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let running = c.exec("pgrep -f 'sleep 4242'").await.unwrap();
+    assert_eq!(running.status, Some(0), "sleep should be running");
+    drop(sh); // what closing a tab does
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let after = c.exec("pgrep -f 'sleep 4242'").await.unwrap();
+    assert_ne!(after.status, Some(0), "remote process survived tab close");
+}
