@@ -31,3 +31,9 @@ Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Ner
 - Startup: `SSHC_TIMING=1 target/release/ssh-client` prints launch milestones (about 170-195 ms to first render warm).
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.
 - Directory symlinks are skipped by transfers so link loops cannot run forever. File symlinks are followed.
+
+## Building
+- `cargo build -p ssh-app` for development (incremental, a couple of seconds).
+- `cargo build --profile fast -p ssh-app` for optimized local runs (incremental, no LTO, a few seconds).
+- `cargo build --release -p ssh-app` for the shipped binary (thin LTO, one codegen unit, 1-3 minutes).
+- SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).

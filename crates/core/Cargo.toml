@@ -9,7 +9,7 @@ alacritty_terminal = "0.26.0"
 bollard = "0.21.1"
 dirs = "7.0.0"
 futures-util = "0.3.34"
-russh = "0.63.3"
+russh = { version = "0.63.3", default-features = false, features = ["ring", "flate2", "rsa"] }
 russh-sftp = "3.0.1"
 security-framework = "3.7.0"
 serde = { version = "1.0.229", features = ["derive"] }
