@@ -1,8 +1,8 @@
 //! "Hide sensitive information": masks hostnames, usernames, IP addresses, ports and secret values,
 //! and hides secret files from file lists. Every category is configurable (see `Settings`).
 //!
-//! Masking keeps the text length (every masked char becomes a bullet) so terminal columns,
-//! selections and click positions never shift.
+//! Every masked span becomes the same fixed run of bullets, so the mask never reveals how long
+//! the hidden value is. The terminal is the exception: it masks char by char (see `mask_char`).
 
 use std::borrow::Cow;
 use std::ops::Range;
@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use ssh_core::config::Settings;
 
 const MASK: char = '•';
+/// Bullets per masked span, whatever the length of the hidden text.
+const MASK_LEN: usize = 6;
 
 static HIDE: AtomicBool = AtomicBool::new(false);
 static CONFIG: RwLock<Config> = RwLock::new(Config::new());
@@ -452,24 +454,34 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
     merged
 }
 
+/// The fixed placeholder that stands in for every masked span.
+pub fn mask() -> String {
+    std::iter::repeat_n(MASK, MASK_LEN).collect()
+}
+
 /// `s` with sensitive parts masked, or `s` itself when hiding is off.
 pub fn redact(s: &str) -> Cow<'_, str> {
     if !hide() {
         return Cow::Borrowed(s);
     }
-    let mut chars: Vec<char> = s.chars().collect();
+    let chars: Vec<char> = s.chars().collect();
     let found = ranges(&chars);
     if found.is_empty() {
         return Cow::Borrowed(s);
     }
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
     for r in found {
-        for c in &mut chars[r] {
-            *c = MASK;
-        }
+        out.extend(&chars[i..r.start]);
+        out.push_str(&mask());
+        i = r.end;
     }
-    Cow::Owned(chars.into_iter().collect())
+    out.extend(&chars[i..]);
+    Cow::Owned(out)
 }
 
+/// The bullet the terminal paints over each masked char. The terminal masks in place (same
+/// length) so its columns, selections and click positions never shift.
 pub fn mask_char() -> char {
     MASK
 }
@@ -479,15 +491,26 @@ pub fn hides_ports() -> bool {
     hide() && CONFIG.read().unwrap().ports
 }
 
-/// `text` (a port, or a list/range of them) with its digits masked when ports are hidden.
+/// `text` (a port, or a list/range of them) with each number masked when ports are hidden.
 pub fn port(text: impl ToString) -> String {
     let text = text.to_string();
     if !hides_ports() {
         return text;
     }
-    text.chars()
-        .map(|c| if c.is_ascii_digit() { MASK } else { c })
-        .collect()
+    let mut out = String::new();
+    let mut digits = false;
+    for c in text.chars() {
+        if c.is_ascii_digit() {
+            if !digits {
+                out.push_str(&mask());
+            }
+            digits = true;
+        } else {
+            out.push(c);
+            digits = false;
+        }
+    }
+    out
 }
 
 // ---------- secret files ----------
@@ -532,8 +555,10 @@ pub fn file_hidden(name: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn b(n: usize) -> String {
-        "•".repeat(n)
+    /// The mask that stands in for any span. The argument is the hidden text's length,
+    /// kept for readability only: the mask never depends on it.
+    fn b(_n: usize) -> String {
+        mask()
     }
 
     fn setup(f: impl FnOnce(&mut Settings)) {
@@ -568,10 +593,7 @@ mod tests {
             format!("{} testers retest", b(6))
         );
         assert_eq!(redact("/home/tester/file"), format!("/home/{}/file", b(6)));
-        assert_eq!(
-            redact("my-server.example.com ok"),
-            "••••••••••••••••••••• ok"
-        );
+        assert_eq!(redact("my-server.example.com ok"), format!("{} ok", b(21)));
         assert_eq!(redact("999.1.1.1 1.2.3.4.5"), "999.1.1.1 1.2.3.4.5");
         assert_eq!(redact("ab ab"), "ab ab");
 
@@ -672,17 +694,15 @@ mod tests {
             format!("deploy {} now", b(14))
         );
 
-        // Length is always preserved.
+        // The mask never reveals the hidden length.
         setup(|_| {});
-        for s in [
-            "tester@1.2.3.4",
-            "x 192.168.1.1 y",
-            "naïve tester ✓ fe80::1",
-            "A=1 token=ünï",
-            "ssh -p 2222 [::1]:22 Port 7",
-        ] {
-            assert_eq!(redact(s).chars().count(), s.chars().count());
-        }
+        assert_eq!(
+            redact("PASSWORD=a"),
+            redact("PASSWORD=a-much-longer-secret")
+        );
+        assert_eq!(redact("1.2.3.4"), redact("192.168.100.200"));
+        assert_eq!(port(22), port(65535));
+
         configure(&Settings::default());
     }
 }

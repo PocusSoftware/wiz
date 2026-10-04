@@ -195,7 +195,7 @@ impl TextInput {
         }
         if self.hidden_view(focused) {
             return match self.hide_mode {
-                Hide::Full | Hide::Port => "•".repeat(self.text.chars().count()),
+                Hide::Full | Hide::Port => privacy::mask(),
                 _ => privacy::redact(&self.text).into_owned(),
             };
         }
