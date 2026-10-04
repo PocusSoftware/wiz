@@ -6227,6 +6227,7 @@ dependencies = [
  "gpui",
  "objc2",
  "objc2-app-kit",
+ "objc2-foundation",
  "raw-window-handle",
  "ssh-core",
  "tokio",

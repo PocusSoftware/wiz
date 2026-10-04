@@ -32,6 +32,21 @@ pub fn mark(what: &str) {
 
 pub static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
+/// Show the castle in the Dock even when running unbundled (cargo run).
+fn set_dock_icon() {
+    use objc2::{AnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSData;
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let data = NSData::with_bytes(include_bytes!("../assets/brand/icon-512.png"));
+    if let Some(img) = NSImage::initWithData(NSImage::alloc(), &data) {
+        // SAFETY: called on the main thread with a valid image.
+        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&img)) };
+    }
+}
+
 fn main() {
     START.get_or_init(std::time::Instant::now);
     mark("main");
@@ -60,7 +75,7 @@ fn main() {
                 KeyBinding::new("cmd-n", NewHost, None),
             ]);
             cx.set_menus(vec![Menu {
-                name: "ssh-client".into(),
+                name: "Bastion".into(),
                 items: vec![
                     MenuItem::action("New Host", NewHost),
                     MenuItem::action("Close Tab", CloseTab),
@@ -80,7 +95,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("ssh-client".into()),
+                        title: Some("Bastion".into()),
                         appears_transparent: true,
                         // Native buttons are parked off-screen; the title bar draws its own.
                         traffic_light_position: Some(point(px(-100.), px(-100.))),
@@ -91,6 +106,7 @@ fn main() {
             )
             .unwrap();
             mark("window opened");
+            set_dock_icon();
             cx.activate(true);
         });
 }

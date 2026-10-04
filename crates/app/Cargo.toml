@@ -5,7 +5,7 @@ version.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "ssh-client"
+name = "bastion"
 path = "src/main.rs"
 
 [dependencies]
@@ -14,7 +14,8 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dirs = "7.0.0"
 gpui = "0.2.2"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSEvent", "NSApplication", "NSResponder", "NSView"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSEvent", "NSApplication", "NSResponder", "NSView", "NSImage"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData"] }
 raw-window-handle = "0.6"
 ssh-core = { path = "../core" }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync"] }

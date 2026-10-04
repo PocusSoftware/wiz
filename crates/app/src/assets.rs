@@ -39,7 +39,8 @@ icons!(
     "chevron-up",
     "chevron-down",
     "check",
-    "arrow-down"
+    "arrow-down",
+    "castle"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

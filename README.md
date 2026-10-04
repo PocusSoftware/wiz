@@ -1,6 +1,6 @@
-# ssh-client
+# Bastion
 
-Fast, macOS-only SSH client in Rust. Frontend: GPUI (pending Xcode). Backend in `crates/core`.
+A castle-keep for your servers: a fast, macOS-only SSH client in Rust (terminal, SFTP, Docker). Frontend: GPUI (pending Xcode). Backend in `crates/core`.
 
 ## Status
 - Done: password, key (ed25519/RSA, encrypted) and keyboard-interactive auth, Keychain secrets,
@@ -28,7 +28,7 @@ terminal_font_size = 13.0
 Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Nerd Font, then Menlo.
 
 ## Notes
-- Startup: `SSHC_TIMING=1 target/release/ssh-client` prints launch milestones (about 170-195 ms to first render warm).
+- Startup: `SSHC_TIMING=1 target/release/bastion` prints launch milestones (about 170-195 ms to first render warm).
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.
 - Directory symlinks are skipped by transfers so link loops cannot run forever. File symlinks are followed.
 
@@ -40,3 +40,6 @@ Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Ner
 
 ## Data locations
 Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.ssh-client/`. Passwords and key passphrases are in the Keychain. Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
+
+## App bundle and icon
+`scripts/bundle.sh` builds `dist/Bastion.app` (release binary, castle icon, ad-hoc signature). The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/castle.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.

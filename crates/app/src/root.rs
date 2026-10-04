@@ -798,8 +798,8 @@ impl Root {
                         cx.notify();
                     }))
                     .child(icon(
-                        "server",
-                        14.,
+                        "castle",
+                        16.,
                         if self.home { ACCENT_TEXT } else { MUTED },
                     )),
             )
