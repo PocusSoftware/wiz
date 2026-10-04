@@ -1,6 +1,7 @@
 #!/bin/sh
-# Builds dist/Bastion.app (release binary, icon, ad-hoc signature) and installs it to
-# /Applications, replacing the previous build.
+# Builds Bastion.app (release binary, icon, ad-hoc signature) and installs it to
+# /Applications, replacing the previous build. The staging copy in dist/ is removed so
+# Launchpad and Spotlight only see the installed app.
 set -e
 cd "$(dirname "$0")/.."
 cargo build --release -p ssh-app
@@ -35,4 +36,8 @@ codesign --force --deep -s - "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
 rm -rf /Applications/Bastion.app
 ditto "$APP" /Applications/Bastion.app
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$LSREGISTER" -u "$APP" 2>/dev/null || true
+rm -rf "$APP"
+"$LSREGISTER" -f /Applications/Bastion.app
 echo "installed /Applications/Bastion.app"
