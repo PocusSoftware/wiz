@@ -134,6 +134,13 @@ impl Connection {
         Ok(out)
     }
 
+    /// Open an SFTP session on this connection.
+    pub async fn open_sftp(&self) -> Result<crate::sftp::Sftp> {
+        let ch = self.handle.channel_open_session().await?;
+        ch.request_subsystem(true, "sftp").await?;
+        crate::sftp::Sftp::new(ch.into_stream()).await
+    }
+
     /// Open an interactive PTY. With `command` set it runs that instead of the login shell
     /// (used for `docker exec -it`).
     pub async fn open_shell(&self, cols: u16, rows: u16, command: Option<&str>) -> Result<Shell> {

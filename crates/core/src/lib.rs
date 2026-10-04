@@ -7,6 +7,7 @@ pub mod error;
 pub mod hostkey;
 pub mod keychain;
 pub mod session;
+pub mod sftp;
 pub mod terminal;
 
 pub use error::{Error, Result};

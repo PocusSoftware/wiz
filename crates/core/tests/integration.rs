@@ -282,3 +282,82 @@ async fn dropping_shell_ends_remote_process() {
     let after = c.exec("pgrep -f 'sleep 4242'").await.unwrap();
     assert_ne!(after.status, Some(0), "remote process survived tab close");
 }
+
+#[tokio::test]
+async fn sftp_roundtrip_rename_remove_cancel() {
+    use ssh_core::sftp::{self, Progress};
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let h = host(2223, AuthMethod::Password);
+    let creds = Credentials::Key {
+        path: keys().join("ed25519"),
+        passphrase: None,
+    };
+    let c = Connection::connect(&h, &creds, verifier(&d, Arc::new(TrustAll)))
+        .await
+        .unwrap();
+    let sftp = c.open_sftp().await.unwrap();
+
+    let home = sftp.home().await.unwrap();
+    assert_eq!(home, "/home/tester");
+    let base = sftp::join(&home, "sftp-test");
+    if sftp.exists(&base).await.unwrap() {
+        sftp.remove(&base).await.unwrap();
+    }
+    sftp.mkdir(&base).await.unwrap();
+
+    // Local tree: a.txt, sub/b.bin (300 KB, crosses chunk boundaries), sub/deep/c.txt
+    let src = tempfile::tempdir().unwrap();
+    let tree = src.path().join("tree");
+    std::fs::create_dir_all(tree.join("sub/deep")).unwrap();
+    std::fs::write(tree.join("a.txt"), "hello").unwrap();
+    let blob: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(tree.join("sub/b.bin"), &blob).unwrap();
+    std::fs::write(tree.join("sub/deep/c.txt"), "deep").unwrap();
+
+    let up = Progress::new();
+    let remote_tree = sftp::join(&base, "tree");
+    sftp.upload(&tree, &remote_tree, &up).await.unwrap();
+    assert_eq!(
+        up.done.load(std::sync::atomic::Ordering::Relaxed),
+        5 + 300_000 + 4
+    );
+    assert_eq!(up.fraction(), 1.0);
+
+    let listing = sftp.list(&remote_tree).await.unwrap();
+    assert_eq!(
+        listing.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
+        ["sub", "a.txt"]
+    );
+    assert!(listing[0].is_dir && !listing[1].is_dir);
+    assert_eq!(listing[1].size, 5);
+
+    let back = src.path().join("back");
+    sftp.download(&remote_tree, &back, &Progress::new())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(back.join("sub/b.bin")).unwrap(), blob);
+    assert_eq!(
+        std::fs::read_to_string(back.join("sub/deep/c.txt")).unwrap(),
+        "deep"
+    );
+
+    // rename
+    let renamed = sftp::join(&base, "tree2");
+    sftp.rename(&remote_tree, &renamed).await.unwrap();
+    assert!(!sftp.exists(&remote_tree).await.unwrap());
+    assert!(sftp.is_dir(&renamed).await.unwrap());
+
+    // cancel mid-transfer leaves no partial file behind
+    let big = src.path().join("big.bin");
+    std::fs::write(&big, vec![7u8; 8_000_000]).unwrap();
+    let p = Progress::new();
+    p.cancel();
+    let r = sftp.upload(&big, &sftp::join(&base, "big.bin"), &p).await;
+    assert!(matches!(r, Err(Error::Cancelled)), "{r:?}");
+    assert!(!sftp.exists(&sftp::join(&base, "big.bin")).await.unwrap());
+
+    // recursive remove
+    sftp.remove(&base).await.unwrap();
+    assert!(!sftp.exists(&base).await.unwrap());
+}

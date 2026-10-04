@@ -34,6 +34,10 @@ pub enum Error {
         port: u16,
         fingerprint: String,
     },
+    #[error("sftp: {0}")]
+    Sftp(String),
+    #[error("transfer cancelled")]
+    Cancelled,
     #[error("remote command failed: {0}")]
     Remote(String),
 }
