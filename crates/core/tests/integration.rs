@@ -361,3 +361,77 @@ async fn sftp_roundtrip_rename_remove_cancel() {
     sftp.remove(&base).await.unwrap();
     assert!(!sftp.exists(&base).await.unwrap());
 }
+
+#[tokio::test]
+async fn sftp_server_to_server_and_local_copy() {
+    use ssh_core::sftp::{self, Progress};
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let v = verifier(&d, Arc::new(TrustAll));
+    let a = Connection::connect(
+        &host(2223, AuthMethod::Password),
+        &Credentials::Key {
+            path: keys().join("ed25519"),
+            passphrase: None,
+        },
+        v.clone(),
+    )
+    .await
+    .unwrap();
+    let b = Connection::connect(
+        &host(2222, AuthMethod::Password),
+        &Credentials::Password("hunter2".into()),
+        v,
+    )
+    .await
+    .unwrap();
+    let (sa, sb) = (a.open_sftp().await.unwrap(), b.open_sftp().await.unwrap());
+
+    let root_a = "/home/tester/s2s-src";
+    let root_b = "/home/tester/s2s-dst";
+    for (s, p) in [(&sa, root_a), (&sb, root_b)] {
+        if s.exists(p).await.unwrap() {
+            s.remove(p).await.unwrap();
+        }
+    }
+    sa.mkdir(root_a).await.unwrap();
+    sb.mkdir(root_b).await.unwrap();
+
+    // Seed server A with a tree via upload, then copy A -> B.
+    let src = tempfile::tempdir().unwrap();
+    let tree = src.path().join("t");
+    std::fs::create_dir_all(tree.join("x/y")).unwrap();
+    let blob: Vec<u8> = (0..400_000u32).map(|i| (i % 253) as u8).collect();
+    std::fs::write(tree.join("x/big.bin"), &blob).unwrap();
+    std::fs::write(tree.join("x/y/small.txt"), "tiny").unwrap();
+    sa.upload(&tree, &sftp::join(root_a, "t"), &Progress::new())
+        .await
+        .unwrap();
+
+    let p = Progress::new();
+    sa.copy_to(&sftp::join(root_a, "t"), &sb, &sftp::join(root_b, "t"), &p)
+        .await
+        .unwrap();
+    assert_eq!(p.files.load(std::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(p.done.load(std::sync::atomic::Ordering::Relaxed), 400_004);
+
+    // Verify on B by downloading.
+    let back = src.path().join("back");
+    sb.download(&sftp::join(root_b, "t"), &back, &Progress::new())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(back.join("x/big.bin")).unwrap(), blob);
+    assert_eq!(
+        std::fs::read_to_string(back.join("x/y/small.txt")).unwrap(),
+        "tiny"
+    );
+
+    // Local -> local copy.
+    let copy = src.path().join("copy");
+    sftp::local::copy(&back, &copy, &Progress::new()).unwrap();
+    assert_eq!(std::fs::read(copy.join("x/big.bin")).unwrap(), blob);
+
+    for (s, p) in [(&sa, root_a), (&sb, root_b)] {
+        s.remove(p).await.unwrap();
+    }
+}

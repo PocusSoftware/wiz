@@ -25,7 +25,20 @@ icons!(
     "key",
     "folder",
     "minus",
-    "maximize"
+    "maximize",
+    "file",
+    "arrow-left",
+    "arrow-right",
+    "arrow-up",
+    "home",
+    "eye",
+    "eye-off",
+    "folder-plus",
+    "upload",
+    "download",
+    "chevron-up",
+    "chevron-down",
+    "check"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

@@ -6261,6 +6261,7 @@ name = "ssh-app"
 version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
+ "chrono",
  "dirs 7.0.0",
  "gpui",
  "ssh-core",

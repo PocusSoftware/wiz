@@ -54,6 +54,8 @@ pub fn parent(path: &str) -> String {
 pub struct Progress {
     pub done: AtomicU64,
     pub total: AtomicU64,
+    /// Files seen by the pre-scan, for the "use rsync" heuristic.
+    pub files: AtomicU64,
     pub cancel: AtomicBool,
     pub current: std::sync::Mutex<String>,
 }
@@ -184,13 +186,14 @@ impl Sftp {
         }
     }
 
-    /// Bytes under a remote path.
-    async fn remote_size(&self, path: &str) -> Result<u64> {
+    /// (bytes, files) under a remote path.
+    async fn remote_size(&self, path: &str) -> Result<(u64, u64)> {
         let md = self.inner.metadata(path).await.map_err(e)?;
         if !md.is_dir() {
-            return Ok(md.len());
+            return Ok((md.len(), 1));
         }
         let mut total = 0;
+        let mut files = 0;
         let mut stack = vec![path.to_string()];
         while let Some(dir) = stack.pop() {
             for ent in self.list(&dir).await? {
@@ -200,16 +203,18 @@ impl Sftp {
                     }
                 } else {
                     total += ent.size;
+                    files += 1;
                 }
             }
         }
-        Ok(total)
+        Ok((total, files))
     }
 
     /// Download `remote` (file or directory) to the exact local path `dest`.
     pub async fn download(&self, remote: &str, dest: &Path, progress: &Progress) -> Result<()> {
-        let total = self.remote_size(remote).await?;
+        let (total, files) = self.remote_size(remote).await?;
         progress.total.fetch_add(total, Ordering::Relaxed);
+        progress.files.fetch_add(files, Ordering::Relaxed);
         self.download_inner(remote, dest, progress).await
     }
 
@@ -252,10 +257,73 @@ impl Sftp {
         })
     }
 
+    /// Copy `src` on this server to `dest` on another one, streaming chunk by chunk
+    /// through this process (no temporary file). Works for files and directories.
+    pub async fn copy_to(
+        &self,
+        src: &str,
+        other: &Sftp,
+        dest: &str,
+        progress: &Progress,
+    ) -> Result<()> {
+        let (total, files) = self.remote_size(src).await?;
+        progress.total.fetch_add(total, Ordering::Relaxed);
+        progress.files.fetch_add(files, Ordering::Relaxed);
+        self.copy_inner(src, other, dest, progress).await
+    }
+
+    fn copy_inner<'a>(
+        &'a self,
+        src: &'a str,
+        other: &'a Sftp,
+        dest: &'a str,
+        progress: &'a Progress,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            progress.check()?;
+            let md = self.inner.metadata(src).await.map_err(e)?;
+            if md.is_dir() {
+                if !other.exists(dest).await? {
+                    other.mkdir(dest).await?;
+                }
+                for ent in self.list(src).await? {
+                    self.copy_inner(
+                        &join(src, &ent.name),
+                        other,
+                        &join(dest, &ent.name),
+                        progress,
+                    )
+                    .await?;
+                }
+                return Ok(());
+            }
+            progress.set_current(src.rsplit('/').next().unwrap_or(src));
+            let mut input = self.inner.open(src).await.map_err(e)?;
+            let mut out = other.inner.create(dest).await.map_err(e)?;
+            let mut buf = vec![0u8; CHUNK];
+            loop {
+                if let Err(err) = progress.check() {
+                    drop(out);
+                    let _ = other.inner.remove_file(dest).await;
+                    return Err(err);
+                }
+                let n = input.read(&mut buf).await?;
+                if n == 0 {
+                    break;
+                }
+                out.write_all(&buf[..n]).await?;
+                progress.done.fetch_add(n as u64, Ordering::Relaxed);
+            }
+            out.shutdown().await?;
+            Ok(())
+        })
+    }
+
     /// Upload `local` (file or directory) to the exact remote path `dest`.
     pub async fn upload(&self, local: &Path, dest: &str, progress: &Progress) -> Result<()> {
-        let total = local_size(local)?;
+        let (total, files) = local_size(local)?;
         progress.total.fetch_add(total, Ordering::Relaxed);
+        progress.files.fetch_add(files, Ordering::Relaxed);
         self.upload_inner(local, dest, progress).await
     }
 
@@ -344,6 +412,44 @@ pub mod local {
         Ok(std::fs::rename(from, to)?)
     }
 
+    /// Recursive copy with progress and cancel (blocking).
+    pub fn copy(src: &Path, dest: &Path, progress: &Progress) -> Result<()> {
+        let (total, files) = local_size(src)?;
+        progress.total.fetch_add(total, Ordering::Relaxed);
+        progress.files.fetch_add(files, Ordering::Relaxed);
+        copy_inner(src, dest, progress)
+    }
+
+    fn copy_inner(src: &Path, dest: &Path, progress: &Progress) -> Result<()> {
+        use std::io::{Read, Write};
+        progress.check()?;
+        if std::fs::metadata(src)?.is_dir() {
+            std::fs::create_dir_all(dest)?;
+            for ent in std::fs::read_dir(src)? {
+                let ent = ent?;
+                copy_inner(&ent.path(), &dest.join(ent.file_name()), progress)?;
+            }
+            return Ok(());
+        }
+        progress.set_current(&src.file_name().unwrap_or_default().to_string_lossy());
+        let mut input = std::fs::File::open(src)?;
+        let mut out = std::fs::File::create(dest)?;
+        let mut buf = vec![0u8; CHUNK];
+        loop {
+            if let Err(err) = progress.check() {
+                drop(out);
+                let _ = std::fs::remove_file(dest);
+                return Err(err);
+            }
+            let n = input.read(&mut buf)?;
+            if n == 0 {
+                return Ok(());
+            }
+            out.write_all(&buf[..n])?;
+            progress.done.fetch_add(n as u64, Ordering::Relaxed);
+        }
+    }
+
     pub fn remove(path: &Path) -> Result<()> {
         let md = std::fs::symlink_metadata(path)?;
         if md.is_dir() {
@@ -354,16 +460,18 @@ pub mod local {
     }
 }
 
-fn local_size(path: &Path) -> Result<u64> {
+fn local_size(path: &Path) -> Result<(u64, u64)> {
     let md = std::fs::metadata(path)?;
     if !md.is_dir() {
-        return Ok(md.len());
+        return Ok((md.len(), 1));
     }
-    let mut total = 0;
+    let (mut total, mut files) = (0, 0);
     for ent in std::fs::read_dir(path)? {
-        total += local_size(&ent?.path())?;
+        let (b, f) = local_size(&ent?.path())?;
+        total += b;
+        files += f;
     }
-    Ok(total)
+    Ok((total, files))
 }
 
 #[cfg(test)]
