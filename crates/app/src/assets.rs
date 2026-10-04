@@ -38,7 +38,8 @@ icons!(
     "download",
     "chevron-up",
     "chevron-down",
-    "check"
+    "check",
+    "arrow-down"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

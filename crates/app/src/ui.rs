@@ -86,3 +86,29 @@ pub fn primary_button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
 pub fn label(text: &str) -> Div {
     div().text_xs().text_color(c(MUTED)).child(text.to_string())
 }
+
+/// Square checkbox with a label. The caller attaches `on_click`.
+pub fn checkbox(id: impl Into<ElementId>, checked: bool, text: &str) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(22.))
+        .px(px(4.))
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .cursor_pointer()
+        .hover(|s| s.bg(c(HOVER)))
+        .child(
+            div()
+                .size(px(14.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .border_2()
+                .border_color(c(if checked { ACCENT } else { BORDER }))
+                .bg(c(if checked { ACCENT } else { ELEMENT }))
+                .when(checked, |d| d.child(icon("check", 10., 0xffffff))),
+        )
+        .child(text.to_string())
+}

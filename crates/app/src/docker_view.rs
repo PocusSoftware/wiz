@@ -11,8 +11,15 @@ use crate::theme::*;
 use crate::ui::icon_button;
 
 pub enum DockerEvent {
-    Shell { id: String, name: String },
-    Logs { name: String, text: String },
+    Shell {
+        id: String,
+        name: String,
+    },
+    Logs {
+        name: String,
+        id: String,
+        backend: Backend,
+    },
 }
 
 impl EventEmitter<DockerEvent> for DockerView {}
@@ -98,19 +105,11 @@ impl DockerView {
     }
 
     fn logs(&mut self, id: String, name: String, cx: &mut Context<Self>) {
-        let backend = self.backend.clone();
-        cx.spawn(async move |this, cx| {
-            let r = runtime::spawn(async move { backend.logs(&id, 500).await }).await;
-            this.update(cx, |t, cx| match r {
-                Ok(text) => cx.emit(DockerEvent::Logs { name, text }),
-                Err(e) => {
-                    t.error = Some(e.to_string().into());
-                    cx.notify();
-                }
-            })
-            .ok();
-        })
-        .detach();
+        cx.emit(DockerEvent::Logs {
+            name,
+            id,
+            backend: self.backend.clone(),
+        });
     }
 }
 

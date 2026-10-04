@@ -1,6 +1,6 @@
 //! Terminal tab: paints the alacritty grid with gpui and maps keys and mouse back to the PTY.
 
-use alacritty_terminal::grid::Scroll;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::TermMode;
@@ -171,6 +171,16 @@ impl TerminalView {
                         cx.write_to_clipboard(ClipboardItem::new_string(s));
                     }
                     cx.stop_propagation();
+                }
+                ("a", false) => {
+                    let grid = self.term.term.grid();
+                    let top = GridPoint::new(grid.topmost_line(), Column(0));
+                    let bottom = GridPoint::new(grid.bottommost_line(), grid.last_column());
+                    let mut sel = Selection::new(SelectionType::Simple, top, Side::Left);
+                    sel.update(bottom, Side::Right);
+                    self.term.term.selection = Some(sel);
+                    cx.stop_propagation();
+                    cx.notify();
                 }
                 ("v", false) => {
                     if let Some(t) = cx.read_from_clipboard().and_then(|c| c.text()) {
@@ -395,7 +405,12 @@ impl Render for TerminalView {
                 cx.listener(|this, ev: &MouseDownEvent, window, cx| {
                     window.focus(&this.focus);
                     let (p, side) = this.grid_point(ev.position);
-                    this.term.term.selection = Some(Selection::new(SelectionType::Simple, p, side));
+                    let ty = match ev.click_count {
+                        2 => SelectionType::Semantic,
+                        c if c >= 3 => SelectionType::Lines,
+                        _ => SelectionType::Simple,
+                    };
+                    this.term.term.selection = Some(Selection::new(ty, p, side));
                     this.selecting = true;
                     cx.notify();
                 }),

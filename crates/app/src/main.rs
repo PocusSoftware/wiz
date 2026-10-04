@@ -1,7 +1,9 @@
+mod anim;
 mod assets;
 mod docker_view;
 mod host_form;
 mod input;
+mod log_view;
 mod root;
 mod rsync;
 mod runtime;

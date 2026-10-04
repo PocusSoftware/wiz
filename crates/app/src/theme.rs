@@ -29,6 +29,8 @@ pub const ACCENT: u32 = 0xf05a29;
 pub const ACCENT_TEXT: u32 = 0xf87c49;
 pub const SELECTION: u32 = 0x4a2a1e;
 pub const SELECTED_ROW: u32 = 0xf05a2966;
+/// Highlight behind selected text in inputs and logs.
+pub const SELECTION_TEXT: u32 = 0xf05a2f66;
 pub const GREEN: u32 = 0x8fbf8a;
 pub const RED: u32 = 0xe5534b;
 pub const YELLOW: u32 = 0xe3b341;

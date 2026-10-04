@@ -14,6 +14,7 @@ use gpui::{
 use ssh_core::config::Host;
 use ssh_core::sftp::{self, Entry, Progress, Sftp, local};
 
+use crate::anim::{fade_in, pop_in};
 use crate::input::TextInput;
 use crate::rsync;
 use crate::runtime;
@@ -1348,17 +1349,20 @@ impl SftpView {
                 .when(is_cur, |d| d.child(icon("check", 12., ACCENT_TEXT)))
         });
         Some(
-            div()
-                .absolute()
-                .occlude()
-                .top(px(22.))
-                .left_0()
-                .w(px(220.))
-                .bg(c(ELEVATED))
-                .border_2()
-                .border_color(c(BORDER))
-                .children(rows)
-                .into_any_element(),
+            pop_in(
+                div()
+                    .absolute()
+                    .occlude()
+                    .top(px(22.))
+                    .left_0()
+                    .w(px(220.))
+                    .bg(c(ELEVATED))
+                    .border_2()
+                    .border_color(c(BORDER))
+                    .children(rows),
+                (side.tag(), 6000usize),
+            )
+            .into_any_element(),
         )
     }
 
@@ -1590,7 +1594,10 @@ impl SftpView {
                         ),
                     )
             });
-            div().flex().flex_col().child(row).children(hint)
+            fade_in(
+                div().flex().flex_col().child(row).children(hint),
+                ("xfer-row", id as usize),
+            )
         });
         Some(
             div()

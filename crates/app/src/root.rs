@@ -14,8 +14,10 @@ use ssh_core::keychain::{self, Kind};
 use ssh_core::session::{Connection, Credentials};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
+use crate::anim::{fade_in, pop_in, stagger_in};
 use crate::docker_view::{DockerEvent, DockerView};
 use crate::host_form::{FormEvent, HostForm};
+use crate::log_view::LogView;
 use crate::runtime;
 use crate::sftp_view::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::terminal_view::TerminalView;
@@ -68,7 +70,7 @@ enum TabKind {
     Terminal(Entity<TerminalView>),
     Docker(Entity<DockerView>),
     Sftp(Entity<SftpView>),
-    Logs(Vec<SharedString>),
+    Logs(Entity<LogView>),
 }
 
 struct Tab {
@@ -84,6 +86,8 @@ pub struct Root {
     active: usize,
     /// Showing the hosts page instead of a session tab.
     home: bool,
+    /// Bumped whenever the visible page changes, to replay the page fade.
+    epoch: u64,
     form: Option<Entity<HostForm>>,
     trust: Option<TrustRequest>,
     trust_tx: UnboundedSender<TrustRequest>,
@@ -121,6 +125,7 @@ impl Root {
             tabs: vec![],
             active: 0,
             home: true,
+            epoch: 0,
             form: None,
             trust: None,
             trust_tx,
@@ -152,9 +157,14 @@ impl Root {
         }
         self.active = ix;
         self.home = false;
+        self.epoch += 1;
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => t.read(cx).focus(window),
             TabKind::Sftp(v) => {
+                let h = v.read(cx).focus_handle(cx);
+                window.focus(&h)
+            }
+            TabKind::Logs(v) => {
                 let h = v.read(cx).focus_handle(cx);
                 window.focus(&h)
             }
@@ -172,6 +182,7 @@ impl Root {
         if self.tabs.is_empty() {
             self.active = 0;
             self.home = true;
+            self.epoch += 1;
             window.focus(&self.focus);
             cx.notify();
         } else {
@@ -442,15 +453,13 @@ impl Root {
                     }
                 }
             }
-            DockerEvent::Logs { name, text } => {
-                let lines: Vec<SharedString> = text
-                    .lines()
-                    .map(|l| l.replace('\t', "    ").into())
-                    .collect();
+            DockerEvent::Logs { name, id, backend } => {
+                let (id, backend) = (id.clone(), backend.clone());
+                let view = cx.new(|cx| LogView::new(backend, id, cx));
                 self.push_tab(
                     Tab {
                         label: format!("{name} · logs").into(),
-                        kind: TabKind::Logs(lines),
+                        kind: TabKind::Logs(view),
                     },
                     window,
                     cx,
@@ -660,7 +669,11 @@ impl Root {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .children(cards)
+                    .children(
+                        cards
+                            .enumerate()
+                            .map(|(i, card)| stagger_in(card, ("card", i), i)),
+                    )
                     .child(
                         small_card("add-host", "plus", "Add host")
                             .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
@@ -766,6 +779,7 @@ impl Root {
                     .tooltip(crate::ui::tip("Hosts"))
                     .on_click(cx.listener(|t, _, w, cx| {
                         t.home = true;
+                        t.epoch += 1;
                         w.focus(&t.focus);
                         cx.notify();
                     }))
@@ -803,19 +817,7 @@ impl Root {
             Some(TabKind::Terminal(v)) => v.clone().into_any_element(),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
             Some(TabKind::Sftp(v)) => v.clone().into_any_element(),
-            Some(TabKind::Logs(lines)) => div()
-                .id("logs")
-                .size_full()
-                .overflow_scroll()
-                .p_3()
-                .font_family(mono())
-                .text_xs()
-                .children(
-                    lines
-                        .iter()
-                        .map(|l| div().whitespace_nowrap().child(l.clone())),
-                )
-                .into_any_element(),
+            Some(TabKind::Logs(v)) => v.clone().into_any_element(),
             None => div()
                 .size_full()
                 .flex()
@@ -846,18 +848,22 @@ impl Render for Root {
         {
             eprintln!("first render after {:?}", t.elapsed());
         }
-        let overlay = |child: AnyElement| {
-            div()
-                .absolute()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(gpui::hsla(0., 0., 0., 0.6))
-                .child(child)
+        let overlay = |id: &'static str, child: AnyElement| {
+            fade_in(
+                div()
+                    .absolute()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(gpui::hsla(0., 0., 0., 0.6))
+                    .child(pop_in(div().child(child), (id, 1usize))),
+                (id, 0usize),
+            )
         };
         let trust_dialog = self.trust.as_ref().map(|req| {
             overlay(
+                "trust",
                 div()
                     .w(px(380.))
                     .p_3()
@@ -910,7 +916,10 @@ impl Render for Root {
                     .into_any_element(),
             )
         });
-        let form = self.form.clone().map(|f| overlay(f.into_any_element()));
+        let form = self
+            .form
+            .clone()
+            .map(|f| overlay("form", f.into_any_element()));
 
         div()
             .id("root")
@@ -942,7 +951,10 @@ impl Render for Root {
                     .flex()
                     .flex_col()
                     .child(self.tab_bar(cx))
-                    .child(div().flex_1().min_h_0().child(self.content(cx)))
+                    .child(div().flex_1().min_h_0().child(fade_in(
+                        div().size_full().child(self.content(cx)),
+                        ("page", self.epoch as usize),
+                    )))
                     .when_some(self.status.clone(), |d, (msg, err)| {
                         d.child(
                             div()
