@@ -4,10 +4,12 @@ mod docker_view;
 mod host_form;
 mod input;
 mod log_view;
+mod prefs;
 mod privacy;
 mod root;
 mod rsync;
 mod runtime;
+mod settings_view;
 mod sftp_view;
 mod terminal_view;
 mod theme;
@@ -56,13 +58,15 @@ fn main() {
         .run(|cx: &mut App| {
             mark("app run");
             mark("before fonts");
+            let settings = ssh_core::config::Settings::load();
+            prefs::init(settings.clone());
             let ts = cx.text_system().clone();
             // An unknown family resolves to the fallback font, so a candidate exists
             // exactly when it resolves to something else.
             let fallback = ts.resolve_font(&gpui::font("\u{1}no-such-font"));
             theme::init_fonts(
                 &|name| ts.resolve_font(&gpui::font(name.to_string())) != fallback,
-                &ssh_core::config::Settings::load(),
+                &settings,
             );
             mark("after fonts");
             cx.on_action(|_: &Quit, cx| cx.quit());

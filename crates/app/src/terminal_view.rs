@@ -66,7 +66,11 @@ impl TerminalView {
         })
         .detach();
         Self {
-            term: Terminal::new(cols, rows),
+            term: Terminal::with_scrollback(
+                cols,
+                rows,
+                crate::prefs::get().terminal_scrollback() as usize,
+            ),
             input,
             focus: cx.focus_handle(),
             cols,

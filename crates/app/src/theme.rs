@@ -39,7 +39,6 @@ pub const TITLEBAR_H: f32 = 30.0;
 
 static MONO: OnceLock<SharedString> = OnceLock::new();
 static UI: OnceLock<SharedString> = OnceLock::new();
-static MONO_SIZE: OnceLock<f32> = OnceLock::new();
 
 fn pick(
     want: Option<&str>,
@@ -71,7 +70,6 @@ pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &ssh_core::config::Settings)
         exists,
         "Menlo",
     ));
-    let _ = MONO_SIZE.set(s.terminal_font_size.unwrap_or(13.0));
 }
 
 pub fn ui() -> SharedString {
@@ -83,5 +81,5 @@ pub fn mono() -> SharedString {
 }
 
 pub fn mono_size() -> f32 {
-    MONO_SIZE.get().copied().unwrap_or(13.0)
+    crate::prefs::get().terminal_font_size().clamp(6.0, 48.0)
 }

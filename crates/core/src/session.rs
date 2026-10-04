@@ -86,9 +86,19 @@ impl Connection {
         creds: &Credentials,
         verifier: HostKeyVerifier,
     ) -> Result<Self> {
+        Self::connect_with(host, creds, verifier, Duration::from_secs(30)).await
+    }
+
+    /// Like `connect`, with a custom keep-alive interval (zero disables it).
+    pub async fn connect_with(
+        host: &Host,
+        creds: &Credentials,
+        verifier: HostKeyVerifier,
+        keepalive: Duration,
+    ) -> Result<Self> {
         let config = Arc::new(client::Config {
             inactivity_timeout: None,
-            keepalive_interval: Some(Duration::from_secs(30)),
+            keepalive_interval: (!keepalive.is_zero()).then_some(keepalive),
             keepalive_max: 3,
             nodelay: true,
             ..Default::default()

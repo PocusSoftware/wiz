@@ -72,6 +72,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn settings_defaults_and_roundtrip() {
+        let d = Settings::default();
+        assert!(!d.hide_sensitive() && d.mask_ipv6() && d.hide_secret_files() && d.animations());
+        assert_eq!(
+            (
+                d.log_refresh_secs(),
+                d.keepalive_secs(),
+                d.rsync_hint_files()
+            ),
+            (2, 30, 500)
+        );
+        assert!(d.secret_file_patterns().contains(&".env".to_string()));
+
+        let s = Settings {
+            hide_sensitive: Some(true),
+            mask_ipv6: Some(false),
+            extra_mask: Some(vec!["falcon".into()]),
+            terminal_font_size: Some(15.0),
+            ..Default::default()
+        };
+        let text = toml::to_string_pretty(&s).unwrap();
+        let back: Settings = toml::from_str(&text).unwrap();
+        assert!(back.hide_sensitive() && !back.mask_ipv6());
+        assert_eq!(back.extra_mask(), vec!["falcon".to_string()]);
+        assert_eq!(back.terminal_font_size(), 15.0);
+        // Unset fields keep their defaults.
+        assert!(back.mask_ipv4() && back.log_tail_lines() == 2000);
+    }
+
+    #[test]
     fn roundtrip() {
         let cfg = Config {
             hosts: vec![
@@ -97,16 +127,86 @@ mod tests {
     }
 }
 
-/// Optional `settings.toml` next to `hosts.toml`. Every field is optional.
-#[derive(Debug, Default, Serialize, Deserialize)]
+/// Default secret-file patterns (matched case-insensitively against a file name).
+pub const DEFAULT_SECRET_FILES: &[&str] = &[
+    ".env",
+    ".env.*",
+    "*.env",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    "id_dsa",
+    ".netrc",
+    ".npmrc",
+    ".pgpass",
+];
+
+/// Optional `settings.toml` next to `hosts.toml`. Every field is optional; the getters
+/// below give the defaults.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    /// Font family for the interface.
+    // Appearance
     pub ui_font: Option<String>,
-    /// Font family for terminals.
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
-    /// Mask hostnames, IPs and usernames in the UI.
+    pub animations: Option<bool>,
+    // Privacy
     pub hide_sensitive: Option<bool>,
+    pub mask_hosts: Option<bool>,
+    pub mask_users: Option<bool>,
+    pub mask_ipv4: Option<bool>,
+    pub mask_ipv6: Option<bool>,
+    /// Mask values of `PASSWORD=...` / `token: ...` style assignments in output.
+    pub mask_secrets: Option<bool>,
+    /// Hide secret files (see `secret_file_patterns`) from file lists.
+    pub hide_secret_files: Option<bool>,
+    /// Extra words to mask everywhere.
+    pub extra_mask: Option<Vec<String>>,
+    pub secret_file_patterns: Option<Vec<String>>,
+    // Files
+    pub show_dotfiles: Option<bool>,
+    pub rsync_hint_files: Option<u32>,
+    pub rsync_hint_mb: Option<u32>,
+    // Logs, Docker, terminal, network
+    pub log_refresh_secs: Option<u32>,
+    pub log_tail_lines: Option<u32>,
+    pub docker_refresh_secs: Option<u32>,
+    pub terminal_scrollback: Option<u32>,
+    pub keepalive_secs: Option<u32>,
+}
+
+macro_rules! getters {
+    ($($name:ident: $ty:ty = $default:expr;)*) => {
+        impl Settings {
+            $(pub fn $name(&self) -> $ty { self.$name.clone().unwrap_or_else(|| $default) })*
+        }
+    };
+}
+
+getters! {
+    terminal_font_size: f32 = 13.0;
+    animations: bool = true;
+    hide_sensitive: bool = false;
+    mask_hosts: bool = true;
+    mask_users: bool = true;
+    mask_ipv4: bool = true;
+    mask_ipv6: bool = true;
+    mask_secrets: bool = true;
+    hide_secret_files: bool = true;
+    extra_mask: Vec<String> = Vec::new();
+    secret_file_patterns: Vec<String> = DEFAULT_SECRET_FILES.iter().map(|s| s.to_string()).collect();
+    show_dotfiles: bool = false;
+    rsync_hint_files: u32 = 500;
+    rsync_hint_mb: u32 = 1024;
+    log_refresh_secs: u32 = 2;
+    log_tail_lines: u32 = 2000;
+    docker_refresh_secs: u32 = 5;
+    terminal_scrollback: u32 = 10_000;
+    keepalive_secs: u32 = 30;
 }
 
 impl Settings {

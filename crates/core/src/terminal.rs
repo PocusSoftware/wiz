@@ -50,13 +50,24 @@ pub struct Terminal {
 
 impl Terminal {
     pub fn new(cols: u16, rows: u16) -> Self {
+        Self::with_scrollback(cols, rows, 10_000)
+    }
+
+    pub fn with_scrollback(cols: u16, rows: u16, scrollback: usize) -> Self {
         let listener = Listener::default();
         let size = Size {
             cols: cols as usize,
             rows: rows as usize,
         };
         Self {
-            term: Term::new(Config::default(), &size, listener.clone()),
+            term: Term::new(
+                Config {
+                    scrolling_history: scrollback,
+                    ..Config::default()
+                },
+                &size,
+                listener.clone(),
+            ),
             parser: Processor::new(),
             listener,
         }

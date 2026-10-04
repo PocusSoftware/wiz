@@ -16,8 +16,6 @@ use crate::runtime;
 use crate::theme::*;
 use crate::ui::{checkbox, icon_button};
 
-const TAIL: u32 = 2000;
-const REFRESH: Duration = Duration::from_secs(2);
 const ROW_H: f32 = 18.0;
 const PAD_X: f32 = 12.0;
 const FONT_SIZE: f32 = 12.0;
@@ -88,7 +86,10 @@ impl LogView {
         this.refresh(cx);
         cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(REFRESH).await;
+                let secs = crate::prefs::get().log_refresh_secs().max(1) as u64;
+                cx.background_executor()
+                    .timer(Duration::from_secs(secs))
+                    .await;
                 if this
                     .update(cx, |t, cx| t.auto.then(|| t.refresh(cx)))
                     .is_err()
@@ -103,8 +104,9 @@ impl LogView {
 
     fn refresh(&self, cx: &mut Context<Self>) {
         let (backend, id) = (self.backend.clone(), self.id.clone());
+        let tail = crate::prefs::get().log_tail_lines().max(10);
         cx.spawn(async move |this, cx| {
-            let r = runtime::spawn(async move { backend.logs(&id, TAIL).await }).await;
+            let r = runtime::spawn(async move { backend.logs(&id, tail).await }).await;
             this.update(cx, |t, cx| {
                 match r {
                     Ok(text) => {

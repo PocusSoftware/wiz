@@ -187,6 +187,8 @@ struct Pane {
     sort: SortKey,
     asc: bool,
     hidden: bool,
+    /// Entries left out because they match a secret-file pattern.
+    secret_hidden: usize,
     nav: u64,
     typed: (String, Instant),
 }
@@ -213,7 +215,8 @@ impl Pane {
             scroll: UniformListScrollHandle::new(),
             sort: SortKey::Name,
             asc: true,
-            hidden: false,
+            hidden: crate::prefs::get().show_dotfiles(),
+            secret_hidden: 0,
             nav: 0,
             typed: (String::new(), Instant::now()),
         }
@@ -221,10 +224,19 @@ impl Pane {
 
     /// Rebuild the visible list: hidden filter, then sort (folders always first).
     fn rebuild(&mut self) {
+        self.secret_hidden = self
+            .raw
+            .iter()
+            .filter(|e| {
+                (self.hidden || !e.name.starts_with('.')) && crate::privacy::file_hidden(&e.name)
+            })
+            .count();
         let mut v: Vec<Entry> = self
             .raw
             .iter()
-            .filter(|e| self.hidden || !e.name.starts_with('.'))
+            .filter(|e| {
+                (self.hidden || !e.name.starts_with('.')) && !crate::privacy::file_hidden(&e.name)
+            })
             .cloned()
             .collect();
         let asc = self.asc;
@@ -416,6 +428,13 @@ impl SftpView {
     }
 
     /// Start browsing both panes at their home directories.
+    /// Settings changed (secret-file patterns, privacy switch): re-filter both lists.
+    pub fn settings_changed(&mut self, cx: &mut Context<Self>) {
+        self.left.rebuild();
+        self.right.rebuild();
+        cx.notify();
+    }
+
     pub fn load(&mut self, cx: &mut Context<Self>) {
         self.go(Side::Left, "~".into(), false, cx);
         self.go(Side::Right, "~".into(), false, cx);
@@ -1295,6 +1314,8 @@ impl SftpView {
                     })
                     .child(div().text_color(c(PLACEHOLDER)).child(if sel > 0 {
                         format!("{sel} of {count} selected")
+                    } else if p.secret_hidden > 0 {
+                        format!("{count} items · {} secret hidden", p.secret_hidden)
                     } else {
                         format!("{count} items")
                     })),
@@ -1490,7 +1511,9 @@ impl SftpView {
             let files = tr.progress.files.load(Ordering::Relaxed);
             let total = tr.progress.total.load(Ordering::Relaxed);
             // Past this size rsync (delta, compression, resume) beats per-file SFTP.
-            let big = files >= 500 || total >= (1u64 << 30);
+            let prefs = crate::prefs::get();
+            let big = files >= prefs.rsync_hint_files() as u64
+                || total >= (prefs.rsync_hint_mb() as u64) << 20;
             let status: (String, u32) = match &tr.state {
                 TState::Running => (
                     format!(

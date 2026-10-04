@@ -19,14 +19,16 @@ Password server: `tester`/`hunter2` on :2222. Key-only server on :2223 (mounts d
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
 
 ## Settings
-Optional `~/Library/Application Support/dev.enty.ssh-client/settings.toml`:
-```toml
-ui_font = "IBM Plex Sans"
-terminal_font = "JetBrainsMono Nerd Font"
-terminal_font_size = 13.0
-hide_sensitive = false
-```
-Defaults: UI font IBM Plex Sans, then Noto Sans; terminal font JetBrainsMono Nerd Font, then Menlo.
+Open the Settings tab with the sliders icon in the title bar or ⌘, . Everything is saved as you change it to `~/Library/Application Support/dev.enty.ssh-client/settings.toml` (all keys optional):
+
+| Area | Keys |
+|---|---|
+| Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_ipv4`, `mask_ipv6`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
+| Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `animations` |
+| Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
+| Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |
+
+The eye button in the title bar flips `hide_sensitive`.
 
 ## Notes
 - Startup: `SSHC_TIMING=1 target/release/bastion` prints launch milestones (about 170-195 ms to first render warm).
@@ -46,4 +48,4 @@ Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.
 `scripts/bundle.sh` builds `dist/Bastion.app` (release binary, castle icon, ad-hoc signature). The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/castle.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.
 
 ## Hide sensitive information
-Settings (sliders icon in the title bar, or ⌘,) has a "Hide sensitive information" switch. It masks hostnames, IP addresses and usernames (configured hosts and users, the local user, and any IPv4 address) in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. Masking keeps text length, so layout and selections do not shift. Host and user fields in the add/edit form show bullets until focused. Copying still copies the real text.
+Masks hostnames, usernames, IPv4 and IPv6 addresses, and the values in `PASSWORD=...` / `token: ...` style lines, in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host and user fields in the add/edit form show bullets until focused. Copying still copies the real text.

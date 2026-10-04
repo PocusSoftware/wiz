@@ -5,9 +5,9 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    Bounds, ClipboardItem, Context, FocusHandle, Focusable, Font, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, SharedString,
-    TextRun, Window, canvas, div, point, prelude::*, px, size,
+    Bounds, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Font, IntoElement,
+    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render,
+    SharedString, TextRun, Window, canvas, div, point, prelude::*, px, size,
 };
 
 use crate::privacy;
@@ -23,6 +23,13 @@ pub enum Hide {
     /// Show only bullets.
     Full,
 }
+
+/// Emitted whenever the user changes the text.
+pub enum InputEvent {
+    Changed,
+}
+
+impl EventEmitter<InputEvent> for TextInput {}
 
 pub struct TextInput {
     text: String,
@@ -220,6 +227,7 @@ impl TextInput {
     }
 
     fn on_key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
+        let before = self.text.clone();
         let k = &ev.keystroke;
         let m = &k.modifiers;
         let shift = m.shift;
@@ -312,6 +320,9 @@ impl TextInput {
                     return;
                 }
             },
+        }
+        if self.text != before {
+            cx.emit(InputEvent::Changed);
         }
         cx.stop_propagation();
         cx.notify();

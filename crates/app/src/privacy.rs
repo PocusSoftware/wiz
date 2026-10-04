@@ -1,4 +1,5 @@
-//! "Hide sensitive information": masks hostnames, IP addresses and usernames.
+//! "Hide sensitive information": masks hostnames, usernames, IP addresses and secret values,
+//! and hides secret files from file lists. Every category is configurable (see `Settings`).
 //!
 //! Masking keeps the text length (every masked char becomes a bullet) so terminal columns,
 //! selections and click positions never shift.
@@ -8,31 +9,79 @@ use std::ops::Range;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use ssh_core::config::Settings;
+
 const MASK: char = '•';
 
 static HIDE: AtomicBool = AtomicBool::new(false);
-/// Strings to hide: configured hosts and usernames plus the local user.
-static TOKENS: RwLock<Vec<Vec<char>>> = RwLock::new(Vec::new());
+static CONFIG: RwLock<Config> = RwLock::new(Config::new());
+
+struct Config {
+    ipv4: bool,
+    ipv6: bool,
+    secrets: bool,
+    hosts: bool,
+    users: bool,
+    files: bool,
+    host_tokens: Vec<Vec<char>>,
+    user_tokens: Vec<Vec<char>>,
+    extra: Vec<Vec<char>>,
+    patterns: Vec<String>,
+}
+
+impl Config {
+    const fn new() -> Self {
+        Self {
+            ipv4: true,
+            ipv6: true,
+            secrets: true,
+            hosts: true,
+            users: true,
+            files: true,
+            host_tokens: Vec::new(),
+            user_tokens: Vec::new(),
+            extra: Vec::new(),
+            patterns: Vec::new(),
+        }
+    }
+}
 
 pub fn hide() -> bool {
     HIDE.load(Ordering::Relaxed)
 }
 
-pub fn set_hide(on: bool) {
-    HIDE.store(on, Ordering::Relaxed);
+/// Apply the privacy-related settings.
+pub fn configure(s: &Settings) {
+    HIDE.store(s.hide_sensitive(), Ordering::Relaxed);
+    let mut c = CONFIG.write().unwrap();
+    c.ipv4 = s.mask_ipv4();
+    c.ipv6 = s.mask_ipv6();
+    c.secrets = s.mask_secrets();
+    c.hosts = s.mask_hosts();
+    c.users = s.mask_users();
+    c.files = s.hide_secret_files();
+    c.extra = tokens(s.extra_mask());
+    c.patterns = s.secret_file_patterns();
 }
 
-/// Replace the list of known-sensitive strings. Very short ones are ignored: masking every
-/// "a" or "io" would make the UI unreadable.
-pub fn set_tokens(tokens: impl IntoIterator<Item = String>) {
-    let mut v: Vec<Vec<char>> = tokens
+fn tokens(items: impl IntoIterator<Item = String>) -> Vec<Vec<char>> {
+    // Very short strings are ignored: masking every "a" or "io" would make the UI unreadable.
+    let mut v: Vec<Vec<char>> = items
         .into_iter()
+        .map(|t| t.trim().to_string())
         .filter(|t| t.chars().count() >= 3)
         .map(|t| t.chars().collect())
         .collect();
     v.sort();
     v.dedup();
-    *TOKENS.write().unwrap() = v;
+    v
+}
+
+/// Hostnames and usernames from the saved hosts (plus the local user) to mask.
+pub fn set_known(hosts: Vec<String>, users: Vec<String>) {
+    let mut c = CONFIG.write().unwrap();
+    c.host_tokens = tokens(hosts);
+    c.user_tokens = tokens(users);
 }
 
 fn is_word(c: char) -> bool {
@@ -47,8 +96,9 @@ fn boundary_after(chars: &[char], end: usize) -> bool {
     end >= chars.len() || !is_word(chars[end])
 }
 
-/// Length of an IPv4 address starting at `i`, if there is one.
-fn ipv4_len(chars: &[char], i: usize) -> Option<usize> {
+// ---------- IPv4 ----------
+
+fn parse_ipv4(chars: &[char], i: usize) -> Option<usize> {
     let mut pos = i;
     for octet in 0..4 {
         let start = pos;
@@ -80,31 +130,215 @@ fn continues_number(chars: &[char], start: usize, end: usize) -> bool {
     after || before
 }
 
+fn ipv4_len(chars: &[char], i: usize) -> Option<usize> {
+    let n = parse_ipv4(chars, i)?;
+    (boundary_after(chars, i + n) && !continues_number(chars, i, i + n)).then_some(n)
+}
+
+// ---------- IPv6 ----------
+
+fn is_ipv4_str(s: &str) -> bool {
+    let chars: Vec<char> = s.chars().collect();
+    parse_ipv4(&chars, 0) == Some(chars.len())
+}
+
+/// Count 16-bit groups in one side of an address ("1:2:3" or "1:2:1.2.3.4").
+fn count_groups(part: &str) -> Option<usize> {
+    if part.is_empty() {
+        return Some(0);
+    }
+    let groups: Vec<&str> = part.split(':').collect();
+    let mut n = 0;
+    for (k, g) in groups.iter().enumerate() {
+        if g.contains('.') {
+            if k != groups.len() - 1 || !is_ipv4_str(g) {
+                return None;
+            }
+            n += 2;
+        } else {
+            if g.is_empty() || g.len() > 4 || !g.chars().all(|c| c.is_ascii_hexdigit()) {
+                return None;
+            }
+            n += 1;
+        }
+    }
+    Some(n)
+}
+
+/// A real IPv6 address needs either `::` or all eight groups. That keeps times (10:45:30)
+/// and MAC addresses (aa:bb:cc:dd:ee:ff) out.
+fn valid_ipv6(s: &str) -> bool {
+    if s.contains(":::") || s.matches("::").count() > 1 || !s.chars().any(|c| c.is_ascii_hexdigit())
+    {
+        return false;
+    }
+    match s.split_once("::") {
+        // Compressed forms need a longer group (fe80, 2001, db8...) so scope-like text such
+        // as `a::b` is left alone. `::1` is the one common exception.
+        Some((head, tail)) => match (count_groups(head), count_groups(tail)) {
+            (Some(h), Some(t)) => {
+                h + t <= 7
+                    && (s == "::1"
+                        || s.split(':').any(|g| g.len() >= 3 && !g.contains('.'))
+                        || s.contains('.'))
+            }
+            _ => false,
+        },
+        None => count_groups(s) == Some(8),
+    }
+}
+
+fn ipv6_len(chars: &[char], i: usize) -> Option<usize> {
+    let mut end = i;
+    while end < chars.len()
+        && (chars[end].is_ascii_hexdigit() || chars[end] == ':' || chars[end] == '.')
+    {
+        end += 1;
+    }
+    // Sentence punctuation after the address is not part of it.
+    while end > i && chars[end - 1] == '.' {
+        end -= 1;
+    }
+    if end > i + 1 && chars[end - 1] == ':' && chars[end - 2] != ':' {
+        end -= 1;
+    }
+    if end - i < 2 {
+        return None;
+    }
+    let cand: String = chars[i..end].iter().collect();
+    if !valid_ipv6(&cand) {
+        return None;
+    }
+    // Optional zone id, e.g. fe80::1%en0
+    let mut stop = end;
+    if chars.get(stop) == Some(&'%') {
+        stop += 1;
+        while stop < chars.len() && (chars[stop].is_alphanumeric() || "._-".contains(chars[stop])) {
+            stop += 1;
+        }
+    }
+    boundary_after(chars, stop).then_some(stop - i)
+}
+
+// ---------- secrets ----------
+
+const SECRET_KEYS: &[&str] = &[
+    "password",
+    "passwd",
+    "passphrase",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "api-key",
+    "private_key",
+    "privatekey",
+    "access_key",
+    "accesskey",
+    "credential",
+];
+
+fn key_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || "_.-".contains(c)
+}
+
+/// Values of `PASSWORD=hunter2`, `token: abc`, `"api_key": "xyz"` style assignments.
+fn secret_ranges(chars: &[char]) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    for i in 0..chars.len() {
+        if chars[i] != '=' && chars[i] != ':' {
+            continue;
+        }
+        // Key before the separator, allowing a closing quote or spaces ("password" : ...).
+        let mut k_end = i;
+        while k_end > 0
+            && (chars[k_end - 1] == '"' || chars[k_end - 1] == '\'' || chars[k_end - 1] == ' ')
+        {
+            k_end -= 1;
+        }
+        let mut k_start = k_end;
+        while k_start > 0 && key_char(chars[k_start - 1]) {
+            k_start -= 1;
+        }
+        if k_start == k_end {
+            continue;
+        }
+        let key: String = chars[k_start..k_end]
+            .iter()
+            .collect::<String>()
+            .to_lowercase();
+        if !SECRET_KEYS.iter().any(|w| key.contains(w)) {
+            continue;
+        }
+        // Value after the separator.
+        let mut v = i + 1;
+        while v < chars.len() && chars[v] == ' ' {
+            v += 1;
+        }
+        let quote = chars.get(v).copied().filter(|c| *c == '"' || *c == '\'');
+        if quote.is_some() {
+            v += 1;
+        }
+        let mut e = v;
+        while e < chars.len() {
+            let ch = chars[e];
+            let stop = match quote {
+                Some(q) => ch == q,
+                None => ch.is_whitespace() || ch == ',' || ch == ';' || ch == '"' || ch == '\'',
+            };
+            if stop {
+                break;
+            }
+            e += 1;
+        }
+        if e > v {
+            out.push(v..e);
+        }
+    }
+    out
+}
+
+// ---------- public API ----------
+
 /// Char ranges of `chars` that must be masked.
 pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
-    let tokens = TOKENS.read().unwrap();
+    let cfg = CONFIG.read().unwrap();
     let mut out: Vec<Range<usize>> = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let mut hit = 0;
         if boundary_before(chars, i) {
-            if let Some(n) = ipv4_len(chars, i)
-                && boundary_after(chars, i + n)
-                && !continues_number(chars, i, i + n)
+            if cfg.ipv6
+                && let Some(n) = ipv6_len(chars, i)
             {
                 hit = n;
             }
-            for t in tokens.iter() {
-                let end = i + t.len();
-                if end <= chars.len()
-                    && t.len() > hit
-                    && chars[i..end]
-                        .iter()
-                        .zip(t)
-                        .all(|(a, b)| a.to_lowercase().eq(b.to_lowercase()))
-                    && boundary_after(chars, end)
-                {
-                    hit = t.len();
+            if cfg.ipv4
+                && let Some(n) = ipv4_len(chars, i)
+            {
+                hit = hit.max(n);
+            }
+            let lists = [
+                (cfg.hosts, &cfg.host_tokens),
+                (cfg.users, &cfg.user_tokens),
+                (true, &cfg.extra),
+            ];
+            for (on, list) in lists {
+                if !on {
+                    continue;
+                }
+                for t in list {
+                    let end = i + t.len();
+                    if end <= chars.len()
+                        && t.len() > hit
+                        && chars[i..end]
+                            .iter()
+                            .zip(t)
+                            .all(|(a, b)| a.to_lowercase().eq(b.to_lowercase()))
+                        && boundary_after(chars, end)
+                    {
+                        hit = t.len();
+                    }
                 }
             }
         }
@@ -114,6 +348,19 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
         } else {
             i += 1;
         }
+    }
+    if cfg.secrets {
+        out.extend(secret_ranges(chars));
+        out.sort_by_key(|r| r.start);
+        // Merge overlaps so each char is masked once.
+        let mut merged: Vec<Range<usize>> = Vec::new();
+        for r in out {
+            match merged.last_mut() {
+                Some(last) if r.start <= last.end => last.end = last.end.max(r.end),
+                _ => merged.push(r),
+            }
+        }
+        return merged;
     }
     out
 }
@@ -140,39 +387,167 @@ pub fn mask_char() -> char {
     MASK
 }
 
+// ---------- secret files ----------
+
+/// Case-insensitive match with `*` (any run) and `?` (one char).
+fn glob(pattern: &str, name: &str) -> bool {
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let n: Vec<char> = name.to_lowercase().chars().collect();
+    let (mut pi, mut ni, mut star, mut mark) = (0, 0, None, 0);
+    while ni < n.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == n[ni]) {
+            pi += 1;
+            ni += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = Some(pi);
+            mark = ni;
+            pi += 1;
+        } else if let Some(s) = star {
+            pi = s + 1;
+            mark += 1;
+            ni = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+/// True when a file list should not show `name` (hiding on, and it matches a secret pattern).
+pub fn file_hidden(name: &str) -> bool {
+    if !hide() {
+        return false;
+    }
+    let cfg = CONFIG.read().unwrap();
+    cfg.files && cfg.patterns.iter().any(|p| glob(p.trim(), name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // The statics are shared, so every case runs inside one test.
-    #[test]
-    fn masks_tokens_ips_and_keeps_length() {
-        set_tokens([
-            "tester".to_string(),
-            "my-server.example.com".to_string(),
-            "ab".to_string(),
-        ]);
-        set_hide(false);
-        assert_eq!(redact("tester@10.0.0.5"), "tester@10.0.0.5");
+    fn b(n: usize) -> String {
+        "•".repeat(n)
+    }
 
-        set_hide(true);
-        assert_eq!(redact("tester@10.0.0.5:22"), "••••••@••••••••:22");
-        // Case-insensitive, boundaries respected: "testers" and "retest" stay readable.
-        assert_eq!(redact("TESTER testers retest"), "•••••• testers retest");
-        assert_eq!(redact("/home/tester/file"), "/home/••••••/file");
+    fn setup(f: impl FnOnce(&mut Settings)) {
+        let mut s = Settings {
+            hide_sensitive: Some(true),
+            ..Default::default()
+        };
+        f(&mut s);
+        configure(&s);
+        set_known(
+            vec!["my-server.example.com".into(), "ab".into()],
+            vec!["tester".into()],
+        );
+    }
+
+    // The statics are shared, so everything runs in one test.
+    #[test]
+    fn privacy_engine() {
+        // Off: nothing changes.
+        configure(&Settings::default());
+        assert_eq!(redact("tester@10.0.0.5"), "tester@10.0.0.5");
+        assert!(!file_hidden(".env"));
+
+        setup(|_| {});
+        // Names and IPv4, keeping length.
+        assert_eq!(
+            redact("tester@10.0.0.5:22"),
+            format!("{}@{}:22", b(6), b(8))
+        );
+        assert_eq!(
+            redact("TESTER testers retest"),
+            format!("{} testers retest", b(6))
+        );
+        assert_eq!(redact("/home/tester/file"), format!("/home/{}/file", b(6)));
         assert_eq!(
             redact("my-server.example.com ok"),
             "••••••••••••••••••••• ok"
         );
-        // Not an address: octet out of range, or part of a longer number.
-        assert_eq!(redact("999.1.1.1"), "999.1.1.1");
-        assert_eq!(redact("1.2.3.4.5"), "1.2.3.4.5");
-        // Too-short tokens are ignored.
+        assert_eq!(redact("999.1.1.1 1.2.3.4.5"), "999.1.1.1 1.2.3.4.5");
         assert_eq!(redact("ab ab"), "ab ab");
+
+        // IPv6: full, compressed, loopback, bracketed with port, mapped IPv4, zone id.
+        assert_eq!(redact("2001:db8::1"), b(11));
+        assert_eq!(redact("fe80::1%en0 up"), format!("{} up", b(11)));
+        assert_eq!(redact("[::1]:22"), format!("[{}]:22", b(3)));
+        assert_eq!(
+            redact("2001:0db8:0000:0000:0000:ff00:0042:8329."),
+            format!("{}.", b(39))
+        );
+        assert_eq!(redact("::ffff:192.168.1.1"), b(18));
+        // Not addresses: times, MACs, C++ scopes, plain words.
+        assert_eq!(
+            redact("at 10:45:30 mac aa:bb:cc:dd:ee:ff"),
+            "at 10:45:30 mac aa:bb:cc:dd:ee:ff"
+        );
+        assert_eq!(redact("std::string a::b"), "std::string a::b");
+
+        // Secret-looking assignments.
+        assert_eq!(
+            redact("PASSWORD=hunter2 ok"),
+            format!("PASSWORD={} ok", b(7))
+        );
+        assert_eq!(
+            redact("api_key: \"abc def\" x"),
+            format!("api_key: \"{}\" x", b(7))
+        );
+        assert_eq!(
+            redact("{\"token\": \"xyz\"}"),
+            format!("{{\"token\": \"{}\"}}", b(3))
+        );
+        assert_eq!(
+            redact("PATH=/usr/bin user=alice"),
+            "PATH=/usr/bin user=alice"
+        );
+
+        // Files.
+        assert!(file_hidden(".env"));
+        assert!(file_hidden(".ENV.production"));
+        assert!(file_hidden("prod.env"));
+        assert!(file_hidden("server.pem"));
+        assert!(file_hidden("id_ed25519"));
+        assert!(!file_hidden("id_ed25519.pub"));
+        assert!(!file_hidden("environment.txt"));
+        assert!(!file_hidden("readme.md"));
+
+        // Every category can be switched off on its own.
+        setup(|s| s.mask_ipv6 = Some(false));
+        assert_eq!(redact("2001:db8::1"), "2001:db8::1");
+        setup(|s| s.mask_ipv4 = Some(false));
+        assert_eq!(redact("10.0.0.5"), "10.0.0.5");
+        setup(|s| s.mask_secrets = Some(false));
+        assert_eq!(redact("PASSWORD=hunter2"), "PASSWORD=hunter2");
+        setup(|s| s.mask_users = Some(false));
+        assert_eq!(redact("tester"), "tester");
+        setup(|s| s.mask_hosts = Some(false));
+        assert_eq!(redact("my-server.example.com"), "my-server.example.com");
+        setup(|s| s.hide_secret_files = Some(false));
+        assert!(!file_hidden(".env"));
+        setup(|s| s.secret_file_patterns = Some(vec!["*.sql".into()]));
+        assert!(file_hidden("dump.SQL"));
+        assert!(!file_hidden(".env"));
+        setup(|s| s.extra_mask = Some(vec!["Project-Falcon".into()]));
+        assert_eq!(
+            redact("deploy project-falcon now"),
+            format!("deploy {} now", b(14))
+        );
+
         // Length is always preserved.
-        for s in ["tester@1.2.3.4", "x 192.168.1.1 y", "naïve tester ✓"] {
+        setup(|_| {});
+        for s in [
+            "tester@1.2.3.4",
+            "x 192.168.1.1 y",
+            "naïve tester ✓ fe80::1",
+            "A=1 token=ünï",
+        ] {
             assert_eq!(redact(s).chars().count(), s.chars().count());
         }
-        set_hide(false);
+        configure(&Settings::default());
     }
 }

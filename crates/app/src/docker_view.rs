@@ -48,7 +48,10 @@ impl DockerView {
         this.refresh(cx);
         cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_secs(5)).await;
+                let secs = crate::prefs::get().docker_refresh_secs().max(1) as u64;
+                cx.background_executor()
+                    .timer(Duration::from_secs(secs))
+                    .await;
                 this.update(cx, |t, cx| t.refresh(cx)).ok()?;
             }
             #[allow(unreachable_code)]
