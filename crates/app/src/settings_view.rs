@@ -235,6 +235,7 @@ impl Render for SettingsView {
                     .child(self.toggle("p-users", "Mask usernames", "Saved users and your macOS user.", s.mask_users(), |s, v| s.mask_users = Some(v), cx))
                     .child(self.toggle("p-v4", "Mask IPv4 addresses", "Any address like 10.0.0.5, even unsaved ones.", s.mask_ipv4(), |s, v| s.mask_ipv4 = Some(v), cx))
                     .child(self.toggle("p-v6", "Mask IPv6 addresses", "Full and compressed forms, ::1, zone ids (fe80::1%en0).", s.mask_ipv6(), |s, v| s.mask_ipv6 = Some(v), cx))
+                    .child(self.toggle("p-ports", "Mask ports", "After addresses and saved hosts (host:2222), ssh -p 2222, Port 22, PORT=3000.", s.mask_ports(), |s, v| s.mask_ports = Some(v), cx))
                     .child(self.toggle("p-sec", "Mask secret values", "The value in PASSWORD=..., token: ..., \"api_key\": \"...\" lines.", s.mask_secrets(), |s, v| s.mask_secrets = Some(v), cx))
                     .child(self.toggle("p-files", "Hide secret files", "Leave files matching the patterns below out of file lists.", s.hide_secret_files(), |s, v| s.hide_secret_files = Some(v), cx))
                     .child(self.text("Secret file patterns", "Comma separated. * matches any run, ? one character.", &self.patterns))
@@ -278,7 +279,8 @@ impl Render for SettingsView {
                                     .unwrap_or_default(),
                             )),
                     )
-                    .when_some(self.error.clone(), |d, e| d.child(div().mt_2().text_color(c(RED)).child(e))),
+                    .when_some(self.error.clone(), |d, e| d.child(div().mt_2().text_color(c(RED)).child(e)))
+                    .child(div().mt_4().text_xs().text_color(c(PLACEHOLDER)).child(format!("Bastion {}", crate::version()))),
             )
     }
 }

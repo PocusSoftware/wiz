@@ -98,7 +98,7 @@ mod tests {
         assert_eq!(back.extra_mask(), vec!["falcon".to_string()]);
         assert_eq!(back.terminal_font_size(), 15.0);
         // Unset fields keep their defaults.
-        assert!(back.mask_ipv4() && back.log_tail_lines() == 2000);
+        assert!(back.mask_ipv4() && back.mask_ports() && back.log_tail_lines() == 2000);
     }
 
     #[test]
@@ -160,6 +160,8 @@ pub struct Settings {
     pub mask_users: Option<bool>,
     pub mask_ipv4: Option<bool>,
     pub mask_ipv6: Option<bool>,
+    /// Mask port numbers (`host:2222`, `ssh -p 2222`, `Port 22`).
+    pub mask_ports: Option<bool>,
     /// Mask values of `PASSWORD=...` / `token: ...` style assignments in output.
     pub mask_secrets: Option<bool>,
     /// Hide secret files (see `secret_file_patterns`) from file lists.
@@ -195,6 +197,7 @@ getters! {
     mask_users: bool = true;
     mask_ipv4: bool = true;
     mask_ipv6: bool = true;
+    mask_ports: bool = true;
     mask_secrets: bool = true;
     hide_secret_files: bool = true;
     extra_mask: Vec<String> = Vec::new();

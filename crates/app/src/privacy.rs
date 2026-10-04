@@ -1,4 +1,4 @@
-//! "Hide sensitive information": masks hostnames, usernames, IP addresses and secret values,
+//! "Hide sensitive information": masks hostnames, usernames, IP addresses, ports and secret values,
 //! and hides secret files from file lists. Every category is configurable (see `Settings`).
 //!
 //! Masking keeps the text length (every masked char becomes a bullet) so terminal columns,
@@ -19,6 +19,7 @@ static CONFIG: RwLock<Config> = RwLock::new(Config::new());
 struct Config {
     ipv4: bool,
     ipv6: bool,
+    ports: bool,
     secrets: bool,
     hosts: bool,
     users: bool,
@@ -34,6 +35,7 @@ impl Config {
         Self {
             ipv4: true,
             ipv6: true,
+            ports: true,
             secrets: true,
             hosts: true,
             users: true,
@@ -56,6 +58,7 @@ pub fn configure(s: &Settings) {
     let mut c = CONFIG.write().unwrap();
     c.ipv4 = s.mask_ipv4();
     c.ipv6 = s.mask_ipv6();
+    c.ports = s.mask_ports();
     c.secrets = s.mask_secrets();
     c.hosts = s.mask_hosts();
     c.users = s.mask_users();
@@ -220,6 +223,74 @@ fn ipv6_len(chars: &[char], i: usize) -> Option<usize> {
     boundary_after(chars, stop).then_some(stop - i)
 }
 
+// ---------- ports ----------
+
+/// Length of a port number (1-65535) at `i`, ending on a word boundary.
+fn port_len(chars: &[char], i: usize) -> Option<usize> {
+    let mut end = i;
+    while end < chars.len() && chars[end].is_ascii_digit() && end - i < 5 {
+        end += 1;
+    }
+    let val: u32 = chars[i..end].iter().collect::<String>().parse().ok()?;
+    ((1..=65535).contains(&val) && boundary_after(chars, end)).then_some(end - i)
+}
+
+/// The port in `addr:port` / `[v6]:port`, where the address ends at `end`.
+fn port_after(chars: &[char], mut end: usize) -> Option<Range<usize>> {
+    if chars.get(end) == Some(&']') {
+        end += 1;
+    }
+    if chars.get(end) != Some(&':') {
+        return None;
+    }
+    port_len(chars, end + 1).map(|n| end + 1..end + 1 + n)
+}
+
+/// Ports given by name: `Port 22`, `PORT=3000`, `db_port: 5432`, `--port 8080`, and the
+/// `-p`/`-P` flag on lines that run ssh, scp or rsync.
+fn keyed_port_ranges(chars: &[char]) -> Vec<Range<usize>> {
+    let line: String = chars.iter().collect::<String>().to_lowercase();
+    let ssh_line = ["ssh", "scp", "rsync"].iter().any(|w| line.contains(w));
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if !key_char(chars[i]) || (i > 0 && key_char(chars[i - 1])) {
+            i += 1;
+            continue;
+        }
+        let mut k_end = i;
+        while k_end < chars.len() && key_char(chars[k_end]) {
+            k_end += 1;
+        }
+        let key: String = chars[i..k_end].iter().collect::<String>().to_lowercase();
+        let flag = key == "-p" && ssh_line && (i == 0 || chars[i - 1].is_whitespace());
+        let named = key == "port" || ["_port", "-port", ".port"].iter().any(|w| key.ends_with(w));
+        if flag || named {
+            // Separator: closing quote, spaces, one optional `=` or `:`, opening quote.
+            let mut v = k_end;
+            while v < chars.len() && (chars[v] == '"' || chars[v] == '\'') {
+                v += 1;
+            }
+            while v < chars.len() && chars[v] == ' ' {
+                v += 1;
+            }
+            if !flag && matches!(chars.get(v), Some('=' | ':')) {
+                v += 1;
+            }
+            while v < chars.len() && (chars[v] == ' ' || chars[v] == '"' || chars[v] == '\'') {
+                v += 1;
+            }
+            if v > k_end
+                && let Some(n) = port_len(chars, v)
+            {
+                out.push(v..v + n);
+            }
+        }
+        i = k_end;
+    }
+    out
+}
+
 // ---------- secrets ----------
 
 const SECRET_KEYS: &[&str] = &[
@@ -308,38 +379,52 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
     while i < chars.len() {
         let mut hit = 0;
         if boundary_before(chars, i) {
-            if cfg.ipv6
-                && let Some(n) = ipv6_len(chars, i)
-            {
-                hit = n;
+            // Longest address here, masked or not; a port after it is masked on its own.
+            let mut addr = 0;
+            if let Some(n) = ipv6_len(chars, i) {
+                addr = n;
+                if cfg.ipv6 {
+                    hit = n;
+                }
             }
-            if cfg.ipv4
-                && let Some(n) = ipv4_len(chars, i)
-            {
-                hit = hit.max(n);
+            if let Some(n) = ipv4_len(chars, i) {
+                addr = addr.max(n);
+                if cfg.ipv4 {
+                    hit = hit.max(n);
+                }
             }
             let lists = [
-                (cfg.hosts, &cfg.host_tokens),
-                (cfg.users, &cfg.user_tokens),
-                (true, &cfg.extra),
+                (cfg.hosts, true, &cfg.host_tokens),
+                (cfg.users, false, &cfg.user_tokens),
+                (true, false, &cfg.extra),
             ];
-            for (on, list) in lists {
-                if !on {
+            for (on, is_addr, list) in lists {
+                if !on && !is_addr {
                     continue;
                 }
                 for t in list {
                     let end = i + t.len();
                     if end <= chars.len()
-                        && t.len() > hit
                         && chars[i..end]
                             .iter()
                             .zip(t)
                             .all(|(a, b)| a.to_lowercase().eq(b.to_lowercase()))
                         && boundary_after(chars, end)
                     {
-                        hit = t.len();
+                        if is_addr {
+                            addr = addr.max(t.len());
+                        }
+                        if on {
+                            hit = hit.max(t.len());
+                        }
                     }
                 }
+            }
+            if cfg.ports
+                && addr > 0
+                && let Some(r) = port_after(chars, i + addr)
+            {
+                out.push(r);
             }
         }
         if hit > 0 {
@@ -349,20 +434,22 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
             i += 1;
         }
     }
+    if cfg.ports {
+        out.extend(keyed_port_ranges(chars));
+    }
     if cfg.secrets {
         out.extend(secret_ranges(chars));
-        out.sort_by_key(|r| r.start);
-        // Merge overlaps so each char is masked once.
-        let mut merged: Vec<Range<usize>> = Vec::new();
-        for r in out {
-            match merged.last_mut() {
-                Some(last) if r.start <= last.end => last.end = last.end.max(r.end),
-                _ => merged.push(r),
-            }
-        }
-        return merged;
     }
-    out
+    out.sort_by_key(|r| r.start);
+    // Merge overlaps so each char is masked once.
+    let mut merged: Vec<Range<usize>> = Vec::new();
+    for r in out {
+        match merged.last_mut() {
+            Some(last) if r.start <= last.end => last.end = last.end.max(r.end),
+            _ => merged.push(r),
+        }
+    }
+    merged
 }
 
 /// `s` with sensitive parts masked, or `s` itself when hiding is off.
@@ -385,6 +472,22 @@ pub fn redact(s: &str) -> Cow<'_, str> {
 
 pub fn mask_char() -> char {
     MASK
+}
+
+/// True when port numbers should be shown masked.
+pub fn hides_ports() -> bool {
+    hide() && CONFIG.read().unwrap().ports
+}
+
+/// `text` (a port, or a list/range of them) with its digits masked when ports are hidden.
+pub fn port(text: impl ToString) -> String {
+    let text = text.to_string();
+    if !hides_ports() {
+        return text;
+    }
+    text.chars()
+        .map(|c| if c.is_ascii_digit() { MASK } else { c })
+        .collect()
 }
 
 // ---------- secret files ----------
@@ -458,7 +561,7 @@ mod tests {
         // Names and IPv4, keeping length.
         assert_eq!(
             redact("tester@10.0.0.5:22"),
-            format!("{}@{}:22", b(6), b(8))
+            format!("{}@{}:{}", b(6), b(8), b(2))
         );
         assert_eq!(
             redact("TESTER testers retest"),
@@ -475,7 +578,7 @@ mod tests {
         // IPv6: full, compressed, loopback, bracketed with port, mapped IPv4, zone id.
         assert_eq!(redact("2001:db8::1"), b(11));
         assert_eq!(redact("fe80::1%en0 up"), format!("{} up", b(11)));
-        assert_eq!(redact("[::1]:22"), format!("[{}]:22", b(3)));
+        assert_eq!(redact("[::1]:22"), format!("[{}]:{}", b(3), b(2)));
         assert_eq!(
             redact("2001:0db8:0000:0000:0000:ff00:0042:8329."),
             format!("{}.", b(39))
@@ -506,6 +609,24 @@ mod tests {
             "PATH=/usr/bin user=alice"
         );
 
+        // Ports: after addresses and saved hosts, by name, and the ssh -p flag.
+        assert_eq!(
+            redact("my-server.example.com:2222"),
+            format!("{}:{}", b(21), b(4))
+        );
+        assert_eq!(redact("ssh -p 2222 x"), format!("ssh -p {} x", b(4)));
+        assert_eq!(redact("Port 22"), format!("Port {}", b(2)));
+        assert_eq!(redact("PORT=3000"), format!("PORT={}", b(4)));
+        assert_eq!(redact("db_port: 5432"), format!("db_port: {}", b(4)));
+        assert_eq!(redact("--port=8080"), format!("--port={}", b(4)));
+        assert_eq!(
+            redact("report: 5 ports 80 ps -p 42 x:99"),
+            "report: 5 ports 80 ps -p 42 x:99"
+        );
+        assert_eq!(redact("port 99999"), "port 99999");
+        assert_eq!(port(2222), b(4));
+        assert_eq!(port("80-90"), format!("{}-{}", b(2), b(2)));
+
         // Files.
         assert!(file_hidden(".env"));
         assert!(file_hidden(".ENV.production"));
@@ -527,6 +648,19 @@ mod tests {
         assert_eq!(redact("tester"), "tester");
         setup(|s| s.mask_hosts = Some(false));
         assert_eq!(redact("my-server.example.com"), "my-server.example.com");
+        assert_eq!(
+            redact("my-server.example.com:2222"),
+            format!("my-server.example.com:{}", b(4))
+        );
+        setup(|s| s.mask_ipv4 = Some(false));
+        assert_eq!(redact("10.0.0.5:22"), format!("10.0.0.5:{}", b(2)));
+        setup(|s| s.mask_ports = Some(false));
+        assert_eq!(
+            redact("tester@10.0.0.5:22"),
+            format!("{}@{}:22", b(6), b(8))
+        );
+        assert_eq!(redact("ssh -p 2222 PORT=1"), "ssh -p 2222 PORT=1");
+        assert_eq!(port(22), "22");
         setup(|s| s.hide_secret_files = Some(false));
         assert!(!file_hidden(".env"));
         setup(|s| s.secret_file_patterns = Some(vec!["*.sql".into()]));
@@ -545,6 +679,7 @@ mod tests {
             "x 192.168.1.1 y",
             "naïve tester ✓ fe80::1",
             "A=1 token=ünï",
+            "ssh -p 2222 [::1]:22 Port 7",
         ] {
             assert_eq!(redact(s).chars().count(), s.chars().count());
         }

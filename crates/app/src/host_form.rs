@@ -41,9 +41,10 @@ impl HostForm {
         let host = cx.new(|cx| TextInput::new("example.com or 10.0.0.5", false, cx));
         let port = cx.new(|cx| TextInput::new("22", false, cx));
         let user = cx.new(|cx| TextInput::new("root", false, cx));
-        // Host and user are bullets unless the field is being edited.
+        // Host, user and port are bullets unless the field is being edited.
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
+        port.update(cx, |t, _| t.set_hide_mode(Hide::Port));
         let editing = existing.is_some();
         let secret_hint = if editing { "(unchanged)" } else { "" };
         let password = cx.new(|cx| TextInput::new(secret_hint, true, cx));

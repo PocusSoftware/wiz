@@ -292,7 +292,7 @@ fn summary(ct: &Container) -> String {
         let p = p
             .trim_start_matches("0.0.0.0:")
             .trim_end_matches("/tcp")
-            .replace("->", "\u{2192}");
+            .to_string();
         if !ports.contains(&p) {
             ports.push(p);
         }
@@ -300,7 +300,24 @@ fn summary(ct: &Container) -> String {
     let mut out = format!("{image} · {}", ct.status);
     if !ports.is_empty() {
         out.push_str(" · ");
-        out.push_str(&ports.join(", "));
+        let shown: Vec<String> = ports
+            .iter()
+            .map(|p| {
+                p.split("->")
+                    .map(port_mapping)
+                    .collect::<Vec<_>>()
+                    .join("\u{2192}")
+            })
+            .collect();
+        out.push_str(&shown.join(", "));
     }
-    out
+    crate::privacy::redact(&out).into_owned()
+}
+
+/// One side of a port mapping (`127.0.0.1:5432` or `80`) with the port masked when hidden.
+fn port_mapping(side: &str) -> String {
+    match side.rsplit_once(':') {
+        Some((addr, port)) => format!("{addr}:{}", crate::privacy::port(port)),
+        None => crate::privacy::port(side),
+    }
 }

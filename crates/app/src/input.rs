@@ -22,6 +22,8 @@ pub enum Hide {
     Redact,
     /// Show only bullets.
     Full,
+    /// Show only bullets while port masking is on.
+    Port,
 }
 
 /// Emitted whenever the user changes the text.
@@ -74,7 +76,13 @@ impl TextInput {
 
     /// True when the text is currently shown masked because of the privacy setting.
     fn hidden_view(&self, focused: bool) -> bool {
-        !focused && privacy::hide() && !self.text.is_empty() && self.hide_mode != Hide::Never
+        !focused
+            && !self.text.is_empty()
+            && match self.hide_mode {
+                Hide::Never => false,
+                Hide::Port => privacy::hides_ports(),
+                Hide::Redact | Hide::Full => privacy::hide(),
+            }
     }
 
     pub fn value(&self) -> &str {
@@ -187,7 +195,7 @@ impl TextInput {
         }
         if self.hidden_view(focused) {
             return match self.hide_mode {
-                Hide::Full => "•".repeat(self.text.chars().count()),
+                Hide::Full | Hide::Port => "•".repeat(self.text.chars().count()),
                 _ => privacy::redact(&self.text).into_owned(),
             };
         }

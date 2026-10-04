@@ -666,9 +666,17 @@ impl Root {
                         )
                         .child(div().size(px(7.)).bg(c(if live { GREEN } else { ACTIVE }))),
                 )
-                .child(div().text_color(c(MUTED)).whitespace_nowrap().child(
-                    privacy::redact(&format!("{}@{}:{}", h.user, h.host, h.port)).into_owned(),
-                ))
+                .child(
+                    div().text_color(c(MUTED)).whitespace_nowrap().child(
+                        privacy::redact(&format!(
+                            "{}@{}:{}",
+                            h.user,
+                            h.host,
+                            privacy::port(h.port)
+                        ))
+                        .into_owned(),
+                    ),
+                )
                 .child(
                     div()
                         .flex()
@@ -974,7 +982,8 @@ impl Render for Root {
                         div().child(
                             privacy::redact(&format!(
                                 "{}:{} has not been seen before.",
-                                req.host, req.port
+                                req.host,
+                                privacy::port(req.port)
                             ))
                             .into_owned(),
                         ),

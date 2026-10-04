@@ -23,6 +23,15 @@ use gpui::{
 
 use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root};
 
+/// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
+pub fn version() -> String {
+    let v = env!("CARGO_PKG_VERSION");
+    match env!("BASTION_COMMIT") {
+        "" => v.to_string(),
+        c => format!("{v} ({c})"),
+    }
+}
+
 /// Print elapsed time since start when SSHC_TIMING is set.
 pub fn mark(what: &str) {
     if std::env::var_os("SSHC_TIMING").is_some()
