@@ -1422,7 +1422,19 @@ impl Render for Root {
                     .bg(c(ELEVATED))
                     .border_1()
                     .border_color(c(BORDER))
-                    .child(div().text_sm().child("Trust this host?"))
+                    .child(
+                        div().text_sm().child(
+                            // Name the saved host: with hiding on, addresses alone all look alike.
+                            match self
+                                .pending
+                                .iter()
+                                .find(|p| p.host == req.host && p.port == req.port)
+                            {
+                                Some(p) => format!("Trust {}?", privacy::redact(&p.name)),
+                                None => "Trust this host?".to_string(),
+                            },
+                        ),
+                    )
                     .child(
                         div().child(
                             privacy::redact(&format!(

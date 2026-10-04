@@ -177,6 +177,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 /// Argument that turns the app binary into the rsync remote-shell bridge.
 pub const BRIDGE_ARG: &str = "--rsync-rsh";
 const SOCK_ENV: &str = "BASTION_RSH_SOCK";
+/// Per-transfer secret the bridge must present, so nothing else can use the socket.
+const TOKEN_ENV: &str = "BASTION_RSH_TOKEN";
 /// Set when the local rsync passes remote arguments unescaped (openrsync, rsync < 3.2.4):
 /// the bridge then quotes them so paths with spaces survive the remote shell.
 const QUOTE_ENV: &str = "BASTION_RSH_QUOTE";
@@ -244,20 +246,21 @@ pub async fn run(
     ));
     let _ = std::fs::remove_file(&sock);
     let listener = tokio::net::UnixListener::bind(&sock)?;
+    let token = Arc::new(token()?);
     let moved = Arc::new(AtomicU64::new(0));
     let server = {
-        let (conn, moved) = (conn.clone(), moved.clone());
+        let (conn, moved, token) = (conn.clone(), moved.clone(), token.clone());
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                let (conn, moved) = (conn.clone(), moved.clone());
+                let (conn, moved, token) = (conn.clone(), moved.clone(), token.clone());
                 tokio::spawn(async move {
-                    let _ = serve(stream, &conn, &moved, upload).await;
+                    let _ = serve(stream, &conn, &moved, upload, &token).await;
                 });
             }
         })
     };
     let r = run_rsync(
-        &sock, local, upload, src_dir, names, dst_dir, &progress, &moved,
+        &sock, &token, local, upload, src_dir, names, dst_dir, &progress, &moved,
     )
     .await;
     server.abort();
@@ -272,6 +275,7 @@ pub async fn run(
 #[allow(clippy::too_many_arguments)]
 async fn run_rsync(
     sock: &std::path::Path,
+    token: &str,
     local: Local,
     upload: bool,
     src_dir: &str,
@@ -299,6 +303,7 @@ async fn run_rsync(
         let mut child = tokio::process::Command::new("rsync")
             .args(["-a", "--partial", "-e", &rsh, &src, &dst])
             .env(SOCK_ENV, sock)
+            .env(TOKEN_ENV, token)
             .env(QUOTE_ENV, if local.quote { "1" } else { "0" })
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -339,22 +344,62 @@ async fn run_rsync(
     Ok(())
 }
 
-/// One bridge connection: first line is the remote command, then raw bytes both ways.
+/// 32 hex chars from the system's random source.
+fn token() -> std::io::Result<String> {
+    use std::io::Read;
+    let mut b = [0u8; 16];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut b)?;
+    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+}
+
+/// One line from the bridge, without the newline.
+async fn read_line(sock: &mut tokio::net::UnixStream) -> std::io::Result<String> {
+    let mut line = Vec::new();
+    loop {
+        let b = sock.read_u8().await?;
+        if b == b'\n' || line.len() > 64 * 1024 {
+            break;
+        }
+        line.push(b);
+    }
+    Ok(String::from_utf8_lossy(&line).into_owned())
+}
+
+/// The bridge may only start an rsync server, nothing else, on the connection. In quoting
+/// mode every argument is single-quoted by us, so file names can hold any character. Otherwise
+/// rsync escapes them itself, and an unescaped shell operator means something else is going on.
+fn allowed(command: &str) -> bool {
+    if command.contains('\n') {
+        return false;
+    }
+    if command.starts_with("'rsync' '--server' ") {
+        return true;
+    }
+    let chars: Vec<char> = command.chars().collect();
+    command.starts_with("rsync --server ")
+        && !chars
+            .iter()
+            .enumerate()
+            .any(|(i, c)| ";&|`$<>(){}".contains(*c) && (i == 0 || chars[i - 1] != '\\'))
+}
+
+/// One bridge connection: the token line, the remote command line, then raw bytes both ways.
 async fn serve(
     mut sock: tokio::net::UnixStream,
     conn: &Connection,
     moved: &AtomicU64,
     upload: bool,
+    token: &str,
 ) -> ssh_core::Result<()> {
-    let mut line = Vec::new();
-    loop {
-        let b = sock.read_u8().await?;
-        if b == b'\n' {
-            break;
-        }
-        line.push(b);
+    if read_line(&mut sock).await? != token {
+        return Err(ssh_core::Error::Remote("rsync bridge: bad token".into()));
     }
-    let command = String::from_utf8_lossy(&line).to_string();
+    let command = read_line(&mut sock).await?;
+    if !allowed(&command) {
+        return Err(ssh_core::Error::Remote(
+            "rsync bridge: not an rsync command".into(),
+        ));
+    }
     let chan = conn.exec_stream(&command).await?;
     let (mut sr, mut sw) = sock.into_split();
     let (mut cr, mut cw) = tokio::io::split(chan);
@@ -423,7 +468,11 @@ pub fn bridge_main() -> ! {
         }
     }
     let mut sock = UnixStream::connect(path).unwrap_or_else(|e| fail(&e.to_string()));
-    if sock.write_all(format!("{command}\n").as_bytes()).is_err() {
+    let token = std::env::var(TOKEN_ENV).unwrap_or_default();
+    if sock
+        .write_all(format!("{token}\n{command}\n").as_bytes())
+        .is_err()
+    {
         fail("could not reach Bastion");
     }
     let mut to_app = sock.try_clone().unwrap_or_else(|e| fail(&e.to_string()));
@@ -619,6 +668,17 @@ mod tests {
             .await
             .unwrap();
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn bridge_only_runs_rsync_servers() {
+        assert!(allowed("rsync --server -logDtpre.iLsfxCIvu . /tmp/x/"));
+        assert!(allowed("'rsync' '--server' '-g' '.' '/tmp/a b/'"));
+        assert!(!allowed("rm -rf /"));
+        assert!(!allowed("rsync --server ; rm -rf /"));
+        assert!(allowed("rsync --server . /tmp/a\\$b/"));
+        assert!(allowed("'rsync' '--server' '.' '/tmp/a;$b/'"));
+        assert!(!allowed("rsync --daemon"));
     }
 
     #[test]
