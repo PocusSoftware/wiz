@@ -702,7 +702,18 @@ impl Root {
                 .max_w(px(220.))
                 .border_r_1()
                 .border_color(c(BORDER_VARIANT))
-                .when(active, |d| d.border_b_2().border_color(c(ACCENT)))
+                .relative()
+                .when(active, |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .bottom_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(2.))
+                            .bg(c(ACCENT)),
+                    )
+                })
                 .bg(c(BG))
                 .text_color(c(if active { TEXT } else { MUTED }))
                 .hover(|s| s.text_color(c(TEXT)))
@@ -739,7 +750,18 @@ impl Root {
                     .cursor_pointer()
                     .border_x_1()
                     .border_color(c(BORDER_VARIANT))
-                    .when(self.home, |d| d.border_b_2().border_color(c(ACCENT)))
+                    .relative()
+                    .when(self.home, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .bottom_0()
+                                .left_0()
+                                .right_0()
+                                .h(px(2.))
+                                .bg(c(ACCENT)),
+                        )
+                    })
                     .hover(|s| s.bg(c(PANEL)))
                     .tooltip(crate::ui::tip("Hosts"))
                     .on_click(cx.listener(|t, _, w, cx| {
