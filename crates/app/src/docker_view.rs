@@ -35,6 +35,11 @@ pub struct DockerView {
 }
 
 impl DockerView {
+    /// True for a server's Docker (over SSH), false for the local one.
+    pub fn is_remote(&self) -> bool {
+        matches!(self.backend, Backend::Remote(_))
+    }
+
     pub fn new(backend: Backend, can_shell: bool, cx: &mut Context<Self>) -> Self {
         let this = Self {
             backend,

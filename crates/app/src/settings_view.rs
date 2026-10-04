@@ -315,6 +315,7 @@ impl Render for SettingsView {
                     .child(Self::section("Terminal and network"))
                     .child(self.stepper("t-scroll", "Scrollback", "Lines kept per terminal. Applies to new terminals.", s.terminal_scrollback(), (1_000, 200_000, 1_000), "lines", |s, v| s.terminal_scrollback = Some(v), cx))
                     .child(self.stepper("n-keep", "SSH keep-alive", "Seconds between keep-alive probes, 0 turns them off. Applies to new connections.", s.keepalive_secs(), (0, 600, 5), "s", |s, v| s.keepalive_secs = Some(v), cx))
+                    .child(self.toggle("n-confirm", "Ask before closing a session", "Confirm before a terminal, files or Docker tab (or a split pane) on a server is closed.", s.confirm_close(), |s, v| s.confirm_close = Some(v), cx))
                     .child(self.stepper("n-timeout", "Connect timeout", "Give up on a connection that takes longer than this. 0 turns it off and waits until you cancel. Time spent on the host key prompt doesn't count.", s.connect_timeout_secs(), (0, 300, 5), "s", |s, v| s.connect_timeout_secs = Some(v), cx))
                     // ---------- footer ----------
                     .child(

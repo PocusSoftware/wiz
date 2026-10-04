@@ -317,6 +317,8 @@ pub struct Settings {
     pub docker_refresh_secs: Option<u32>,
     pub terminal_scrollback: Option<u32>,
     pub keepalive_secs: Option<u32>,
+    /// Ask before closing a tab or pane that holds an SSH session.
+    pub confirm_close: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
     pub connect_timeout_secs: Option<u32>,
 }
@@ -352,6 +354,7 @@ getters! {
     docker_refresh_secs: u32 = 5;
     terminal_scrollback: u32 = 10_000;
     keepalive_secs: u32 = 30;
+    confirm_close: bool = false;
     connect_timeout_secs: u32 = 15;
 }
 

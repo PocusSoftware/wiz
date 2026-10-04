@@ -191,6 +191,8 @@ pub struct Root {
     settings: Option<Entity<SettingsView>>,
     pending: Vec<Pending>,
     pane_drag: Option<PaneDrag>,
+    /// A close waiting for "are you sure": tab id, and the pane for a split.
+    confirm: Option<(u64, Option<usize>)>,
     tab_scroll: gpui::ScrollHandle,
     next_pending: u64,
     next_tab: u64,
@@ -257,6 +259,7 @@ impl Root {
             next_pending: 0,
             next_tab: 0,
             pane_drag: None,
+            confirm: None,
             tab_scroll: gpui::ScrollHandle::new(),
             collapsed: HashSet::new(),
             epoch: 0,
@@ -733,17 +736,72 @@ impl Root {
     /// ⌘W: close the focused pane of a split, otherwise the whole tab.
     fn close_current(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let ix = self.active;
-        if let Some(Tab {
-            kind: TabKind::Terminal(t),
-            ..
-        }) = self.tabs.get(ix)
-            && t.panes.len() > 1
-        {
-            let pane = Self::focused_pane(t, window, cx);
-            self.close_pane(ix, pane, window, cx);
+        let pane = match self.tabs.get(ix) {
+            Some(Tab {
+                kind: TabKind::Terminal(t),
+                ..
+            }) if t.panes.len() > 1 => Some(Self::focused_pane(t, window, cx)),
+            _ => None,
+        };
+        self.request_close(ix, pane, window, cx);
+    }
+
+    /// Close a tab (or one pane of a split), first asking when the setting is on and it
+    /// holds an SSH session.
+    fn request_close(
+        &mut self,
+        ix: usize,
+        pane: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab) = self.tabs.get(ix) else {
+            return;
+        };
+        let remote = match &tab.kind {
+            TabKind::Terminal(_) | TabKind::Sftp(_) => true,
+            TabKind::Docker(v) => v.read(cx).is_remote(),
+            TabKind::Logs(_) => false,
+        };
+        if remote && crate::prefs::get().confirm_close() {
+            self.confirm = Some((tab.id, pane));
+            // Take keyboard focus from the terminal so Enter and Esc reach the dialog.
+            window.focus(&self.focus);
+            cx.notify();
             return;
         }
-        self.close_tab(ix, window, cx);
+        self.do_close(ix, pane, window, cx);
+    }
+
+    fn do_close(
+        &mut self,
+        ix: usize,
+        pane: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match pane {
+            Some(p) => self.close_pane(ix, p, window, cx),
+            None => self.close_tab(ix, window, cx),
+        }
+    }
+
+    /// Answer the close dialog.
+    fn answer_close(&mut self, yes: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((id, pane)) = self.confirm.take() else {
+            return;
+        };
+        let Some(ix) = self.tabs.iter().position(|t| t.id == id) else {
+            cx.notify();
+            return;
+        };
+        if yes {
+            self.do_close(ix, pane, window, cx);
+        } else if self.page == Page::Tab {
+            self.select_tab(self.active, window, cx);
+        } else {
+            cx.notify();
+        }
     }
 
     /// Close one pane of a split terminal tab; the last pane closes the tab.
@@ -1000,7 +1058,7 @@ impl Root {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(icon(kind_icon, 16., if live { GREEN } else { ACCENT_TEXT }))
+                    .child(icon(kind_icon, 16., ACCENT_TEXT))
                     .child(
                         div()
                             .flex_1()
@@ -1321,7 +1379,7 @@ impl Root {
                         .size(px(16.))
                         .on_click(cx.listener(move |t, _, w, cx| {
                             cx.stop_propagation();
-                            t.close_tab(ix, w, cx)
+                            t.request_close(ix, None, w, cx)
                         })),
                 )
         });
@@ -1563,7 +1621,7 @@ impl Root {
                                             .size(px(16.))
                                             .on_click(cx.listener(move |this, _, w, cx| {
                                                 cx.stop_propagation();
-                                                this.close_pane(tab_ix, i, w, cx)
+                                                this.request_close(tab_ix, Some(i), w, cx)
                                             })),
                                     ),
                             )
@@ -1708,11 +1766,66 @@ impl Render for Root {
             .form
             .clone()
             .map(|f| overlay("form", f.into_any_element()));
+        let confirm_dialog =
+            self.confirm.and_then(|(id, pane)| {
+                let tab = self.tabs.iter().find(|t| t.id == id)?;
+                let what = match pane {
+                    Some(_) => "this terminal pane",
+                    None => "this tab",
+                };
+                Some(overlay(
+                    "confirm",
+                    div()
+                        .w(px(340.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded(px(3.))
+                        .bg(c(ELEVATED))
+                        .border_1()
+                        .border_color(c(BORDER))
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(format!("Close {}?", privacy::redact(&tab.label))),
+                        )
+                        .child(
+                            div()
+                                .text_color(c(MUTED))
+                                .child(format!("Closing {what} ends its session.")),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_2()
+                                .child(button("close-no", "Cancel").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_close(false, w, cx)),
+                                ))
+                                .child(primary_button("close-yes", "Close").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_close(true, w, cx)),
+                                )),
+                        )
+                        .into_any_element(),
+                ))
+            });
 
         div()
             .id("root")
             .track_focus(&self.focus)
             .key_context("Root")
+            .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                if t.confirm.is_none() {
+                    return;
+                }
+                match ev.keystroke.key.as_str() {
+                    "enter" => t.answer_close(true, w, cx),
+                    "escape" => t.answer_close(false, w, cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+            }))
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
                 Page::Tab => t.close_current(w, cx),
@@ -1794,6 +1907,7 @@ impl Render for Root {
             )
             .children(trust_dialog)
             .children(form)
+            .children(confirm_dialog)
     }
 }
 
