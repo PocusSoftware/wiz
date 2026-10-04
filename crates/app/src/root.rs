@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
-    SharedString, Window, WindowControlArea, actions, div, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
+    Render, SharedString, Window, WindowControlArea, actions, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
@@ -77,6 +77,8 @@ pub struct Root {
     conns: HashMap<String, Live>,
     tabs: Vec<Tab>,
     active: usize,
+    /// Showing the hosts page instead of a session tab.
+    home: bool,
     form: Option<Entity<HostForm>>,
     trust: Option<TrustRequest>,
     trust_tx: UnboundedSender<TrustRequest>,
@@ -113,6 +115,7 @@ impl Root {
             conns: HashMap::new(),
             tabs: vec![],
             active: 0,
+            home: true,
             form: None,
             trust: None,
             trust_tx,
@@ -143,6 +146,7 @@ impl Root {
             return;
         }
         self.active = ix;
+        self.home = false;
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => t.read(cx).focus(window),
             _ => window.focus(&self.focus),
@@ -158,6 +162,7 @@ impl Root {
         self.tabs.remove(ix);
         if self.tabs.is_empty() {
             self.active = 0;
+            self.home = true;
             window.focus(&self.focus);
             cx.notify();
         } else {
@@ -419,168 +424,142 @@ impl Root {
 
     // ---------- render ----------
 
-    fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let items =
-            self.cfg.hosts.iter().enumerate().map(|(ix, h)| {
-                let live = self
-                    .conns
-                    .get(&h.account())
-                    .is_some_and(|l| !l.conn.is_closed());
-                let group = format!("host-{ix}");
-                let kind_icon = match h.auth {
-                    AuthMethod::Password => "server",
-                    AuthMethod::Key { .. } => "key",
-                };
-                let actions = div()
-                    .flex()
-                    .gap_0p5()
-                    .invisible()
-                    .group_hover(group.clone(), |s| s.visible())
-                    .child(
-                        icon_button(("h-docker", ix), "container", "Docker containers", MUTED)
-                            .on_click(cx.listener(move |t, _, w, cx| {
-                                cx.stop_propagation();
-                                t.open_host(ix, Open::Docker, w, cx)
-                            })),
-                    )
-                    .child(
-                        icon_button(("h-edit", ix), "pencil", "Edit host", MUTED).on_click(
-                            cx.listener(move |t, _, w, cx| {
-                                cx.stop_propagation();
-                                t.open_form(Some(ix), w, cx)
-                            }),
-                        ),
-                    )
-                    .child(
-                        icon_button(("h-del", ix), "trash", "Delete host", RED).on_click(
-                            cx.listener(move |t, _, _, cx| {
-                                cx.stop_propagation();
-                                t.delete_host(ix, cx)
-                            }),
-                        ),
-                    );
-                div()
-                    .id(("host", ix))
-                    .group(group)
-                    .mx_1()
-                    .px_2()
-                    .h(px(44.))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(c(HOVER)))
-                    .on_click(cx.listener(move |t, _: &ClickEvent, w, cx| {
+    /// Hosts as big square cards. With a handful of servers this beats a list.
+    fn home_view(&self, cx: &mut Context<Self>) -> AnyElement {
+        let cards = self.cfg.hosts.iter().enumerate().map(|(ix, h)| {
+            let live = self
+                .conns
+                .get(&h.account())
+                .is_some_and(|l| !l.conn.is_closed());
+            let kind_icon = match h.auth {
+                AuthMethod::Password => "server",
+                AuthMethod::Key { .. } => "key",
+            };
+            div()
+                .id(("host", ix))
+                .w(px(210.))
+                .p_2()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .rounded(px(2.))
+                .border_2()
+                .border_color(c(BORDER))
+                .bg(c(PANEL))
+                .cursor_pointer()
+                .hover(|s| s.bg(c(ACTIVE)).border_color(c(BORDER_FOCUSED)))
+                .on_click(
+                    cx.listener(move |t, _: &ClickEvent, w, cx| {
                         t.open_host(ix, Open::Shell, w, cx)
-                    }))
-                    .child(div().relative().child(icon(
-                        kind_icon,
-                        15.,
-                        if live { GREEN } else { MUTED },
-                    )))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().whitespace_nowrap().child(h.name.clone()))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(c(PLACEHOLDER))
-                                    .whitespace_nowrap()
-                                    .child(format!("{}@{}:{}", h.user, h.host, h.port)),
+                    }),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(icon(kind_icon, 16., if live { GREEN } else { ACCENT_TEXT }))
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .whitespace_nowrap()
+                                .child(h.name.clone()),
+                        )
+                        .child(div().size(px(7.)).bg(c(if live { GREEN } else { ACTIVE }))),
+                )
+                .child(
+                    div()
+                        .text_color(c(MUTED))
+                        .whitespace_nowrap()
+                        .child(format!("{}@{}:{}", h.user, h.host, h.port)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap_1()
+                        .child(
+                            icon_button(("h-shell", ix), "terminal", "Open shell", ACCENT_TEXT)
+                                .on_click(cx.listener(move |t, _, w, cx| {
+                                    cx.stop_propagation();
+                                    t.open_host(ix, Open::Shell, w, cx)
+                                })),
+                        )
+                        .child(
+                            icon_button(("h-docker", ix), "container", "Docker containers", MUTED)
+                                .on_click(cx.listener(move |t, _, w, cx| {
+                                    cx.stop_propagation();
+                                    t.open_host(ix, Open::Docker, w, cx)
+                                })),
+                        )
+                        .child(div().flex_1())
+                        .child(
+                            icon_button(("h-edit", ix), "pencil", "Edit host", MUTED).on_click(
+                                cx.listener(move |t, _, w, cx| {
+                                    cx.stop_propagation();
+                                    t.open_form(Some(ix), w, cx)
+                                }),
                             ),
-                    )
-                    .child(actions)
-            });
+                        )
+                        .child(
+                            icon_button(("h-del", ix), "trash", "Delete host", RED).on_click(
+                                cx.listener(move |t, _, _, cx| {
+                                    cx.stop_propagation();
+                                    t.delete_host(ix, cx)
+                                }),
+                            ),
+                        ),
+                )
+        });
+
+        let small_card = |id: &'static str, ic: &'static str, text: &'static str| {
+            div()
+                .id(id)
+                .w(px(210.))
+                .p_2()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap_2()
+                .rounded(px(2.))
+                .border_2()
+                .border_color(c(BORDER_VARIANT))
+                .text_color(c(MUTED))
+                .cursor_pointer()
+                .hover(|s| s.bg(c(PANEL)).text_color(c(TEXT)).border_color(c(BORDER)))
+                .child(icon(ic, 14., MUTED))
+                .child(text)
+        };
 
         div()
-            .w(px(240.))
-            .h_full()
-            .flex_none()
+            .size_full()
+            .p_3()
             .flex()
             .flex_col()
-            .bg(c(PANEL))
-            .border_r_1()
-            .border_color(c(BORDER_VARIANT))
+            .gap_3()
             .child(
                 div()
-                    .h(px(TITLEBAR_H))
-                    .flex_none()
-                    .pl(px(TRAFFIC_LIGHTS_W))
-                    .pr_2()
                     .flex()
-                    .items_center()
-                    .justify_end()
-                    .window_control_area(WindowControlArea::Drag)
+                    .flex_wrap()
+                    .gap_2()
+                    .children(cards)
                     .child(
-                        icon_button("add-host", "plus", "Add host (⌘N)", MUTED)
+                        small_card("add-host", "plus", "Add host")
                             .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .id("hosts")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .children(items)
-                    .when(self.cfg.hosts.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .px_3()
-                                .py_2()
-                                .text_xs()
-                                .text_color(c(PLACEHOLDER))
-                                .child("No hosts yet. Click + to add one."),
-                        )
-                    }),
-            )
-            .when_some(self.status.clone(), |d, (msg, err)| {
-                d.child(
-                    div()
-                        .px_3()
-                        .py_2()
-                        .text_xs()
-                        .text_color(c(if err { RED } else { MUTED }))
-                        .border_t_1()
-                        .border_color(c(BORDER_VARIANT))
-                        .child(msg),
-                )
-            })
-            .child(
-                div()
-                    .h(px(36.))
-                    .flex_none()
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .border_t_1()
-                    .border_color(c(BORDER_VARIANT))
+                    )
                     .child(
-                        div()
-                            .id("local-docker")
-                            .h(px(26.))
-                            .px_2()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_xs()
-                            .text_color(c(MUTED))
-                            .hover(|s| s.bg(c(HOVER)))
-                            .on_click(cx.listener(|t, _, w, cx| t.open_local_docker(w, cx)))
-                            .child(icon("container", 14., MUTED))
-                            .child("Local Docker"),
+                        small_card("local-docker", "container", "Local Docker")
+                            .on_click(cx.listener(|t, _, w, cx| t.open_local_docker(w, cx))),
                     ),
             )
+            .into_any_element()
     }
 
     /// The tab strip doubles as the title bar: empty space drags the window.
     fn tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
-            let active = ix == self.active;
+            let active = !self.home && ix == self.active;
             let mut text = tab.label.to_string();
             if let TabKind::Terminal(t) = &tab.kind
                 && let Some(title) = t.read(cx).title()
@@ -597,12 +576,12 @@ impl Root {
                 .id(("tab", ix))
                 .group(format!("tab-{ix}"))
                 .h_full()
-                .px_3()
+                .px(px(8.))
                 .flex()
                 .items_center()
-                .gap_2()
+                .gap(px(6.))
                 .cursor_pointer()
-                .max_w(px(240.))
+                .max_w(px(220.))
                 .border_r_1()
                 .border_color(c(BORDER_VARIANT))
                 .when(active, |d| d.border_b_2().border_color(c(ACCENT)))
@@ -618,7 +597,7 @@ impl Root {
                 .child(div().overflow_hidden().whitespace_nowrap().child(text))
                 .child(
                     icon_button(("tab-close", ix), "x", "Close (⌘W)", MUTED)
-                        .size(px(18.))
+                        .size(px(16.))
                         .on_click(cx.listener(move |t, _, w, cx| {
                             cx.stop_propagation();
                             t.close_tab(ix, w, cx)
@@ -632,6 +611,37 @@ impl Root {
             .bg(c(BG))
             .border_b_1()
             .border_color(c(BORDER_VARIANT))
+            .child(
+                div()
+                    .w(px(TRAFFIC_LIGHTS_W))
+                    .h_full()
+                    .flex_none()
+                    .window_control_area(WindowControlArea::Drag),
+            )
+            .child(
+                div()
+                    .id("home-tab")
+                    .h_full()
+                    .px(px(10.))
+                    .flex()
+                    .items_center()
+                    .cursor_pointer()
+                    .border_x_1()
+                    .border_color(c(BORDER_VARIANT))
+                    .when(self.home, |d| d.border_b_2().border_color(c(ACCENT)))
+                    .hover(|s| s.bg(c(PANEL)))
+                    .tooltip(crate::ui::tip("Hosts"))
+                    .on_click(cx.listener(|t, _, w, cx| {
+                        t.home = true;
+                        w.focus(&t.focus);
+                        cx.notify();
+                    }))
+                    .child(icon(
+                        "server",
+                        14.,
+                        if self.home { ACCENT_TEXT } else { MUTED },
+                    )),
+            )
             .child(div().flex().h_full().children(tabs))
             .child(
                 div()
@@ -641,7 +651,10 @@ impl Root {
             )
     }
 
-    fn content(&self) -> AnyElement {
+    fn content(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.home || self.tabs.is_empty() {
+            return self.home_view(cx);
+        }
         match self.tabs.get(self.active).map(|t| &t.kind) {
             Some(TabKind::Terminal(v)) => v.clone().into_any_element(),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
@@ -694,16 +707,16 @@ impl Render for Root {
         let trust_dialog = self.trust.as_ref().map(|req| {
             overlay(
                 div()
-                    .w(px(440.))
-                    .p_4()
+                    .w(px(380.))
+                    .p_3()
                     .flex()
                     .flex_col()
-                    .gap_3()
-                    .rounded_lg()
+                    .gap_2()
+                    .rounded(px(3.))
                     .bg(c(ELEVATED))
                     .border_1()
                     .border_color(c(BORDER))
-                    .child(div().text_base().child("Trust this host?"))
+                    .child(div().text_sm().child("Trust this host?"))
                     .child(div().child(format!(
                         "{}:{} has not been seen before.",
                         req.host, req.port
@@ -766,10 +779,9 @@ impl Render for Root {
             .size_full()
             .flex()
             .font_family(FONT_UI)
-            .text_size(px(13.))
+            .text_size(px(12.))
             .bg(c(BG))
             .text_color(c(TEXT))
-            .child(self.sidebar(cx))
             .child(
                 div()
                     .flex_1()
@@ -778,7 +790,18 @@ impl Render for Root {
                     .flex()
                     .flex_col()
                     .child(self.tab_bar(cx))
-                    .child(div().flex_1().min_h_0().child(self.content())),
+                    .child(div().flex_1().min_h_0().child(self.content(cx)))
+                    .when_some(self.status.clone(), |d, (msg, err)| {
+                        d.child(
+                            div()
+                                .px_2()
+                                .py(px(3.))
+                                .border_t_1()
+                                .border_color(c(BORDER_VARIANT))
+                                .text_color(c(if err { RED } else { MUTED }))
+                                .child(msg),
+                        )
+                    }),
             )
             .children(trust_dialog)
             .children(form)

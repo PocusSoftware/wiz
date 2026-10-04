@@ -197,40 +197,33 @@ impl Render for DockerView {
             div()
                 .flex()
                 .items_center()
-                .gap_3()
-                .px_3()
-                .py_2()
+                .gap_2()
+                .px_2()
+                .h(px(26.))
                 .border_b_1()
                 .border_color(c(BORDER_VARIANT))
                 .hover(|s| s.bg(c(HOVER)))
                 .child(
                     div()
-                        .size(px(7.))
+                        .size(px(6.))
                         .flex_none()
-                        .rounded_full()
+                        .rounded(px(1.))
                         .bg(c(if running { GREEN } else { ACTIVE })),
                 )
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(div().child(ct.name.clone()))
+                        .overflow_hidden()
+                        .flex()
+                        .gap_2()
+                        .child(div().whitespace_nowrap().child(ct.name.clone()))
                         .child(
                             div()
-                                .text_xs()
-                                .text_color(c(MUTED))
-                                .overflow_hidden()
+                                .text_color(c(PLACEHOLDER))
                                 .whitespace_nowrap()
-                                .child(format!("{}  ·  {}", ct.image, ct.status)),
-                        )
-                        .when(!ct.ports.is_empty(), |d| {
-                            d.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(c(PLACEHOLDER))
-                                    .child(ct.ports.clone()),
-                            )
-                        }),
+                                .child(summary(ct)),
+                        ),
                 )
                 .child(actions)
         });
@@ -241,8 +234,8 @@ impl Render for DockerView {
             .flex_col()
             .child(
                 div()
-                    .h(px(34.))
-                    .px_3()
+                    .h(px(26.))
+                    .px_2()
                     .flex()
                     .items_center()
                     .justify_between()
@@ -260,14 +253,14 @@ impl Render for DockerView {
                     ),
             )
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().px_3().py_2().text_xs().text_color(c(RED)).child(e))
+                d.child(div().px_2().py_1().text_xs().text_color(c(RED)).child(e))
             })
             .when(
                 self.loaded && self.items.is_empty() && self.error.is_none(),
                 |d| {
                     d.child(
                         div()
-                            .p_4()
+                            .p_2()
                             .text_color(c(PLACEHOLDER))
                             .child("No containers."),
                     )
@@ -281,4 +274,31 @@ impl Render for DockerView {
                     .children(rows),
             )
     }
+}
+
+/// "image · status · ports" with noise removed: short hashes, no IPv6 duplicates.
+fn summary(ct: &Container) -> String {
+    let image = match ct.image.strip_prefix("sha256:") {
+        Some(h) => h.chars().take(12).collect(),
+        None => ct.image.clone(),
+    };
+    let mut ports: Vec<String> = Vec::new();
+    for p in ct.ports.split(", ") {
+        if p.is_empty() || p.starts_with("[::]") {
+            continue;
+        }
+        let p = p
+            .trim_start_matches("0.0.0.0:")
+            .trim_end_matches("/tcp")
+            .replace("->", "\u{2192}");
+        if !ports.contains(&p) {
+            ports.push(p);
+        }
+    }
+    let mut out = format!("{image} · {}", ct.status);
+    if !ports.is_empty() {
+        out.push_str(" · ");
+        out.push_str(&ports.join(", "));
+    }
+    out
 }

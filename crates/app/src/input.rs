@@ -122,7 +122,7 @@ impl Render for TextInput {
         let (before, after) = self.text.split_at(self.cursor);
         let caret = div()
             .w(px(1.))
-            .h(px(15.))
+            .h(px(13.))
             .bg(c(if focused { ACCENT_TEXT } else { ACTIVE }));
         let mut row = div()
             .flex()
@@ -142,15 +142,14 @@ impl Render for TextInput {
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, _| window.focus(&this.focus)),
             )
-            .h(px(28.))
+            .h(px(26.))
             .px_2()
             .flex()
             .items_center()
-            .rounded_md()
+            .rounded(px(2.))
             .bg(c(ELEMENT))
-            .border_1()
+            .border_2()
             .border_color(c(if focused { BORDER_FOCUSED } else { BORDER }))
-            .text_sm()
             .text_color(c(TEXT))
             .child(row)
     }

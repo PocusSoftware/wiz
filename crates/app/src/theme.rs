@@ -32,9 +32,9 @@ pub const GREEN: u32 = 0x8fbf8a;
 pub const RED: u32 = 0xe5534b;
 pub const YELLOW: u32 = 0xe3b341;
 
-pub const TITLEBAR_H: f32 = 36.0;
+pub const TITLEBAR_H: f32 = 30.0;
 /// Space left of the first tab for the macOS traffic lights.
-pub const TRAFFIC_LIGHTS_W: f32 = 78.0;
+pub const TRAFFIC_LIGHTS_W: f32 = 80.0;
 pub const FONT_UI: &str = ".SystemUIFont";
 
 static MONO: OnceLock<SharedString> = OnceLock::new();

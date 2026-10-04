@@ -261,17 +261,17 @@ impl Render for HostForm {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(420.))
-            .p_4()
+            .w(px(340.))
+            .p_3()
             .flex()
             .flex_col()
-            .gap_3()
-            .rounded_lg()
+            .gap_2()
+            .rounded(px(3.))
             .bg(c(ELEVATED))
             .border_1()
             .border_color(c(BORDER))
             .shadow_lg()
-            .child(div().text_base().child(if self.index.is_some() {
+            .child(div().text_sm().child(if self.index.is_some() {
                 "Edit host"
             } else {
                 "Add host"

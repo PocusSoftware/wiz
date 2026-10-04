@@ -13,7 +13,7 @@ impl Render for Tip {
             .mt_1()
             .px_2()
             .py_1()
-            .rounded_md()
+            .rounded(px(2.))
             .bg(c(ELEVATED))
             .border_1()
             .border_color(c(BORDER))
@@ -23,7 +23,7 @@ impl Render for Tip {
     }
 }
 
-fn tip(text: &'static str) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+pub fn tip(text: &'static str) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     move |_, cx| cx.new(|_| Tip(text.into())).into()
 }
 
@@ -48,12 +48,12 @@ pub fn icon_button(
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(px(2.))
         .cursor_pointer()
         .hover(|s| s.bg(c(HOVER)))
         .active(|s| s.bg(c(ACTIVE)))
         .tooltip(tip(tooltip))
-        .child(icon(name, 14., color))
+        .child(icon(name, 13., color))
 }
 
 fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> Stateful<Div> {
@@ -61,9 +61,12 @@ fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> S
         .id(id)
         .px_3()
         .h(px(26.))
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .border_1()
+        .border_color(c(BORDER))
         .flex()
         .items_center()
-        .rounded_md()
+        .rounded(px(2.))
         .bg(c(bg))
         .text_xs()
         .text_color(c(fg))

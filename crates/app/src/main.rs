@@ -53,7 +53,7 @@ fn main() {
                     titlebar: Some(TitlebarOptions {
                         title: Some("ssh-client".into()),
                         appears_transparent: true,
-                        traffic_light_position: Some(point(px(14.), px(12.))),
+                        traffic_light_position: Some(point(px(12.), px(9.))),
                     }),
                     ..Default::default()
                 },

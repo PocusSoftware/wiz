@@ -40,7 +40,7 @@ pub enum TerminalEvent {
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
 
-const FONT_SIZE: f32 = 14.0;
+const FONT_SIZE: f32 = 13.0;
 
 impl TerminalView {
     pub fn new(shell: Shell, saved_password: Option<String>, cx: &mut Context<Self>) -> Self {
@@ -451,7 +451,7 @@ impl Render for TerminalView {
             .flex()
             .flex_col()
             .bg(c(BG))
-            .child(div().flex_1().p_1().child(grid))
+            .child(div().flex_1().px(px(6.)).py(px(2.)).child(grid))
             .when_some(exited, |d, status| {
                 d.child(
                     div()
