@@ -191,6 +191,7 @@ pub struct Root {
     settings: Option<Entity<SettingsView>>,
     pending: Vec<Pending>,
     pane_drag: Option<PaneDrag>,
+    tab_scroll: gpui::ScrollHandle,
     next_pending: u64,
     next_tab: u64,
     /// Host groups folded shut on the hosts page.
@@ -256,6 +257,7 @@ impl Root {
             next_pending: 0,
             next_tab: 0,
             pane_drag: None,
+            tab_scroll: gpui::ScrollHandle::new(),
             collapsed: HashSet::new(),
             epoch: 0,
             form: None,
@@ -306,6 +308,7 @@ impl Root {
         }
         self.active = ix;
         self.page = Page::Tab;
+        self.tab_scroll.scroll_to_item(ix);
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => {
                 if let Some(p) = t.panes.get(t.focused).or(t.panes.first()) {
@@ -1233,7 +1236,12 @@ impl Root {
     }
 
     /// The tab strip doubles as the title bar: empty space drags the window.
-    fn tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn tab_bar(&self, window_w: Pixels, cx: &mut Context<Self>) -> impl IntoElement {
+        // Share the space between the castle and the buttons on the right: tabs are 220 px
+        // wide until they don't fit, then narrow down to 110 px and the strip scrolls.
+        const RESERVED: f32 = 38. + 3. * 24. + 8. + 3. * 40. + 32.;
+        let room = f32::from(window_w) - RESERVED;
+        let tab_w = (room / self.tabs.len().max(1) as f32).clamp(110., 220.);
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
@@ -1263,7 +1271,8 @@ impl Root {
                 .items_center()
                 .gap(px(6.))
                 .cursor_pointer()
-                .max_w(px(220.))
+                .flex_shrink_0()
+                .w(px(tab_w))
                 .border_r_1()
                 .border_color(c(BORDER_VARIANT))
                 .relative()
@@ -1326,6 +1335,7 @@ impl Root {
             .child(
                 div()
                     .id("home-tab")
+                    .flex_none()
                     .h_full()
                     .px(px(10.))
                     .flex()
@@ -1358,12 +1368,25 @@ impl Root {
                         },
                     )),
             )
-            .child(div().flex().h_full().children(tabs))
+            // Tabs shrink to a minimum width, then the strip scrolls sideways. It never
+            // pushes the buttons on the right out of the window.
+            .child(
+                div()
+                    .id("tabs")
+                    .flex()
+                    .h_full()
+                    .min_w_0()
+                    .flex_shrink()
+                    .overflow_x_scroll()
+                    .track_scroll(&self.tab_scroll)
+                    .children(tabs),
+            )
             .child(crate::window_drag::title_bar(
-                div().id("title-drag").flex_1().h_full(),
+                div().id("title-drag").flex_1().min_w(px(32.)).h_full(),
             ))
             .child(
                 div()
+                    .flex_none()
                     .h_full()
                     .px(px(4.))
                     .flex()
@@ -1407,6 +1430,7 @@ impl Root {
             .child(
                 div()
                     .flex()
+                    .flex_none()
                     .h_full()
                     .border_l_1()
                     .border_color(c(BORDER_VARIANT))
@@ -1720,7 +1744,7 @@ impl Render for Root {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .child(self.tab_bar(cx))
+                    .child(self.tab_bar(window.viewport_size().width, cx))
                     .child(div().flex_1().min_h_0().child(fade_in(
                         div().size_full().child(self.content(cx)),
                         ("page", self.epoch as usize),
