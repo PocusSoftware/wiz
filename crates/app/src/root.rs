@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gpui::{
@@ -13,6 +14,7 @@ use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
 use ssh_core::keychain::{self, Kind};
 use ssh_core::session::{Connection, Credentials};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+use tokio::sync::oneshot;
 
 use crate::anim::{fade_in, pop_in, stagger_in};
 use crate::docker_view::{DockerEvent, DockerView};
@@ -39,8 +41,12 @@ struct TrustRequest {
 }
 
 /// Called from the tokio side during the handshake. Blocks that worker until the
-/// user answers in the UI.
-struct GuiPrompt(UnboundedSender<TrustRequest>);
+/// user answers in the UI. `prompting` is set meanwhile, so the connect timeout pauses
+/// while the user reads the fingerprint.
+struct GuiPrompt {
+    tx: UnboundedSender<TrustRequest>,
+    prompting: Arc<AtomicBool>,
+}
 
 impl TrustPrompt for GuiPrompt {
     fn trust_new_host(&self, host: &str, port: u16, fingerprint: &str) -> bool {
@@ -51,11 +57,60 @@ impl TrustPrompt for GuiPrompt {
             fingerprint: fingerprint.into(),
             reply: tx,
         };
-        if self.0.send(req).is_err() {
+        if self.tx.send(req).is_err() {
             return false;
         }
-        rx.recv_timeout(Duration::from_secs(120)).unwrap_or(false)
+        self.prompting.store(true, Ordering::Relaxed);
+        let ok = rx.recv_timeout(Duration::from_secs(120)).unwrap_or(false);
+        self.prompting.store(false, Ordering::Relaxed);
+        ok
     }
+}
+
+/// Run `work` until it finishes, the cancel sender is dropped, or `timeout_secs` (0 = never)
+/// pass. Time spent in the host key prompt does not count. `None` means cancelled.
+async fn race<T>(
+    work: impl std::future::Future<Output = ssh_core::Result<T>>,
+    cancel: &mut oneshot::Receiver<()>,
+    timeout_secs: u32,
+    prompting: &AtomicBool,
+) -> ssh_core::Result<Option<T>> {
+    const TICK: Duration = Duration::from_millis(250);
+    let limit = Duration::from_secs(timeout_secs as u64);
+    let mut waited = Duration::ZERO;
+    tokio::pin!(work);
+    loop {
+        tokio::select! {
+            r = &mut work => return r.map(Some),
+            _ = &mut *cancel => return Ok(None),
+            _ = tokio::time::sleep(TICK) => {
+                if timeout_secs > 0 && !prompting.load(Ordering::Relaxed) {
+                    waited += TICK;
+                    if waited >= limit {
+                        return Err(ssh_core::Error::Timeout(timeout_secs));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A connection attempt still in flight. Dropping `_cancel` aborts it.
+struct Pending {
+    id: u64,
+    account: String,
+    name: String,
+    host: String,
+    port: u16,
+    _cancel: oneshot::Sender<()>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Home,
+    Settings,
+    /// `tabs[active]`.
+    Tab,
 }
 
 struct Live {
@@ -76,7 +131,6 @@ enum TabKind {
     Docker(Entity<DockerView>),
     Sftp(Entity<SftpView>),
     Logs(Entity<LogView>),
-    Settings(Entity<SettingsView>),
 }
 
 struct Tab {
@@ -90,8 +144,13 @@ pub struct Root {
     conns: HashMap<String, Live>,
     tabs: Vec<Tab>,
     active: usize,
-    /// Showing the hosts page instead of a session tab.
-    home: bool,
+    page: Page,
+    /// Created on first visit, then kept so the page keeps its scroll position.
+    settings: Option<Entity<SettingsView>>,
+    pending: Vec<Pending>,
+    next_pending: u64,
+    /// Host groups folded shut on the hosts page.
+    collapsed: HashSet<String>,
     /// Bumped whenever the visible page changes, to replay the page fade.
     epoch: u64,
     form: Option<Entity<HostForm>>,
@@ -145,7 +204,11 @@ impl Root {
             conns: HashMap::new(),
             tabs: vec![],
             active: 0,
-            home: true,
+            page: Page::Home,
+            settings: None,
+            pending: Vec::new(),
+            next_pending: 0,
+            collapsed: HashSet::new(),
             epoch: 0,
             form: None,
             trust: None,
@@ -178,11 +241,11 @@ impl Root {
             return;
         }
         // Re-selecting the current page only refocuses it; the enter animation is for changes.
-        if self.home || ix != self.active {
+        if self.page != Page::Tab || ix != self.active {
             self.epoch += 1;
         }
         self.active = ix;
-        self.home = false;
+        self.page = Page::Tab;
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => t.read(cx).focus(window),
             TabKind::Sftp(v) => {
@@ -193,10 +256,19 @@ impl Root {
                 let h = v.read(cx).focus_handle(cx);
                 window.focus(&h)
             }
-            TabKind::Settings(v) => {
-                let h = v.read(cx).focus_handle(cx);
-                window.focus(&h)
-            }
+            _ => window.focus(&self.focus),
+        }
+        cx.notify();
+    }
+
+    /// Show the hosts or settings page.
+    fn show_page(&mut self, page: Page, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != page {
+            self.page = page;
+            self.epoch += 1;
+        }
+        match (page, &self.settings) {
+            (Page::Settings, Some(v)) => window.focus(&v.read(cx).focus_handle(cx)),
             _ => window.focus(&self.focus),
         }
         cx.notify();
@@ -208,12 +280,15 @@ impl Root {
         }
         // Dropping the view drops the shell input sender, which closes the channel.
         self.tabs.remove(ix);
-        if self.tabs.is_empty() {
-            self.active = 0;
-            self.home = true;
-            self.epoch += 1;
-            window.focus(&self.focus);
+        if self.page != Page::Tab {
+            // Closed from the tab strip while another page shows: stay there.
+            if ix < self.active || self.active >= self.tabs.len() {
+                self.active = self.active.saturating_sub(1);
+            }
             cx.notify();
+        } else if self.tabs.is_empty() {
+            self.active = 0;
+            self.show_page(Page::Home, window, cx);
         } else {
             let next = if ix < self.active {
                 self.active - 1
@@ -239,52 +314,112 @@ impl Root {
             }
             self.conns.remove(&account);
         }
-        self.set_status(format!("Connecting to {}...", host.name), false);
+        if self.pending.iter().any(|p| p.account == account) {
+            // Already connecting: a second click must not open a second session.
+            return;
+        }
+        let (cancel_tx, mut cancel_rx) = oneshot::channel();
+        let id = self.next_pending;
+        self.next_pending += 1;
+        self.pending.push(Pending {
+            id,
+            account: account.clone(),
+            name: host.name.clone(),
+            host: host.host.clone(),
+            port: host.port,
+            _cancel: cancel_tx,
+        });
+        self.status = None;
         cx.notify();
+        let prompting = Arc::new(AtomicBool::new(false));
         let verifier = HostKeyVerifier {
             known_hosts: HostKeyVerifier::default_path()
                 .unwrap_or_else(|_| PathBuf::from("known_hosts")),
-            prompt: Arc::new(GuiPrompt(self.trust_tx.clone())),
+            prompt: Arc::new(GuiPrompt {
+                tx: self.trust_tx.clone(),
+                prompting: prompting.clone(),
+            }),
         };
-        let keepalive_secs = crate::prefs::get().keepalive_secs();
+        let prefs = crate::prefs::get();
+        let (keepalive_secs, timeout_secs) = (prefs.keepalive_secs(), prefs.connect_timeout_secs());
         cx.spawn_in(window, async move |this, cx| {
             let h = host.clone();
             let r = runtime::spawn(async move {
                 // Keychain access can block on a system prompt, keep it off the async workers.
+                // It is not timed: macOS may be waiting for the user to allow access.
                 let hk = h.clone();
-                let creds = tokio::task::spawn_blocking(move || Credentials::from_keychain(&hk))
-                    .await
-                    .map_err(|e| ssh_core::Error::Remote(e.to_string()))??;
+                let creds = tokio::select! {
+                    r = tokio::task::spawn_blocking(move || Credentials::from_keychain(&hk)) => {
+                        r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??
+                    }
+                    _ = &mut cancel_rx => return Ok(None),
+                };
                 let pw = match &creds {
                     Credentials::Password(p) => Some(p.clone()),
                     _ => None,
                 };
                 let keepalive = std::time::Duration::from_secs(keepalive_secs as u64);
-                let conn = Connection::connect_with(&h, &creds, verifier, keepalive).await?;
-                Ok::<_, ssh_core::Error>((conn, pw))
+                let conn = race(
+                    Connection::connect_with(&h, &creds, verifier, keepalive),
+                    &mut cancel_rx,
+                    timeout_secs,
+                    &prompting,
+                )
+                .await?;
+                Ok::<_, ssh_core::Error>(conn.map(|c| (c, pw)))
             })
             .await;
-            this.update_in(cx, |this, window, cx| match r {
-                Ok((conn, pw)) => {
-                    let conn = Arc::new(conn);
-                    this.conns.insert(
-                        host.account(),
-                        Live {
-                            conn: conn.clone(),
-                            password: pw.clone(),
-                        },
-                    );
-                    this.status = None;
-                    this.finish_open(host, conn, pw, what, window, cx);
+            this.update_in(cx, |this, window, cx| {
+                // Cancelled (X, host deleted) while connecting: drop whatever came back.
+                let Some(pos) = this.pending.iter().position(|p| p.id == id) else {
+                    return;
+                };
+                this.pending.remove(pos);
+                let exists = this.cfg.hosts.iter().any(|h| h.account() == account);
+                match r {
+                    Ok(Some((conn, pw))) if exists => {
+                        let conn = Arc::new(conn);
+                        this.conns.insert(
+                            account,
+                            Live {
+                                conn: conn.clone(),
+                                password: pw.clone(),
+                            },
+                        );
+                        this.finish_open(host, conn, pw, what, window, cx);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        this.dismiss_trust(&host.host, host.port);
+                        this.set_status(format!("{}: {e}", host.name), true);
+                    }
                 }
-                Err(e) => {
-                    this.set_status(format!("{}: {e}", host.name), true);
-                    cx.notify();
-                }
+                cx.notify();
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Stop connecting to `account`. The task notices its cancel sender is gone.
+    fn cancel_connect(&mut self, account: &str, cx: &mut Context<Self>) {
+        if let Some(pos) = self.pending.iter().position(|p| p.account == account) {
+            let p = self.pending.remove(pos);
+            self.dismiss_trust(&p.host, p.port);
+            cx.notify();
+        }
+    }
+
+    /// Answer "no" to an open host key prompt for this address.
+    fn dismiss_trust(&mut self, host: &str, port: u16) {
+        if self
+            .trust
+            .as_ref()
+            .is_some_and(|t| t.host == host && t.port == port)
+            && let Some(t) = self.trust.take()
+        {
+            let _ = t.reply.send(false);
+        }
     }
 
     fn finish_open(
@@ -533,7 +668,15 @@ impl Root {
 
     fn open_form(&mut self, existing: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         let ex = existing.and_then(|i| self.cfg.hosts.get(i).cloned().map(|h| (i, h)));
-        let form = cx.new(|cx| HostForm::new(ex, cx));
+        let taken = self
+            .cfg
+            .hosts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| Some(*i) != existing)
+            .map(|(_, h)| h.account())
+            .collect();
+        let form = cx.new(|cx| HostForm::new(ex, taken, cx));
         cx.subscribe_in(&form, window, |this, _, ev: &FormEvent, window, cx| {
             match ev {
                 FormEvent::Saved { host, index } => {
@@ -561,6 +704,7 @@ impl Root {
         }
         let h = self.cfg.hosts.remove(ix);
         let acct = h.account();
+        self.cancel_connect(&acct, cx);
         for kind in [Kind::Password, Kind::KeyPassphrase] {
             if let Err(e) = keychain::delete(kind, &acct) {
                 self.set_status(format!("Keychain: {e}"), true);
@@ -571,31 +715,27 @@ impl Root {
         cx.notify();
     }
 
+    fn toggle_pin(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if let Some(h) = self.cfg.hosts.get_mut(ix) {
+            h.pinned = !h.pinned;
+            self.save_config();
+            cx.notify();
+        }
+    }
+
     // ---------- settings ----------
 
-    /// Open the Settings tab, or switch to it if it is already open.
+    /// Show the Settings page (a page like the hosts page, not a tab).
     fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(ix) = self
-            .tabs
-            .iter()
-            .position(|t| matches!(t.kind, TabKind::Settings(_)))
-        {
-            self.select_tab(ix, window, cx);
-            return;
+        if self.settings.is_none() {
+            let view = cx.new(SettingsView::new);
+            cx.subscribe_in(&view, window, |this, _, _: &SettingsEvent, _, cx| {
+                this.settings_changed(cx)
+            })
+            .detach();
+            self.settings = Some(view);
         }
-        let view = cx.new(SettingsView::new);
-        cx.subscribe_in(&view, window, |this, _, _: &SettingsEvent, _, cx| {
-            this.settings_changed(cx)
-        })
-        .detach();
-        self.push_tab(
-            Tab {
-                label: "Settings".into(),
-                kind: TabKind::Settings(view),
-            },
-            window,
-            cx,
-        );
+        self.show_page(Page::Settings, window, cx);
     }
 
     /// Settings changed somewhere: repaint every page (they read the live settings) and
@@ -607,8 +747,10 @@ impl Root {
                 TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
                 TabKind::Sftp(v) => v.update(cx, |v, cx| v.settings_changed(cx)),
                 TabKind::Logs(v) => v.update(cx, |_, cx| cx.notify()),
-                TabKind::Settings(v) => v.update(cx, |_, cx| cx.notify()),
             }
+        }
+        if let Some(v) = &self.settings {
+            v.update(cx, |_, cx| cx.notify());
         }
         cx.notify();
     }
@@ -624,107 +766,239 @@ impl Root {
 
     // ---------- render ----------
 
-    /// Hosts as big square cards. With a handful of servers this beats a list.
-    fn home_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        let cards = self.cfg.hosts.iter().enumerate().map(|(ix, h)| {
-            let live = self
-                .conns
-                .get(&h.account())
-                .is_some_and(|l| !l.conn.is_closed());
-            let kind_icon = match h.auth {
-                AuthMethod::Password => "server",
-                AuthMethod::Key { .. } => "key",
-            };
-            div()
-                .id(("host", ix))
-                .w(px(210.))
-                .p_2()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .rounded(px(2.))
-                .border_2()
-                .border_color(c(BORDER))
-                .bg(c(PANEL))
-                .cursor_pointer()
-                .hover(|s| s.bg(c(ACTIVE)).border_color(c(BORDER_FOCUSED)))
-                .on_click(
-                    cx.listener(move |t, _: &ClickEvent, w, cx| {
-                        t.open_host(ix, Open::Shell, w, cx)
-                    }),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(icon(kind_icon, 16., if live { GREEN } else { ACCENT_TEXT }))
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_sm()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .whitespace_nowrap()
-                                .child(h.name.clone()),
-                        )
-                        .child(div().size(px(7.)).bg(c(if live { GREEN } else { ACTIVE }))),
-                )
-                .child(
-                    div().text_color(c(MUTED)).whitespace_nowrap().child(
-                        privacy::redact(&format!(
-                            "{}@{}:{}",
-                            h.user,
-                            h.host,
-                            privacy::port(h.port)
-                        ))
+    /// One host as a big square card. `ix` is the index in `cfg.hosts`, whatever section the
+    /// card is shown in.
+    fn host_card(&self, ix: usize, h: &Host, cx: &mut Context<Self>) -> gpui::Stateful<gpui::Div> {
+        let account = h.account();
+        let live = self
+            .conns
+            .get(&account)
+            .is_some_and(|l| !l.conn.is_closed());
+        let connecting = self.pending.iter().any(|p| p.account == account);
+        let kind_icon = match h.auth {
+            AuthMethod::Password => "server",
+            AuthMethod::Key { .. } => "key",
+        };
+        let dot = if live {
+            GREEN
+        } else if connecting {
+            YELLOW
+        } else {
+            ACTIVE
+        };
+        div()
+            .id(("host", ix))
+            .w(px(210.))
+            .p_2()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .rounded(px(2.))
+            .border_2()
+            .border_color(c(BORDER))
+            .bg(c(PANEL))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(ACTIVE)).border_color(c(BORDER_FOCUSED)))
+            .on_click(
+                cx.listener(move |t, _: &ClickEvent, w, cx| t.open_host(ix, Open::Shell, w, cx)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(icon(kind_icon, 16., if live { GREEN } else { ACCENT_TEXT }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .whitespace_nowrap()
+                            .child(h.name.clone()),
+                    )
+                    .child(div().size(px(7.)).bg(c(dot))),
+            )
+            .child(
+                div().text_color(c(MUTED)).whitespace_nowrap().child(
+                    privacy::redact(&format!("{}@{}:{}", h.user, h.host, privacy::port(h.port)))
                         .into_owned(),
-                    ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap_1()
-                        .child(
-                            icon_button(("h-shell", ix), "terminal", "Open shell", ACCENT_TEXT)
-                                .on_click(cx.listener(move |t, _, w, cx| {
-                                    cx.stop_propagation();
-                                    t.open_host(ix, Open::Shell, w, cx)
-                                })),
-                        )
-                        .child(
-                            icon_button(("h-docker", ix), "container", "Docker containers", MUTED)
-                                .on_click(cx.listener(move |t, _, w, cx| {
-                                    cx.stop_propagation();
-                                    t.open_host(ix, Open::Docker, w, cx)
-                                })),
-                        )
-                        .child(
-                            icon_button(("h-sftp", ix), "folder", "Files (SFTP)", MUTED).on_click(
-                                cx.listener(move |t, _, w, cx| {
-                                    cx.stop_propagation();
-                                    t.open_host(ix, Open::Sftp, w, cx)
-                                }),
-                            ),
-                        )
-                        .child(div().flex_1())
-                        .child(
-                            icon_button(("h-edit", ix), "pencil", "Edit host", MUTED).on_click(
-                                cx.listener(move |t, _, w, cx| {
-                                    cx.stop_propagation();
-                                    t.open_form(Some(ix), w, cx)
-                                }),
-                            ),
-                        )
-                        .child(
-                            icon_button(("h-del", ix), "trash", "Delete host", RED).on_click(
-                                cx.listener(move |t, _, _, cx| {
-                                    cx.stop_propagation();
-                                    t.delete_host(ix, cx)
-                                }),
-                            ),
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_1()
+                    .child(
+                        icon_button(("h-shell", ix), "terminal", "Open shell", ACCENT_TEXT)
+                            .on_click(cx.listener(move |t, _, w, cx| {
+                                cx.stop_propagation();
+                                t.open_host(ix, Open::Shell, w, cx)
+                            })),
+                    )
+                    .child(
+                        icon_button(("h-docker", ix), "container", "Docker containers", MUTED)
+                            .on_click(cx.listener(move |t, _, w, cx| {
+                                cx.stop_propagation();
+                                t.open_host(ix, Open::Docker, w, cx)
+                            })),
+                    )
+                    .child(
+                        icon_button(("h-sftp", ix), "folder", "Files (SFTP)", MUTED).on_click(
+                            cx.listener(move |t, _, w, cx| {
+                                cx.stop_propagation();
+                                t.open_host(ix, Open::Sftp, w, cx)
+                            }),
                         ),
-                )
-        });
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        icon_button(
+                            ("h-pin", ix),
+                            "pin",
+                            if h.pinned { "Unpin" } else { "Pin to top" },
+                            if h.pinned { ACCENT_TEXT } else { MUTED },
+                        )
+                        .on_click(cx.listener(move |t, _, _, cx| {
+                            cx.stop_propagation();
+                            t.toggle_pin(ix, cx)
+                        })),
+                    )
+                    .child(
+                        icon_button(("h-edit", ix), "pencil", "Edit host", MUTED).on_click(
+                            cx.listener(move |t, _, w, cx| {
+                                cx.stop_propagation();
+                                t.open_form(Some(ix), w, cx)
+                            }),
+                        ),
+                    )
+                    .child(
+                        icon_button(("h-del", ix), "trash", "Delete host", RED).on_click(
+                            cx.listener(move |t, _, _, cx| {
+                                cx.stop_propagation();
+                                t.delete_host(ix, cx)
+                            }),
+                        ),
+                    ),
+            )
+    }
+
+    /// Hosts as big square cards: pinned ones first, then one section per group, then the
+    /// ungrouped ones. With a handful of servers this beats a list.
+    fn home_view(&self, cx: &mut Context<Self>) -> AnyElement {
+        let hosts: Vec<(usize, &Host)> = self.cfg.hosts.iter().enumerate().collect();
+        let pinned: Vec<usize> = hosts
+            .iter()
+            .filter(|(_, h)| h.pinned)
+            .map(|(i, _)| *i)
+            .collect();
+        let mut groups: Vec<String> = hosts
+            .iter()
+            .filter(|(_, h)| !h.pinned)
+            .filter_map(|(_, h)| h.group.clone())
+            .collect();
+        groups.sort_by_key(|g| g.to_lowercase());
+        groups.dedup();
+        let ungrouped: Vec<usize> = hosts
+            .iter()
+            .filter(|(_, h)| !h.pinned && h.group.is_none())
+            .map(|(i, _)| *i)
+            .collect();
+        let sectioned = !pinned.is_empty() || !groups.is_empty();
+
+        // Cascade only on launch. Coming back home later just fades the page,
+        // so it shows up as fast as any other page.
+        let mut n = 0;
+        let mut cards = |ixs: &[usize], cx: &mut Context<Self>| -> Vec<AnyElement> {
+            ixs.iter()
+                .map(|&ix| {
+                    let card = self.host_card(ix, &self.cfg.hosts[ix], cx);
+                    n += 1;
+                    if self.epoch == 0 {
+                        stagger_in(card, ("card", ix), n - 1).into_any_element()
+                    } else {
+                        card.into_any_element()
+                    }
+                })
+                .collect()
+        };
+        let grid = || div().flex().flex_wrap().gap_2();
+        let header = |text: String| {
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(c(MUTED))
+                .child(text)
+        };
+
+        let mut page = div()
+            .id("home")
+            .size_full()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_3();
+
+        if !pinned.is_empty() {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(header("PINNED".into()).child(icon("pin", 11., MUTED)))
+                    .child(grid().children(cards(&pinned, cx))),
+            );
+        }
+        for (gi, g) in groups.iter().enumerate() {
+            let members: Vec<usize> = hosts
+                .iter()
+                .filter(|(_, h)| !h.pinned && h.group.as_ref() == Some(g))
+                .map(|(i, _)| *i)
+                .collect();
+            let open = !self.collapsed.contains(g);
+            let key = g.clone();
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        header(String::new())
+                            .id(("group", gi))
+                            .cursor_pointer()
+                            .hover(|s| s.text_color(c(TEXT)))
+                            .on_click(cx.listener(move |t, _, _, cx| {
+                                if !t.collapsed.remove(&key) {
+                                    t.collapsed.insert(key.clone());
+                                }
+                                cx.notify();
+                            }))
+                            .child(icon(
+                                if open {
+                                    "chevron-down"
+                                } else {
+                                    "chevron-right"
+                                },
+                                12.,
+                                MUTED,
+                            ))
+                            .child(icon("folder", 12., MUTED))
+                            .child(privacy::redact(&g.to_uppercase()).into_owned())
+                            .child(
+                                div()
+                                    .text_color(c(PLACEHOLDER))
+                                    .font_weight(FontWeight::NORMAL)
+                                    .child(members.len().to_string()),
+                            ),
+                    )
+                    .when(open, |d| d.child(grid().children(cards(&members, cx)))),
+            );
+        }
 
         let small_card = |id: &'static str, ic: &'static str, text: &'static str| {
             div()
@@ -744,43 +1018,34 @@ impl Root {
                 .child(icon(ic, 14., MUTED))
                 .child(text)
         };
-
-        div()
-            .size_full()
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .children(cards.enumerate().map(|(i, card)| {
-                        // Cascade only on launch. Coming back home later just fades the page,
-                        // so it shows up as fast as any other page.
-                        if self.epoch == 0 {
-                            stagger_in(card, ("card", i), i).into_any_element()
-                        } else {
-                            card.into_any_element()
-                        }
-                    }))
-                    .child(
-                        small_card("add-host", "plus", "Add host")
-                            .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
-                    )
-                    .child(
-                        small_card("local-docker", "container", "Local Docker")
-                            .on_click(cx.listener(|t, _, w, cx| t.open_local_docker(w, cx))),
-                    ),
-            )
-            .into_any_element()
+        page.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .when(sectioned && !ungrouped.is_empty(), |d| {
+                    d.child(header("HOSTS".into()))
+                })
+                .child(
+                    grid()
+                        .children(cards(&ungrouped, cx))
+                        .child(
+                            small_card("add-host", "plus", "Add host")
+                                .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
+                        )
+                        .child(
+                            small_card("local-docker", "container", "Local Docker")
+                                .on_click(cx.listener(|t, _, w, cx| t.open_local_docker(w, cx))),
+                        ),
+                ),
+        )
+        .into_any_element()
     }
 
     /// The tab strip doubles as the title bar: empty space drags the window.
     fn tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
-            let active = !self.home && ix == self.active;
+            let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
             if let TabKind::Terminal(t) = &tab.kind
                 && let Some(title) = t.read(cx).title()
@@ -793,7 +1058,6 @@ impl Root {
                 TabKind::Docker(_) => "container",
                 TabKind::Sftp(_) => "folder",
                 TabKind::Logs(_) => "logs",
-                TabKind::Settings(_) => "sliders",
             };
             div()
                 .id(("tab", ix))
@@ -856,7 +1120,7 @@ impl Root {
                     .border_x_1()
                     .border_color(c(BORDER_VARIANT))
                     .relative()
-                    .when(self.home, |d| {
+                    .when(self.page == Page::Home, |d| {
                         d.child(
                             div()
                                 .absolute()
@@ -869,18 +1133,15 @@ impl Root {
                     })
                     .hover(|s| s.bg(c(PANEL)))
                     .tooltip(crate::ui::tip("Hosts"))
-                    .on_click(cx.listener(|t, _, w, cx| {
-                        if !t.home {
-                            t.home = true;
-                            t.epoch += 1;
-                        }
-                        w.focus(&t.focus);
-                        cx.notify();
-                    }))
+                    .on_click(cx.listener(|t, _, w, cx| t.show_page(Page::Home, w, cx)))
                     .child(icon(
                         "castle",
                         16.,
-                        if self.home { ACCENT_TEXT } else { MUTED },
+                        if self.page == Page::Home {
+                            ACCENT_TEXT
+                        } else {
+                            MUTED
+                        },
                     )),
             )
             .child(div().flex().h_full().children(tabs))
@@ -903,8 +1164,17 @@ impl Root {
                         .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
                     )
                     .child(
-                        icon_button("settings-btn", "sliders", "Settings (⌘,)", MUTED)
-                            .on_click(cx.listener(|t, _, w, cx| t.open_settings(w, cx))),
+                        icon_button(
+                            "settings-btn",
+                            "sliders",
+                            "Settings (⌘,)",
+                            if self.page == Page::Settings {
+                                ACCENT_TEXT
+                            } else {
+                                MUTED
+                            },
+                        )
+                        .on_click(cx.listener(|t, _, w, cx| t.open_settings(w, cx))),
                     ),
             )
             .child(
@@ -924,15 +1194,16 @@ impl Root {
     }
 
     fn content(&self, cx: &mut Context<Self>) -> AnyElement {
-        if self.home || self.tabs.is_empty() {
-            return self.home_view(cx);
+        match (self.page, &self.settings) {
+            (Page::Settings, Some(v)) => return v.clone().into_any_element(),
+            (Page::Tab, _) if !self.tabs.is_empty() => {}
+            _ => return self.home_view(cx),
         }
         match self.tabs.get(self.active).map(|t| &t.kind) {
             Some(TabKind::Terminal(v)) => v.clone().into_any_element(),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
             Some(TabKind::Sftp(v)) => v.clone().into_any_element(),
             Some(TabKind::Logs(v)) => v.clone().into_any_element(),
-            Some(TabKind::Settings(v)) => v.clone().into_any_element(),
             None => div()
                 .size_full()
                 .flex()
@@ -1043,7 +1314,11 @@ impl Render for Root {
             .id("root")
             .track_focus(&self.focus)
             .key_context("Root")
-            .on_action(cx.listener(|t, _: &CloseTab, w, cx| t.close_tab(t.active, w, cx)))
+            .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
+                Page::Tab => t.close_tab(t.active, w, cx),
+                Page::Settings => t.show_page(Page::Home, w, cx),
+                Page::Home => {}
+            }))
             .on_action(cx.listener(|t, _: &NextTab, w, cx| {
                 if !t.tabs.is_empty() {
                     t.select_tab((t.active + 1) % t.tabs.len(), w, cx)
@@ -1074,6 +1349,37 @@ impl Render for Root {
                         div().size_full().child(self.content(cx)),
                         ("page", self.epoch as usize),
                     )))
+                    .children(self.pending.iter().map(|p| {
+                        let account = p.account.clone();
+                        div()
+                            .px_2()
+                            .py(px(1.))
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .border_t_1()
+                            .border_color(c(BORDER_VARIANT))
+                            .text_color(c(MUTED))
+                            .child(div().size(px(7.)).bg(c(YELLOW)))
+                            .child(
+                                div().flex_1().child(
+                                    privacy::redact(&format!("Connecting to {}...", p.name))
+                                        .into_owned(),
+                                ),
+                            )
+                            .child(
+                                icon_button(
+                                    ("cancel-connect", p.id as usize),
+                                    "x",
+                                    "Cancel",
+                                    MUTED,
+                                )
+                                .size(px(18.))
+                                .on_click(
+                                    cx.listener(move |t, _, _, cx| t.cancel_connect(&account, cx)),
+                                ),
+                            )
+                    }))
                     .when_some(self.status.clone(), |d, (msg, err)| {
                         d.child(
                             div()

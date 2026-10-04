@@ -38,6 +38,8 @@ fn host(port: u16, auth: AuthMethod) -> Host {
         host: "127.0.0.1".into(),
         port,
         user: "tester".into(),
+        group: None,
+        pinned: false,
         auth,
     }
 }

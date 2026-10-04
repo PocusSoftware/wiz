@@ -11,7 +11,7 @@ use ssh_core::keychain::{self, Kind};
 
 use crate::input::{Hide, TextInput};
 use crate::theme::*;
-use crate::ui::{button, label, primary_button};
+use crate::ui::{button, icon_button, label, primary_button};
 
 pub enum FormEvent {
     Saved { host: Host, index: Option<usize> },
@@ -23,7 +23,10 @@ impl EventEmitter<FormEvent> for HostForm {}
 pub struct HostForm {
     index: Option<usize>,
     old: Option<Host>,
+    /// Accounts (user@host:port) of the other saved hosts, to refuse duplicates.
+    taken: Vec<String>,
     name: Entity<TextInput>,
+    group: Entity<TextInput>,
     host: Entity<TextInput>,
     port: Entity<TextInput>,
     user: Entity<TextInput>,
@@ -36,8 +39,13 @@ pub struct HostForm {
 }
 
 impl HostForm {
-    pub fn new(existing: Option<(usize, Host)>, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        existing: Option<(usize, Host)>,
+        taken: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let name = cx.new(|cx| TextInput::new("My server", false, cx));
+        let group = cx.new(|cx| TextInput::new("Optional, e.g. Production", false, cx));
         let host = cx.new(|cx| TextInput::new("example.com or 10.0.0.5", false, cx));
         let port = cx.new(|cx| TextInput::new("22", false, cx));
         let user = cx.new(|cx| TextInput::new("root", false, cx));
@@ -55,6 +63,9 @@ impl HostForm {
         let (index, old) = match existing {
             Some((i, h)) => {
                 name.update(cx, |t, _| t.set_value(&h.name));
+                group.update(cx, |t, _| {
+                    t.set_value(h.group.as_deref().unwrap_or_default())
+                });
                 host.update(cx, |t, _| t.set_value(&h.host));
                 port.update(cx, |t, _| t.set_value(&h.port.to_string()));
                 user.update(cx, |t, _| t.set_value(&h.user));
@@ -69,7 +80,9 @@ impl HostForm {
         Self {
             index,
             old,
+            taken,
             name,
+            group,
             host,
             port,
             user,
@@ -89,6 +102,7 @@ impl HostForm {
     fn fields(&self) -> Vec<Entity<TextInput>> {
         let mut v = vec![
             self.name.clone(),
+            self.group.clone(),
             self.host.clone(),
             self.port.clone(),
             self.user.clone(),
@@ -129,16 +143,19 @@ impl HostForm {
     fn try_save(&mut self, cx: &mut Context<Self>) -> Result<Host, String> {
         let get = |e: &Entity<TextInput>| e.read(cx).value().trim().to_string();
         let host = get(&self.host);
+        // Accept a pasted bracketed IPv6 address ([::1]).
+        let host = match host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+            Some(inner) => inner.to_string(),
+            None => host,
+        };
         let user = get(&self.user);
         let port_s = get(&self.port);
-        if host.is_empty() || user.is_empty() {
-            return Err("Host and user are required.".into());
-        }
         let port: u16 = if port_s.is_empty() {
             22
         } else {
             port_s.parse().map_err(|_| "Port must be 1-65535.")?
         };
+        let group = Some(get(&self.group)).filter(|g| !g.is_empty());
         let mut name = get(&self.name);
         if name.is_empty() {
             name = format!("{user}@{host}");
@@ -154,6 +171,9 @@ impl HostForm {
                     .unwrap_or(PathBuf::from(&p)),
                 None => PathBuf::from(&p),
             };
+            if !p.is_file() {
+                return Err("Private key file not found.".into());
+            }
             AuthMethod::Key { path: p }
         } else {
             AuthMethod::Password
@@ -163,9 +183,16 @@ impl HostForm {
             host,
             port,
             user,
+            group,
+            pinned: self.old.as_ref().is_some_and(|o| o.pinned),
             auth,
         };
+        new.validate()?;
         let acct = new.account();
+        if self.taken.contains(&acct) {
+            return Err("Another saved host already uses this user, host and port.".into());
+        }
+        // Every check above runs before the Keychain is touched.
         let (pw, pass) = (
             self.password.read(cx).value().to_string(),
             self.passphrase.read(cx).value().to_string(),
@@ -275,12 +302,28 @@ impl Render for HostForm {
             .border_1()
             .border_color(c(BORDER))
             .shadow_lg()
-            .child(div().text_sm().child(if self.index.is_some() {
-                "Edit host"
-            } else {
-                "Add host"
-            }))
-            .child(field("Name", &self.name))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(div().text_sm().child(if self.index.is_some() {
+                        "Edit host"
+                    } else {
+                        "Add host"
+                    }))
+                    .child(
+                        icon_button("form-close", "x", "Close (Esc)", MUTED)
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(field("Name", &self.name).flex_1())
+                    .child(field("Group", &self.group).flex_1()),
+            )
             .child(
                 div()
                     .flex()

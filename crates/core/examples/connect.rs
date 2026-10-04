@@ -48,6 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         host: hostname.into(),
         port,
         user: user.into(),
+        group: None,
+        pinned: false,
         auth: AuthMethod::Password,
     };
     let creds = match creds {

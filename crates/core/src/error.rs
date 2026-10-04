@@ -38,6 +38,8 @@ pub enum Error {
     Sftp(String),
     #[error("transfer cancelled")]
     Cancelled,
+    #[error("connection timed out after {0} s")]
+    Timeout(u32),
     #[error("remote command failed: {0}")]
     Remote(String),
 }

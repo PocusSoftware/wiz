@@ -41,7 +41,9 @@ icons!(
     "check",
     "arrow-down",
     "castle",
-    "sliders"
+    "sliders",
+    "pin",
+    "chevron-right"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

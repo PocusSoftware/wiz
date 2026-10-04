@@ -21,6 +21,13 @@ pub struct Host {
     #[serde(default = "default_port")]
     pub port: u16,
     pub user: String,
+    /// Folder the host is listed under on the hosts page. `None` is ungrouped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// Listed at the top of the hosts page.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pinned: bool,
+    // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }
 
@@ -28,11 +35,81 @@ fn default_port() -> u16 {
     22
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 impl Host {
     /// Keychain account string, unique per user@host:port.
     pub fn account(&self) -> String {
         format!("{}@{}:{}", self.user, self.host, self.port)
     }
+
+    /// Check the fields a user typed. Messages never repeat the values, since the form
+    /// may be showing them masked.
+    pub fn validate(&self) -> std::result::Result<(), String> {
+        if self.name.chars().count() > 64 {
+            return Err("Name must be 64 characters or fewer.".into());
+        }
+        if self.name.chars().any(char::is_control) {
+            return Err("Name can't contain control characters.".into());
+        }
+        if self.host.is_empty() {
+            return Err("Host is required.".into());
+        }
+        if !valid_host(&self.host) {
+            return Err(
+                "Host must be a hostname or IP address, without user, port or scheme.".into(),
+            );
+        }
+        if self.user.is_empty() {
+            return Err("User is required.".into());
+        }
+        if self.user.len() > 64
+            || self
+                .user
+                .chars()
+                .any(|c| c.is_whitespace() || c.is_control() || "@:/".contains(c))
+        {
+            return Err("User can't contain spaces, @, : or /.".into());
+        }
+        if self.port == 0 {
+            return Err("Port must be 1-65535.".into());
+        }
+        if let Some(g) = &self.group
+            && (g.chars().count() > 40 || g.chars().any(char::is_control))
+        {
+            return Err("Group must be 40 characters or fewer.".into());
+        }
+        Ok(())
+    }
+}
+
+/// An IPv4/IPv6 address or a DNS name (letters, digits, `-` and `_`, dot separated).
+fn valid_host(h: &str) -> bool {
+    if h.parse::<std::net::IpAddr>().is_ok() {
+        return true;
+    }
+    if h.len() > 253 {
+        return false;
+    }
+    let h = h.strip_suffix('.').unwrap_or(h);
+    // An all-digit last label is a mistyped IP (1.2.3, 999.1.1.1), not a name.
+    let numeric_tld = h
+        .rsplit('.')
+        .next()
+        .is_some_and(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_digit()));
+    !h.is_empty()
+        && !numeric_tld
+        && h.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -110,6 +187,8 @@ mod tests {
                     host: "h".into(),
                     port: 2222,
                     user: "u".into(),
+                    group: Some("prod".into()),
+                    pinned: true,
                     auth: AuthMethod::Password,
                 },
                 Host {
@@ -117,6 +196,8 @@ mod tests {
                     host: "h2".into(),
                     port: 22,
                     user: "u".into(),
+                    group: None,
+                    pinned: false,
                     auth: AuthMethod::Key { path: "/k".into() },
                 },
             ],
@@ -124,6 +205,59 @@ mod tests {
         let s = toml::to_string_pretty(&cfg).unwrap();
         let back: Config = toml::from_str(&s).unwrap();
         assert_eq!(back.hosts, cfg.hosts);
+        assert!(!s.contains("pinned = false"));
+    }
+
+    #[test]
+    fn old_files_without_group_or_pin_still_load() {
+        let old = "[[host]]\nname = \"a\"\nhost = \"h\"\nuser = \"u\"\n\n[host.auth]\ntype = \"password\"\n";
+        let cfg: Config = toml::from_str(old).unwrap();
+        assert_eq!(cfg.hosts[0].group, None);
+        assert!(!cfg.hosts[0].pinned);
+        assert_eq!(cfg.hosts[0].port, 22);
+    }
+
+    #[test]
+    fn validate() {
+        let h = |host: &str, user: &str, port: u16| Host {
+            name: "n".into(),
+            host: host.into(),
+            port,
+            user: user.into(),
+            group: None,
+            pinned: false,
+            auth: AuthMethod::Password,
+        };
+        for ok in [
+            "example.com",
+            "my-server.example.com.",
+            "localhost",
+            "10.0.0.5",
+            "::1",
+            "2001:db8::1",
+            "host_1",
+        ] {
+            assert!(h(ok, "root", 22).validate().is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "root@example.com",
+            "example.com:22",
+            "ssh://example.com",
+            "exa mple.com",
+            "-bad.com",
+            "a..b",
+            "1.2.3",
+            "999.1.1.1",
+            "example.com/x",
+        ] {
+            assert!(h(bad, "root", 22).validate().is_err(), "{bad}");
+        }
+        assert!(h("example.com", "", 22).validate().is_err());
+        assert!(h("example.com", "ro ot", 22).validate().is_err());
+        assert!(h("example.com", "a@b", 22).validate().is_err());
+        assert!(h("example.com", "root", 0).validate().is_err());
+        assert!(h("example.com", "deploy-user.1", 65535).validate().is_ok());
     }
 }
 
@@ -179,6 +313,8 @@ pub struct Settings {
     pub docker_refresh_secs: Option<u32>,
     pub terminal_scrollback: Option<u32>,
     pub keepalive_secs: Option<u32>,
+    /// Give up connecting after this many seconds (0 waits forever).
+    pub connect_timeout_secs: Option<u32>,
 }
 
 macro_rules! getters {
@@ -210,6 +346,7 @@ getters! {
     docker_refresh_secs: u32 = 5;
     terminal_scrollback: u32 = 10_000;
     keepalive_secs: u32 = 30;
+    connect_timeout_secs: u32 = 15;
 }
 
 impl Settings {
