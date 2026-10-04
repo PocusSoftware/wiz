@@ -23,7 +23,6 @@ use gpui::{
 
 use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root};
 
-/// Set at process start; read by the first render when SSHC_TIMING is set.
 /// Print elapsed time since start when SSHC_TIMING is set.
 pub fn mark(what: &str) {
     if std::env::var_os("SSHC_TIMING").is_some()
@@ -33,7 +32,8 @@ pub fn mark(what: &str) {
     }
 }
 
-pub static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+/// Set at process start; read by `mark`.
+static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
 /// Show the castle in the Dock even when running unbundled (cargo run).
 fn set_dock_icon() {

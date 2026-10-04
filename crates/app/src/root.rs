@@ -940,11 +940,8 @@ impl Focusable for Root {
 impl Render for Root {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-        if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed)
-            && std::env::var_os("SSHC_TIMING").is_some()
-            && let Some(t) = crate::START.get()
-        {
-            eprintln!("first render after {:?}", t.elapsed());
+        if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            crate::mark("first render");
         }
         let overlay = |id: &'static str, child: AnyElement| {
             fade_in(

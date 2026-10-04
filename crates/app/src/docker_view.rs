@@ -52,10 +52,10 @@ impl DockerView {
                 cx.background_executor()
                     .timer(Duration::from_secs(secs))
                     .await;
-                this.update(cx, |t, cx| t.refresh(cx)).ok()?;
+                if this.update(cx, |t, cx| t.refresh(cx)).is_err() {
+                    break;
+                }
             }
-            #[allow(unreachable_code)]
-            None::<()>
         })
         .detach();
         this
