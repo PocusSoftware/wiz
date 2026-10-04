@@ -307,6 +307,8 @@ pub struct Settings {
     pub show_dotfiles: Option<bool>,
     pub rsync_hint_files: Option<u32>,
     pub rsync_hint_mb: Option<u32>,
+    /// Run large local/server transfers with rsync when both sides have it.
+    pub use_rsync: Option<bool>,
     // Logs, Docker, terminal, network
     pub log_refresh_secs: Option<u32>,
     pub log_tail_lines: Option<u32>,
@@ -341,6 +343,7 @@ getters! {
     show_dotfiles: bool = false;
     rsync_hint_files: u32 = 500;
     rsync_hint_mb: u32 = 1024;
+    use_rsync: bool = true;
     log_refresh_secs: u32 = 2;
     log_tail_lines: u32 = 2000;
     docker_refresh_secs: u32 = 5;

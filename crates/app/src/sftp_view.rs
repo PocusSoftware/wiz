@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use gpui::{
@@ -48,6 +48,8 @@ pub struct RemoteRef {
     pub label: String,
     pub host: Host,
     pub sftp: Arc<Sftp>,
+    /// The SSH connection behind `sftp`, for running rsync over it.
+    pub conn: Arc<ssh_core::session::Connection>,
 }
 
 #[derive(Clone)]
@@ -296,6 +298,8 @@ struct Transfer {
     rsync: String,
     /// An endpoint uses password auth, so rsync will prompt.
     rsync_prompts: bool,
+    /// Running with the built-in rsync instead of SFTP.
+    via_rsync: Arc<AtomicBool>,
 }
 
 pub struct SftpView {
@@ -876,6 +880,8 @@ impl SftpView {
             &to_src.endpoint(&dst_dir),
         );
         let progress = Progress::new();
+        let via_rsync = Arc::new(AtomicBool::new(false));
+        let via = via_rsync.clone();
         let id = self.next_id;
         self.next_id += 1;
         let label = if names.len() == 1 {
@@ -896,6 +902,7 @@ impl SftpView {
             rsync_prompts: [&from_src, &to_src].iter().any(|s| {
                 matches!(s, Source::Remote(r) if matches!(r.host.auth, ssh_core::config::AuthMethod::Password))
             }),
+            via_rsync,
         });
         cx.notify();
         cx.spawn(async move |this, cx| {
@@ -918,6 +925,25 @@ impl SftpView {
                     files += f;
                 }
                 progress.set_prescan(bytes, files);
+                // Large and between this Mac and one server: rsync, if both sides have it.
+                let prefs = crate::prefs::get();
+                let big = files >= prefs.rsync_hint_files() as u64
+                    || bytes >= (prefs.rsync_hint_mb() as u64) << 20;
+                let job = match (&from_src, &to_src) {
+                    (Source::Local, Source::Remote(r)) => Some((r.conn.clone(), true)),
+                    (Source::Remote(r), Source::Local) => Some((r.conn.clone(), false)),
+                    _ => None,
+                };
+                if prefs.use_rsync()
+                    && big
+                    && let Some((conn, upload)) = job
+                    && let Some(local) = rsync::local().await
+                    && conn.has_command("rsync").await
+                {
+                    via.store(true, Ordering::Relaxed);
+                    return rsync::run(conn, local, upload, &src_dir, &names, &dst_dir, progress)
+                        .await;
+                }
                 for n in names {
                     let (sp, dp) = (from_src.join(&src_dir, &n), to_src.join(&dst_dir, &n));
                     match (&from_src, &to_src) {
@@ -1554,7 +1580,13 @@ impl SftpView {
                         .flex_none()
                         .overflow_hidden()
                         .text_color(c(PLACEHOLDER))
-                        .child(div().whitespace_nowrap().child(tr.route.clone())),
+                        .child(div().whitespace_nowrap().child(
+                            if tr.via_rsync.load(Ordering::Relaxed) {
+                                format!("{} · rsync", tr.route)
+                            } else {
+                                tr.route.clone()
+                            },
+                        )),
                 )
                 .child(
                     div().w(px(140.)).h(px(6.)).flex_none().bg(c(ACTIVE)).child(
@@ -1594,7 +1626,7 @@ impl SftpView {
                         cx.notify();
                     })),
                 );
-            let hint = (big && running).then(|| {
+            let hint = (big && running && !tr.via_rsync.load(Ordering::Relaxed)).then(|| {
                 let cmd = tr.rsync.clone();
                 div()
                     .px_2()

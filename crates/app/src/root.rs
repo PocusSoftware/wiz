@@ -522,6 +522,7 @@ impl Root {
                                 label: host.name.clone(),
                                 host: host.clone(),
                                 sftp: Arc::new(sftp),
+                                conn: conn.clone(),
                             });
                             let view =
                                 cx.new(|cx| SftpView::new(SftpSource::Local, remote, names, cx));
@@ -555,6 +556,7 @@ impl Root {
                                 label: host.name.clone(),
                                 host: host.clone(),
                                 sftp: Arc::new(sftp),
+                                conn: conn.clone(),
                             });
                             view.update(cx, |v, cx| v.set_source(side, src, cx)).ok();
                         }

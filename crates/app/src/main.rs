@@ -60,6 +60,9 @@ fn set_dock_icon() {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some(rsync::BRIDGE_ARG) {
+        rsync::bridge_main();
+    }
     START.get_or_init(std::time::Instant::now);
     mark("main");
     Application::new()

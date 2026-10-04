@@ -144,6 +144,24 @@ impl Connection {
         Ok(out)
     }
 
+    /// Run a command without a PTY and hand back its stdin/stdout as one byte stream
+    /// (stderr is dropped). Used to carry rsync's protocol over this connection.
+    pub async fn exec_stream(
+        &self,
+        command: &str,
+    ) -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> {
+        let ch = self.handle.channel_open_session().await?;
+        ch.exec(true, command).await?;
+        Ok(ch.into_stream())
+    }
+
+    /// True when `name` is on the remote PATH.
+    pub async fn has_command(&self, name: &str) -> bool {
+        self.exec(&format!("command -v {name} >/dev/null 2>&1"))
+            .await
+            .is_ok_and(|o| o.status == Some(0))
+    }
+
     /// Open an SFTP session on this connection.
     pub async fn open_sftp(&self) -> Result<crate::sftp::Sftp> {
         let ch = self.handle.channel_open_session().await?;

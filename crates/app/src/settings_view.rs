@@ -252,7 +252,8 @@ impl Render for SettingsView {
                     // ---------- Files ----------
                     .child(Self::section("Files (SFTP)"))
                     .child(self.toggle("f-dot", "Show dotfiles by default", "Initial state of the eye button in each pane.", s.show_dotfiles(), |s, v| s.show_dotfiles = Some(v), cx))
-                    .child(self.stepper("f-rfiles", "Suggest rsync from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
+                    .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Bastion's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
+                    .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
                     .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx))
                     // ---------- Logs & Docker ----------
                     .child(Self::section("Logs and Docker"))
