@@ -756,11 +756,15 @@ impl Root {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .children(
-                        cards
-                            .enumerate()
-                            .map(|(i, card)| stagger_in(card, ("card", i), i)),
-                    )
+                    .children(cards.enumerate().map(|(i, card)| {
+                        // Cascade only on launch. Coming back home later just fades the page,
+                        // so it shows up as fast as any other page.
+                        if self.epoch == 0 {
+                            stagger_in(card, ("card", i), i).into_any_element()
+                        } else {
+                            card.into_any_element()
+                        }
+                    }))
                     .child(
                         small_card("add-host", "plus", "Add host")
                             .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
