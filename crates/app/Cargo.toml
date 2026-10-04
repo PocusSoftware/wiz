@@ -1,0 +1,13 @@
+[package]
+name = "ssh-app"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ssh-client"
+path = "src/main.rs"
+
+[dependencies]
+gpui = "0.2.2"
+ssh-core = { path = "../core" }
