@@ -309,6 +309,8 @@ pub struct Settings {
     pub rsync_hint_mb: Option<u32>,
     /// Run large local/server transfers with rsync when both sides have it.
     pub use_rsync: Option<bool>,
+    /// Speed limit for file transfers (SFTP and rsync) in KB/s, 0 for none.
+    pub transfer_limit_kbps: Option<u32>,
     // Logs, Docker, terminal, network
     pub log_refresh_secs: Option<u32>,
     pub log_tail_lines: Option<u32>,
@@ -344,6 +346,7 @@ getters! {
     rsync_hint_files: u32 = 500;
     rsync_hint_mb: u32 = 1024;
     use_rsync: bool = true;
+    transfer_limit_kbps: u32 = 0;
     log_refresh_secs: u32 = 2;
     log_tail_lines: u32 = 2000;
     docker_refresh_secs: u32 = 5;

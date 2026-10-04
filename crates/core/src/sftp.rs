@@ -60,6 +60,10 @@ pub struct Progress {
     prescanned: AtomicBool,
     pub cancel: AtomicBool,
     pub current: std::sync::Mutex<String>,
+    /// Speed limit in bytes per second, 0 for none. Can change while running.
+    pub limit: AtomicU64,
+    /// Start of the current one-second pacing window and bytes sent in it.
+    window: std::sync::Mutex<Option<(std::time::Instant, u64)>>,
 }
 
 impl Progress {
@@ -94,6 +98,24 @@ impl Progress {
     fn set_current(&self, s: &str) {
         *self.current.lock().unwrap() = s.to_string();
     }
+    /// Count `n` bytes against the speed limit and return how long to wait before sending
+    /// more. Paced over one-second windows, so a changed limit applies within a second.
+    pub fn pace(&self, n: u64) -> std::time::Duration {
+        use std::time::{Duration, Instant};
+        let limit = self.limit.load(Ordering::Relaxed);
+        if limit == 0 {
+            return Duration::ZERO;
+        }
+        let now = Instant::now();
+        let mut w = self.window.lock().unwrap();
+        let (start, sent) = match *w {
+            Some((start, sent)) if now - start < Duration::from_secs(1) => (start, sent + n),
+            _ => (now, n),
+        };
+        *w = Some((start, sent));
+        Duration::from_secs_f64(sent as f64 / limit as f64).saturating_sub(now - start)
+    }
+
     pub fn fraction(&self) -> f32 {
         let t = self.total.load(Ordering::Relaxed);
         if t == 0 {
@@ -274,6 +296,7 @@ impl Sftp {
                 }
                 out.write_all(&buf[..n]).await?;
                 progress.done.fetch_add(n as u64, Ordering::Relaxed);
+                tokio::time::sleep(progress.pace(n as u64)).await;
             }
             out.flush().await?;
             Ok(())
@@ -338,6 +361,7 @@ impl Sftp {
                 }
                 out.write_all(&buf[..n]).await?;
                 progress.done.fetch_add(n as u64, Ordering::Relaxed);
+                tokio::time::sleep(progress.pace(n as u64)).await;
             }
             out.shutdown().await?;
             Ok(())
@@ -391,6 +415,7 @@ impl Sftp {
                 }
                 out.write_all(&buf[..n]).await?;
                 progress.done.fetch_add(n as u64, Ordering::Relaxed);
+                tokio::time::sleep(progress.pace(n as u64)).await;
             }
             out.shutdown().await?;
             Ok(())
@@ -481,6 +506,7 @@ pub mod local {
             }
             out.write_all(&buf[..n])?;
             progress.done.fetch_add(n as u64, Ordering::Relaxed);
+            std::thread::sleep(progress.pace(n as u64));
         }
     }
 
@@ -521,6 +547,17 @@ fn local_size(path: &Path) -> Result<(u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pace_waits_to_hold_the_limit() {
+        let p = Progress::new();
+        assert_eq!(p.pace(1_000_000), std::time::Duration::ZERO);
+        p.limit.store(100_000, Ordering::Relaxed);
+        // 50 KB at 100 KB/s is due after about half a second.
+        let d = p.pace(50_000);
+        assert!(d > std::time::Duration::from_millis(400), "{d:?}");
+        assert!(d <= std::time::Duration::from_millis(500), "{d:?}");
+    }
 
     #[test]
     fn path_helpers() {

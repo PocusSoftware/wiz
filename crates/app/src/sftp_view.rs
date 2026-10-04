@@ -434,6 +434,11 @@ impl SftpView {
     /// Start browsing both panes at their home directories.
     /// Settings changed (secret-file patterns, privacy switch): re-filter both lists.
     pub fn settings_changed(&mut self, cx: &mut Context<Self>) {
+        // A new speed limit also applies to transfers already running.
+        let limit = crate::prefs::get().transfer_limit_kbps() as u64 * 1024;
+        for tr in &self.transfers {
+            tr.progress.limit.store(limit, Ordering::Relaxed);
+        }
         self.left.rebuild();
         self.right.rebuild();
         cx.notify();
@@ -880,6 +885,10 @@ impl SftpView {
             &to_src.endpoint(&dst_dir),
         );
         let progress = Progress::new();
+        progress.limit.store(
+            crate::prefs::get().transfer_limit_kbps() as u64 * 1024,
+            Ordering::Relaxed,
+        );
         let via_rsync = Arc::new(AtomicBool::new(false));
         let via = via_rsync.clone();
         let id = self.next_id;

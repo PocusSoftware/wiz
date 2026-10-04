@@ -250,11 +250,13 @@ pub async fn run(
     let moved = Arc::new(AtomicU64::new(0));
     let server = {
         let (conn, moved, token) = (conn.clone(), moved.clone(), token.clone());
+        let progress = progress.clone();
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
                 let (conn, moved, token) = (conn.clone(), moved.clone(), token.clone());
+                let progress = progress.clone();
                 tokio::spawn(async move {
-                    let _ = serve(stream, &conn, &moved, upload, &token).await;
+                    let _ = serve(stream, &conn, &moved, &progress, upload, &token).await;
                 });
             }
         })
@@ -388,6 +390,7 @@ async fn serve(
     mut sock: tokio::net::UnixStream,
     conn: &Connection,
     moved: &AtomicU64,
+    progress: &Progress,
     upload: bool,
     token: &str,
 ) -> ssh_core::Result<()> {
@@ -403,10 +406,12 @@ async fn serve(
     let chan = conn.exec_stream(&command).await?;
     let (mut sr, mut sw) = sock.into_split();
     let (mut cr, mut cw) = tokio::io::split(chan);
+    // Count and pace only the direction that carries the files.
+    let payload = Some((moved, progress));
     let (up, down) = if upload {
-        (Some(moved), None)
+        (payload, None)
     } else {
-        (None, Some(moved))
+        (None, payload)
     };
     let _ = tokio::join!(pump(&mut sr, &mut cw, up), pump(&mut cr, &mut sw, down));
     Ok(())
@@ -416,7 +421,7 @@ async fn serve(
 async fn pump(
     from: &mut (impl AsyncRead + Unpin),
     to: &mut (impl AsyncWrite + Unpin),
-    count: Option<&AtomicU64>,
+    payload: Option<(&AtomicU64, &Progress)>,
 ) -> std::io::Result<()> {
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -425,8 +430,9 @@ async fn pump(
             break;
         }
         to.write_all(&buf[..n]).await?;
-        if let Some(c) = count {
-            c.fetch_add(n as u64, Ordering::Relaxed);
+        if let Some((moved, progress)) = payload {
+            moved.fetch_add(n as u64, Ordering::Relaxed);
+            tokio::time::sleep(progress.pace(n as u64)).await;
         }
     }
     to.shutdown().await
@@ -664,6 +670,30 @@ mod tests {
             "hello"
         );
         assert_eq!(std::fs::read(down.join("big.bin")).unwrap().len(), 300_000);
+        // The speed limit holds: 300 KB at 150 KB/s takes about two seconds.
+        conn.exec(&format!("rm -rf {}/big.bin", q(&remote_dir)))
+            .await
+            .unwrap();
+        let p = Progress::new();
+        p.limit.store(150_000, Ordering::Relaxed);
+        let started = std::time::Instant::now();
+        run(
+            conn.clone(),
+            local,
+            true,
+            &up_s,
+            &["big.bin".to_string()],
+            &remote_dir,
+            p,
+        )
+        .await
+        .unwrap();
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(1500),
+            "{:?}",
+            started.elapsed()
+        );
+
         conn.exec(&format!("rm -rf {}", q(&remote_dir)))
             .await
             .unwrap();

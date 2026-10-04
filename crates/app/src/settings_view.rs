@@ -196,6 +196,52 @@ impl SettingsView {
         )
     }
 
+    /// Like `stepper`, but steps through fixed `choices` (for ranges where linear steps are
+    /// useless, like speeds from 128 KB/s to 100 MB/s).
+    #[allow(clippy::too_many_arguments)]
+    fn choice(
+        &self,
+        id: &'static str,
+        label: &str,
+        desc: &str,
+        value: u32,
+        choices: &[u32],
+        show: fn(u32) -> String,
+        set: fn(&mut Settings, u32),
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let dec = choices
+            .iter()
+            .rev()
+            .find(|c| **c < value)
+            .copied()
+            .unwrap_or(choices[0]);
+        let inc = choices
+            .iter()
+            .find(|c| **c > value)
+            .copied()
+            .unwrap_or(*choices.last().unwrap());
+        Self::row(
+            label,
+            desc,
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(
+                    icon_button((id, 0usize), "minus", "Lower", MUTED).on_click(
+                        cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, dec))),
+                    ),
+                )
+                .child(div().w(px(96.)).flex().justify_center().child(show(value)))
+                .child(
+                    icon_button((id, 1usize), "plus", "Higher", MUTED).on_click(
+                        cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, inc))),
+                    ),
+                ),
+        )
+    }
+
     fn text(&self, label: &str, desc: &str, input: &Entity<TextInput>) -> gpui::Div {
         Self::row(label, desc, div().w(px(320.)).child(input.clone()))
     }
@@ -252,6 +298,11 @@ impl Render for SettingsView {
                     // ---------- Files ----------
                     .child(Self::section("Files (SFTP)"))
                     .child(self.toggle("f-dot", "Show dotfiles by default", "Initial state of the eye button in each pane.", s.show_dotfiles(), |s, v| s.show_dotfiles = Some(v), cx))
+                    .child(self.choice("f-limit", "Transfer speed limit", "For SFTP and rsync transfers. Changes apply to running transfers too.", s.transfer_limit_kbps(), &[0, 128, 256, 512, 1024, 2048, 5120, 10240, 25600, 51200, 102400], |v| match v {
+                        0 => "Off".to_string(),
+                        v if v < 1024 => format!("{v} KB/s"),
+                        v => format!("{} MB/s", v / 1024),
+                    }, |s, v| s.transfer_limit_kbps = Some(v), cx))
                     .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Bastion's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
                     .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
                     .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx))
