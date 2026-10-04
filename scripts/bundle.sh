@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds dist/Bastion.app (release binary, icon, ad-hoc signature).
+# Builds dist/Bastion.app (release binary, icon, ad-hoc signature) and installs it to
+# /Applications, replacing the previous build.
 set -e
 cd "$(dirname "$0")/.."
 cargo build --release -p ssh-app
@@ -32,3 +33,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 codesign --force --deep -s - "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
+rm -rf /Applications/Bastion.app
+ditto "$APP" /Applications/Bastion.app
+echo "installed /Applications/Bastion.app"
