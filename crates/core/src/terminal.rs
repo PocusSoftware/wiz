@@ -65,6 +65,9 @@ pub struct Link {
 pub const RESET_MODES: &[u8] =
     b"\x1b[?1049l\x1b[?25h\x1b[0m\x1b[r\x1b[?1l\x1b>\x1b[?6l\x1b[?7h\x1b[?2004l\x1b(B";
 
+/// Clear the screen and the scrollback and home the cursor.
+pub const CLEAR_ALL: &[u8] = b"\x1b[2J\x1b[3J\x1b[H";
+
 /// Most hits kept, so a one-letter query on a huge scrollback stays cheap.
 const MAX_MATCHES: usize = 10_000;
 
@@ -268,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn reset_modes_clears_app_modes_but_keeps_history() {
+    fn reset_modes_clears_app_modes_and_clear_all_drops_history() {
         use alacritty_terminal::term::TermMode;
         let mut t = Terminal::new(20, 3);
         t.advance(b"a\r\nb\r\nc\r\nd\r\n\x1b[?1h\x1b[?2004h\x1b[?1049h");
@@ -281,6 +284,9 @@ mod tests {
         assert!(!m.contains(TermMode::ALT_SCREEN));
         // Primary screen scrollback is untouched.
         assert!(t.term.grid().history_size() > 0);
+        t.advance(CLEAR_ALL);
+        assert_eq!(t.term.grid().history_size(), 0);
+        assert!(t.screen_text().trim().is_empty());
     }
 
     #[test]

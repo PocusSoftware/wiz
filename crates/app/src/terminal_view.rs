@@ -143,10 +143,11 @@ impl TerminalView {
         self.lost = false;
         self.notice = None;
         self.retry_ready = false;
-        // Leave a full-screen app's screen, then mark the gap.
+        // Start from a clean terminal: the old screen and scrollback belong to the dead shell.
         self.term.advance(ssh_core::terminal::RESET_MODES);
-        self.term
-            .advance(b"\r\n\x1b[2m--- reconnected ---\x1b[0m\r\n");
+        self.term.advance(ssh_core::terminal::CLEAR_ALL);
+        self.term.term.selection = None;
+        self.term.term.scroll_display(Scroll::Bottom);
         let _ = self.input.try_send(ShellInput::Resize {
             cols: self.cols,
             rows: self.rows,
