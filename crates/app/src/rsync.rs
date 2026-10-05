@@ -429,6 +429,9 @@ async fn pump(
         if n == 0 {
             break;
         }
+        if let Some((_, progress)) = payload {
+            progress.wait_resume().await;
+        }
         to.write_all(&buf[..n]).await?;
         if let Some((moved, progress)) = payload {
             moved.fetch_add(n as u64, Ordering::Relaxed);

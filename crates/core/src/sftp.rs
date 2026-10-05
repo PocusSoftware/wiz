@@ -59,6 +59,8 @@ pub struct Progress {
     /// Totals were already counted for the whole job, so per-item scans must not add again.
     prescanned: AtomicBool,
     pub cancel: AtomicBool,
+    /// Transfer holds still until cleared (checked between chunks).
+    pub paused: AtomicBool,
     pub current: std::sync::Mutex<String>,
     /// Speed limit in bytes per second, 0 for none. Can change while running.
     pub limit: AtomicU64,
@@ -87,6 +89,23 @@ impl Progress {
 
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
+    }
+    pub fn set_paused(&self, on: bool) {
+        self.paused.store(on, Ordering::Relaxed);
+    }
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+    /// Wait while paused. Returns early on cancel so a paused transfer can still be stopped.
+    pub async fn wait_resume(&self) {
+        while self.is_paused() && !self.cancel.load(Ordering::Relaxed) {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+    fn wait_resume_blocking(&self) {
+        while self.is_paused() && !self.cancel.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
     fn check(&self) -> Result<()> {
         if self.cancel.load(Ordering::Relaxed) {
@@ -290,6 +309,7 @@ impl Sftp {
                     let _ = tokio::fs::remove_file(dest).await;
                     return Err(err);
                 }
+                progress.wait_resume().await;
                 let n = src.read(&mut buf).await?;
                 if n == 0 {
                     break;
@@ -355,6 +375,7 @@ impl Sftp {
                     let _ = other.inner.remove_file(dest).await;
                     return Err(err);
                 }
+                progress.wait_resume().await;
                 let n = input.read(&mut buf).await?;
                 if n == 0 {
                     break;
@@ -409,6 +430,7 @@ impl Sftp {
                     let _ = self.inner.remove_file(dest).await;
                     return Err(err);
                 }
+                progress.wait_resume().await;
                 let n = src.read(&mut buf).await?;
                 if n == 0 {
                     break;
@@ -500,6 +522,7 @@ pub mod local {
                 let _ = std::fs::remove_file(dest);
                 return Err(err);
             }
+            progress.wait_resume_blocking();
             let n = input.read(&mut buf)?;
             if n == 0 {
                 return Ok(());

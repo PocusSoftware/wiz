@@ -44,7 +44,10 @@ icons!(
     "sliders",
     "pin",
     "chevron-right",
-    "columns"
+    "columns",
+    "pause",
+    "search",
+    "external-link"
 );
 
 /// Icons are compiled into the binary (Lucide, ISC license).

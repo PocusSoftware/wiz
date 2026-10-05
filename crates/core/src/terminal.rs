@@ -42,6 +42,18 @@ impl EventListener for Listener {
     }
 }
 
+/// A hit from [`Terminal::find`]: `line` is a grid line (negative is scrollback), `col` the
+/// first column and `len` the width in columns.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Match {
+    pub line: i32,
+    pub col: usize,
+    pub len: usize,
+}
+
+/// Most hits kept, so a one-letter query on a huge scrollback stays cheap.
+const MAX_MATCHES: usize = 10_000;
+
 pub struct Terminal {
     pub term: Term<Listener>,
     parser: Processor,
@@ -90,6 +102,48 @@ impl Terminal {
         self.listener.title.lock().unwrap().clone()
     }
 
+    /// All occurrences of `query` in scrollback and screen, oldest first. Case-insensitive
+    /// unless the query has an uppercase letter. Matches never span a line break.
+    pub fn find(&self, query: &str) -> Vec<Match> {
+        use alacritty_terminal::index::{Column, Line};
+        let fold = !query.chars().any(char::is_uppercase);
+        let lower = |c: char| c.to_lowercase().next().unwrap_or(c);
+        let q: Vec<char> = query
+            .chars()
+            .map(|c| if fold { lower(c) } else { c })
+            .collect();
+        let mut out = Vec::new();
+        if q.is_empty() {
+            return out;
+        }
+        let grid = self.term.grid();
+        for l in grid.topmost_line().0..=grid.bottommost_line().0 {
+            let row = &grid[Line(l)];
+            let cells: Vec<char> = (0..grid.columns())
+                .map(|c| {
+                    let ch = row[Column(c)].c;
+                    if fold { lower(ch) } else { ch }
+                })
+                .collect();
+            if cells.len() < q.len() {
+                continue;
+            }
+            for col in 0..=cells.len() - q.len() {
+                if cells[col..col + q.len()] == q[..] {
+                    out.push(Match {
+                        line: l,
+                        col,
+                        len: q.len(),
+                    });
+                    if out.len() >= MAX_MATCHES {
+                        return out;
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Visible screen as plain text, trailing blanks trimmed. Handy for tests.
     pub fn screen_text(&self) -> String {
         use alacritty_terminal::index::{Column, Line};
@@ -117,5 +171,20 @@ mod tests {
         assert!(text.starts_with("hello\nred\n"), "{text}");
         // CPR reply: ESC [ row ; col R
         assert_eq!(String::from_utf8_lossy(&reply), "\x1b[2;4R");
+    }
+
+    #[test]
+    fn finds_in_scrollback_and_screen() {
+        let mut t = Terminal::new(20, 3);
+        t.advance(b"one Error\r\ntwo\r\nthree\r\nfour error\r\nfive");
+        // Lowercase query ignores case; "one Error" has scrolled into history.
+        let m = t.find("error");
+        assert_eq!(m.len(), 2);
+        // 5 lines into 3 rows: "one Error" is in history, "four error" on screen.
+        assert_eq!((m[0].line, m[1].line), (-2, 1), "{m:?}");
+        assert_eq!((m[0].col, m[0].len), (4, 5));
+        // An uppercase letter makes it case-sensitive.
+        assert_eq!(t.find("Error").len(), 1);
+        assert!(t.find("").is_empty());
     }
 }

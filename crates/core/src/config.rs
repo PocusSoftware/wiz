@@ -311,6 +311,12 @@ pub struct Settings {
     pub use_rsync: Option<bool>,
     /// Speed limit for file transfers (SFTP and rsync) in KB/s, 0 for none.
     pub transfer_limit_kbps: Option<u32>,
+    /// Transfers that run at the same time, the rest wait in the queue.
+    pub max_transfers: Option<u32>,
+    /// Program that opens files edited from a server (`open -a`), empty for the system default.
+    pub editor_app: Option<String>,
+    /// Upload a file opened from a server again whenever it is saved.
+    pub auto_upload_edits: Option<bool>,
     // Logs, Docker, terminal, network
     pub log_refresh_secs: Option<u32>,
     pub log_tail_lines: Option<u32>,
@@ -349,6 +355,9 @@ getters! {
     rsync_hint_mb: u32 = 1024;
     use_rsync: bool = true;
     transfer_limit_kbps: u32 = 0;
+    max_transfers: u32 = 2;
+    editor_app: String = String::new();
+    auto_upload_edits: bool = true;
     log_refresh_secs: u32 = 2;
     log_tail_lines: u32 = 2000;
     docker_refresh_secs: u32 = 5;

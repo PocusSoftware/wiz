@@ -280,14 +280,27 @@ enum Prompt {
 }
 
 enum TState {
+    /// Waiting for a free slot (see the "Parallel transfers" setting).
+    Queued,
     Running,
     Done,
     Failed(String),
     Cancelled,
 }
 
+/// Everything needed to start a transfer later.
+struct Job {
+    to: Side,
+    src_dir: String,
+    dst_dir: String,
+    names: Vec<String>,
+    from_src: Source,
+    to_src: Source,
+}
+
 struct Transfer {
     id: u64,
+    job: Option<Job>,
     label: String,
     route: String,
     progress: Arc<Progress>,
@@ -313,6 +326,34 @@ pub struct SftpView {
     prompt_input: Entity<TextInput>,
     transfers: Vec<Transfer>,
     next_id: u64,
+    edits: Vec<Edit>,
+}
+
+enum EState {
+    Downloading,
+    /// In sync with the server.
+    Synced,
+    /// Saved locally, waiting for an upload (auto-upload is off).
+    Modified,
+    Uploading,
+    Failed(String),
+}
+
+/// A server file opened in a local editor and watched for saves.
+struct Edit {
+    id: u64,
+    name: String,
+    remote: RemoteRef,
+    remote_path: String,
+    local: PathBuf,
+    /// Private temp folder holding `local`, removed when the edit stops.
+    dir: PathBuf,
+    /// The download finished, so `local` is the real file and safe to upload.
+    downloaded: bool,
+    /// Modification time last synced, to spot a save.
+    mtime: Option<SystemTime>,
+    state: EState,
+    synced_at: Option<chrono::DateTime<chrono::Local>>,
 }
 
 fn human_size(n: u64) -> String {
@@ -393,6 +434,7 @@ impl SftpView {
             prompt_input: cx.new(|cx| TextInput::new("name", false, cx)),
             transfers: vec![],
             next_id: 1,
+            edits: vec![],
         };
         // Speed and auto-dismiss ticker.
         cx.spawn(async move |this, cx| {
@@ -417,6 +459,7 @@ impl SftpView {
                             }
                             _ => true,
                         });
+                        t.poll_edits(cx);
                         if !t.transfers.is_empty() || before != t.transfers.len() {
                             cx.notify();
                         }
@@ -441,7 +484,7 @@ impl SftpView {
         }
         self.left.rebuild();
         self.right.rebuild();
-        cx.notify();
+        self.pump(cx);
     }
 
     pub fn load(&mut self, cx: &mut Context<Self>) {
@@ -542,13 +585,18 @@ impl SftpView {
         }
     }
 
+    /// Enter a folder, or open a file in the local editor.
     fn open_dir(&mut self, side: Side, ix: usize, cx: &mut Context<Self>) {
         let p = self.pane(side);
-        if let Some(e) = p.entries.get(ix)
-            && e.is_dir
-        {
-            let target = p.source.join(&p.path, &e.name);
+        let Some(e) = p.entries.get(ix) else {
+            return;
+        };
+        let target = p.source.join(&p.path, &e.name);
+        if e.is_dir {
             self.go(side, target, true, cx);
+        } else {
+            let (name, size) = (e.name.clone(), e.size);
+            self.open_file(side, name, target, size, cx);
         }
     }
 
@@ -884,13 +932,6 @@ impl SftpView {
             &names,
             &to_src.endpoint(&dst_dir),
         );
-        let progress = Progress::new();
-        progress.limit.store(
-            crate::prefs::get().transfer_limit_kbps() as u64 * 1024,
-            Ordering::Relaxed,
-        );
-        let via_rsync = Arc::new(AtomicBool::new(false));
-        let via = via_rsync.clone();
         let id = self.next_id;
         self.next_id += 1;
         let label = if names.len() == 1 {
@@ -900,10 +941,18 @@ impl SftpView {
         };
         self.transfers.push(Transfer {
             id,
+            job: Some(Job {
+                to,
+                src_dir,
+                dst_dir,
+                names,
+                from_src: from_src.clone(),
+                to_src: to_src.clone(),
+            }),
             label,
             route: format!("{} to {}", from_src.label(), to_src.label()),
-            progress: progress.clone(),
-            state: TState::Running,
+            progress: Progress::new(),
+            state: TState::Queued,
             finished: None,
             last_done: 0,
             speed: 0.0,
@@ -911,9 +960,58 @@ impl SftpView {
             rsync_prompts: [&from_src, &to_src].iter().any(|s| {
                 matches!(s, Source::Remote(r) if matches!(r.host.auth, ssh_core::config::AuthMethod::Password))
             }),
-            via_rsync,
+            via_rsync: Arc::new(AtomicBool::new(false)),
         });
+        self.pump(cx);
+    }
+
+    /// Start queued transfers while there are free slots.
+    fn pump(&mut self, cx: &mut Context<Self>) {
+        let max = crate::prefs::get().max_transfers() as usize;
+        loop {
+            let running = self
+                .transfers
+                .iter()
+                .filter(|t| matches!(t.state, TState::Running))
+                .count();
+            if running >= max {
+                break;
+            }
+            let Some(id) = self
+                .transfers
+                .iter()
+                .find(|t| matches!(t.state, TState::Queued))
+                .map(|t| t.id)
+            else {
+                break;
+            };
+            self.start_transfer(id, cx);
+        }
         cx.notify();
+    }
+
+    fn start_transfer(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(tr) = self.transfers.iter_mut().find(|t| t.id == id) else {
+            return;
+        };
+        let Some(Job {
+            to,
+            src_dir,
+            dst_dir,
+            names,
+            from_src,
+            to_src,
+        }) = tr.job.take()
+        else {
+            return;
+        };
+        tr.state = TState::Running;
+        let progress = tr.progress.clone();
+        progress.limit.store(
+            crate::prefs::get().transfer_limit_kbps() as u64 * 1024,
+            Ordering::Relaxed,
+        );
+        let via = tr.via_rsync.clone();
         cx.spawn(async move |this, cx| {
             let r = runtime::spawn(async move {
                 // Count the whole selection first so the percentage and the "use rsync"
@@ -988,11 +1086,270 @@ impl SftpView {
                     };
                 }
                 t.refresh(to, cx);
+                t.pump(cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    // ---------- edit in local editor ----------
+
+    /// Largest file opened for editing; bigger ones are better downloaded.
+    const EDIT_MAX: u64 = 64 << 20;
+
+    /// Without a configured app, `-t` opens the default text editor, so a server file named
+    /// like an app or script is never launched.
+    fn launch_editor(path: &std::path::Path) {
+        let app = crate::prefs::get().editor_app();
+        let mut cmd = std::process::Command::new("open");
+        if app.is_empty() {
+            cmd.arg("-t");
+        } else {
+            cmd.arg("-a").arg(app);
+        }
+        let _ = cmd.arg(path).spawn();
+    }
+
+    /// Open a file in the local editor. Server files are downloaded to a temp folder first
+    /// and uploaded again when saved.
+    fn open_file(
+        &mut self,
+        side: Side,
+        name: String,
+        path: String,
+        size: u64,
+        cx: &mut Context<Self>,
+    ) {
+        let remote = match &self.pane(side).source {
+            Source::Local => {
+                Self::launch_editor(std::path::Path::new(&path));
+                return;
+            }
+            Source::Remote(r) => r.clone(),
+        };
+        if size > Self::EDIT_MAX {
+            self.pane_mut(side).error = Some(
+                format!(
+                    "{name} is over {} MB, download it instead.",
+                    Self::EDIT_MAX >> 20
+                )
+                .into(),
+            );
+            cx.notify();
+            return;
+        }
+        // Already open: just bring the editor forward.
+        if let Some(e) = self
+            .edits
+            .iter()
+            .find(|e| e.remote_path == path && e.remote.host.account() == remote.host.account())
+        {
+            Self::launch_editor(&e.local);
+            return;
+        }
+        // The name comes from the server: never let it point outside the temp folder.
+        if std::path::Path::new(&name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            != Some(name.as_str())
+        {
+            self.pane_mut(side).error = Some("That file name can't be opened safely.".into());
+            cx.notify();
+            return;
+        }
+        let id = self.next_id;
+        self.next_id += 1;
+        let dir = std::env::temp_dir()
+            .join("bastion-edit")
+            .join(format!("{}-{id}", std::process::id()));
+        let local = dir.join(&name);
+        let task_dir = dir.clone();
+        self.edits.push(Edit {
+            id,
+            name,
+            remote: remote.clone(),
+            remote_path: path.clone(),
+            local: local.clone(),
+            dir: dir.clone(),
+            downloaded: false,
+            mtime: None,
+            state: EState::Downloading,
+            synced_at: None,
+        });
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let r = runtime::spawn(async move {
+                tokio::fs::create_dir_all(&task_dir).await?;
+                let r = remote.sftp.download(&path, &local, &Progress::new()).await;
+                if r.is_err() {
+                    // Never leave a partial file around that could be uploaded.
+                    let _ = tokio::fs::remove_dir_all(&task_dir).await;
+                }
+                r
+            })
+            .await;
+            this.update(cx, |t, cx| {
+                let Some(e) = t.edits.iter_mut().find(|e| e.id == id) else {
+                    return;
+                };
+                match r {
+                    Ok(()) => {
+                        e.mtime = std::fs::metadata(&e.local).and_then(|m| m.modified()).ok();
+                        e.downloaded = true;
+                        e.state = EState::Synced;
+                        e.synced_at = Some(chrono::Local::now());
+                        Self::launch_editor(&e.local);
+                    }
+                    Err(err) => e.state = EState::Failed(err.to_string()),
+                }
                 cx.notify();
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Spot saves of watched files (called from the half-second ticker).
+    fn poll_edits(&mut self, cx: &mut Context<Self>) {
+        let auto = crate::prefs::get().auto_upload_edits();
+        let mut upload = vec![];
+        for e in self.edits.iter_mut() {
+            if !e.downloaded || matches!(e.state, EState::Downloading | EState::Uploading) {
+                continue;
+            }
+            let now = std::fs::metadata(&e.local).and_then(|m| m.modified()).ok();
+            if now.is_some() && now != e.mtime {
+                if auto {
+                    upload.push(e.id);
+                } else if !matches!(e.state, EState::Modified) {
+                    e.state = EState::Modified;
+                    cx.notify();
+                }
+            }
+        }
+        for id in upload {
+            self.upload_edit(id, cx);
+        }
+    }
+
+    fn upload_edit(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(e) = self.edits.iter_mut().find(|e| e.id == id && e.downloaded) else {
+            return;
+        };
+        let mtime = std::fs::metadata(&e.local).and_then(|m| m.modified()).ok();
+        e.state = EState::Uploading;
+        let (remote, path, local) = (e.remote.clone(), e.remote_path.clone(), e.local.clone());
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let r =
+                runtime::spawn(
+                    async move { remote.sftp.upload(&local, &path, &Progress::new()).await },
+                )
+                .await;
+            this.update(cx, |t, cx| {
+                if let Some(e) = t.edits.iter_mut().find(|e| e.id == id) {
+                    match r {
+                        Ok(()) => {
+                            e.mtime = mtime;
+                            e.state = EState::Synced;
+                            e.synced_at = Some(chrono::Local::now());
+                        }
+                        Err(err) => {
+                            // Remember the mtime so a failure isn't retried every tick.
+                            e.mtime = mtime;
+                            e.state = EState::Failed(err.to_string());
+                        }
+                    }
+                }
+                // The server file changed: refresh a pane that shows its folder.
+                for side in [Side::Left, Side::Right] {
+                    t.refresh(side, cx);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn stop_edit(&mut self, id: u64, cx: &mut Context<Self>) {
+        if let Some(ix) = self.edits.iter().position(|e| e.id == id) {
+            remove_edit_dir(&self.edits.remove(ix).dir);
+        }
+        cx.notify();
+    }
+
+    fn edit_bar(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        if self.edits.is_empty() {
+            return None;
+        }
+        let rows = self.edits.iter().map(|e| {
+            let id = e.id;
+            let (status, color): (String, u32) = match &e.state {
+                EState::Downloading => ("Downloading...".into(), MUTED),
+                EState::Synced => (
+                    match e.synced_at {
+                        Some(t) => format!("In sync, {}", t.format("%H:%M:%S")),
+                        None => "In sync".into(),
+                    },
+                    GREEN,
+                ),
+                EState::Modified => ("Saved locally, not uploaded".into(), YELLOW),
+                EState::Uploading => ("Uploading...".into(), MUTED),
+                EState::Failed(m) => (m.clone(), RED),
+            };
+            let can_upload =
+                e.downloaded && matches!(e.state, EState::Modified | EState::Failed(_));
+            div()
+                .h(px(24.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(icon("external-link", 13., ACCENT_TEXT))
+                .child(
+                    div()
+                        .w(px(150.))
+                        .flex_none()
+                        .overflow_hidden()
+                        .child(div().whitespace_nowrap().child(e.name.clone())),
+                )
+                .child(
+                    div()
+                        .w(px(130.))
+                        .flex_none()
+                        .overflow_hidden()
+                        .text_color(c(PLACEHOLDER))
+                        .child(div().whitespace_nowrap().child(e.remote.label.clone())),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_color(c(color))
+                        .child(div().whitespace_nowrap().child(status)),
+                )
+                .when(can_upload, |d| {
+                    d.child(
+                        icon_button(("e-up", id as usize), "upload", "Upload now", ACCENT_TEXT)
+                            .on_click(cx.listener(move |t, _, _, cx| t.upload_edit(id, cx))),
+                    )
+                })
+                .child(
+                    icon_button(("e-x", id as usize), "x", "Stop watching", MUTED)
+                        .on_click(cx.listener(move |t, _, _, cx| t.stop_edit(id, cx))),
+                )
+        });
+        Some(
+            div()
+                .border_t_1()
+                .border_color(c(BORDER))
+                .bg(c(PANEL))
+                .children(rows)
+                .into_any_element(),
+        )
     }
 
     // ---------- rendering ----------
@@ -1542,6 +1899,8 @@ impl SftpView {
         let rows = self.transfers.iter().map(|tr| {
             let frac = tr.progress.fraction();
             let running = matches!(tr.state, TState::Running);
+            let queued = matches!(tr.state, TState::Queued);
+            let paused = running && tr.progress.is_paused();
             let id = tr.id;
             let files = tr.progress.files.load(Ordering::Relaxed);
             let total = tr.progress.total.load(Ordering::Relaxed);
@@ -1550,6 +1909,16 @@ impl SftpView {
             let big = files >= prefs.rsync_hint_files() as u64
                 || total >= (prefs.rsync_hint_mb() as u64) << 20;
             let status: (String, u32) = match &tr.state {
+                TState::Queued => ("Queued".into(), MUTED),
+                TState::Running if paused => (
+                    format!(
+                        "Paused  {:.0}%  {}/{}",
+                        frac * 100.0,
+                        human_size(tr.progress.done.load(Ordering::Relaxed)),
+                        human_size(tr.progress.total.load(Ordering::Relaxed)),
+                    ),
+                    YELLOW,
+                ),
                 TState::Running => (
                     format!(
                         "{:.0}%  {}/{}  {}/s",
@@ -1567,6 +1936,7 @@ impl SftpView {
             let bar_color = match tr.state {
                 TState::Failed(_) => RED,
                 TState::Done => GREEN,
+                TState::Running if paused => YELLOW,
                 _ => ACCENT,
             };
             let row = div()
@@ -1617,11 +1987,27 @@ impl SftpView {
                         .text_color(c(status.1))
                         .child(div().whitespace_nowrap().child(status.0)),
                 )
+                .when(running, |d| {
+                    d.child(
+                        icon_button(
+                            ("t-pause", id as usize),
+                            if paused { "play" } else { "pause" },
+                            if paused { "Resume" } else { "Pause" },
+                            MUTED,
+                        )
+                        .on_click(cx.listener(move |t, _, _, cx| {
+                            if let Some(tr) = t.transfers.iter().find(|x| x.id == id) {
+                                tr.progress.set_paused(!tr.progress.is_paused());
+                            }
+                            cx.notify();
+                        })),
+                    )
+                })
                 .child(
                     icon_button(
                         ("t-x", id as usize),
                         "x",
-                        if running { "Cancel" } else { "Dismiss" },
+                        if running { "Cancel" } else if queued { "Remove from queue" } else { "Dismiss" },
                         MUTED,
                     )
                     .on_click(cx.listener(move |t, _, _, cx| {
@@ -1684,6 +2070,21 @@ enum FsOp {
     Delete(Vec<String>),
 }
 
+/// Delete an edit's temp folder, but only ever something inside our own temp root.
+fn remove_edit_dir(dir: &std::path::Path) {
+    if dir.starts_with(std::env::temp_dir().join("bastion-edit")) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+impl Drop for SftpView {
+    fn drop(&mut self) {
+        for e in &self.edits {
+            remove_edit_dir(&e.dir);
+        }
+    }
+}
+
 impl Focusable for SftpView {
     fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
         self.pane(self.active).focus.clone()
@@ -1734,6 +2135,7 @@ impl Render for SftpView {
                     .child(self.pane_view(Side::Right, cx)),
             )
             .children(self.prompt_bar(cx))
+            .children(self.edit_bar(cx))
             .children(self.transfer_bar(cx))
     }
 }

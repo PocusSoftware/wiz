@@ -24,6 +24,7 @@ pub struct SettingsView {
     terminal_font: Entity<TextInput>,
     extra_mask: Entity<TextInput>,
     patterns: Entity<TextInput>,
+    editor: Entity<TextInput>,
     error: Option<SharedString>,
 }
 
@@ -45,6 +46,7 @@ impl SettingsView {
             terminal_font: make("JetBrainsMono Nerd Font", cx),
             extra_mask: make("project-name, client-name", cx),
             patterns: make(".env, *.pem", cx),
+            editor: make("System default", cx),
             error: None,
         };
         this.load_inputs(cx);
@@ -53,6 +55,7 @@ impl SettingsView {
             &this.terminal_font,
             &this.extra_mask,
             &this.patterns,
+            &this.editor,
         ] {
             cx.subscribe(input, |t, _, _: &InputEvent, cx| t.sync_inputs(cx))
                 .detach();
@@ -71,6 +74,8 @@ impl SettingsView {
         self.terminal_font.update(cx, |i, _| i.set_value(&term));
         self.extra_mask.update(cx, |i, _| i.set_value(&extra));
         self.patterns.update(cx, |i, _| i.set_value(&pats));
+        let editor = s.editor_app();
+        self.editor.update(cx, |i, _| i.set_value(&editor));
     }
 
     fn sync_inputs(&mut self, cx: &mut Context<Self>) {
@@ -78,11 +83,13 @@ impl SettingsView {
         let term = self.terminal_font.read(cx).value().trim().to_string();
         let extra = split_list(self.extra_mask.read(cx).value());
         let pats = split_list(self.patterns.read(cx).value());
+        let editor = self.editor.read(cx).value().trim().to_string();
         self.apply(cx, move |s| {
             s.ui_font = (!ui.is_empty()).then(|| ui.clone());
             s.terminal_font = (!term.is_empty()).then(|| term.clone());
             s.extra_mask = Some(extra.clone());
             s.secret_file_patterns = Some(pats.clone());
+            s.editor_app = Some(editor.clone());
         });
     }
 
@@ -303,6 +310,9 @@ impl Render for SettingsView {
                         v if v < 1024 => format!("{v} KB/s"),
                         v => format!("{} MB/s", v / 1024),
                     }, |s, v| s.transfer_limit_kbps = Some(v), cx))
+                    .child(self.text("Editor for server files", "App name for Open (Enter on a file), like Visual Studio Code or Zed. Empty uses the system default.", &self.editor))
+                    .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
+                    .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))
                     .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Bastion's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
                     .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
                     .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx))
