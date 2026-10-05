@@ -24,7 +24,7 @@ use crate::privacy;
 use crate::runtime;
 use crate::settings_view::{SettingsEvent, SettingsView};
 use crate::sftp_view::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
-use crate::terminal_view::TerminalView;
+use crate::terminal_view::{TerminalEvent, TerminalView};
 use crate::theme::*;
 use crate::ui::{button, icon, icon_button, primary_button};
 
@@ -124,6 +124,8 @@ struct TermTab {
     /// Pane that had focus last; gets it back when the tab is selected.
     focused: usize,
     conn: Arc<Connection>,
+    /// Which host `conn` belongs to, so a lost terminal can reconnect.
+    account: String,
     password: Option<String>,
     /// Width of each pane as a share of the tab, summing to 1. Dividers can be dragged.
     sizes: Vec<f32>,
@@ -164,6 +166,13 @@ enum Open {
     Sftp,
     /// Connect a host and attach it to one pane of an open SFTP tab.
     SftpSource(gpui::WeakEntity<SftpView>, SftpSide),
+    /// Reconnect a terminal whose connection dropped (attempt number).
+    Reattach(gpui::WeakEntity<TerminalView>, u32),
+}
+
+/// Seconds to wait before reconnect attempt `n` (0-based).
+fn backoff(n: u32) -> u64 {
+    [1, 2, 4, 8, 15, 30][n.min(5) as usize]
 }
 
 enum TabKind {
@@ -475,10 +484,63 @@ impl Root {
                             );
                         }
                     }
-                    Ok(_) => {}
+                    Ok(_) => {
+                        // Cancelled: a terminal waiting to reconnect lets the user retry by hand.
+                        for w in std::iter::once(&what).chain(&queued) {
+                            if let Open::Reattach(v, _) = w {
+                                v.update(cx, |v, cx| {
+                                    v.set_notice(
+                                        Some("Reconnect cancelled. Press Enter to retry.".into()),
+                                        true,
+                                        cx,
+                                    )
+                                })
+                                .ok();
+                            }
+                        }
+                    }
                     Err(e) => {
                         this.dismiss_trust(&host.host, host.port);
-                        this.set_status(format!("{}: {e}", host.name), true);
+                        use ssh_core::Error as E;
+                        // Wrong password or a changed host key will not fix itself: stop.
+                        let fatal = matches!(
+                            e,
+                            E::AuthFailed
+                                | E::HostKeyChanged { .. }
+                                | E::HostKeyRejected { .. }
+                                | E::PassphraseRequired
+                                | E::NoCredentials(_)
+                        );
+                        let msg = e.to_string();
+                        let mut other = false;
+                        for w in std::iter::once(&what).chain(&queued) {
+                            match w {
+                                Open::Reattach(v, _) if fatal => {
+                                    v.update(cx, |v, cx| {
+                                        v.set_notice(
+                                            Some(format!(
+                                                "Reconnect failed: {msg}. Press Enter to retry."
+                                            )),
+                                            true,
+                                            cx,
+                                        )
+                                    })
+                                    .ok();
+                                }
+                                Open::Reattach(v, n) => this.start_reconnect(
+                                    v.clone(),
+                                    n + 1,
+                                    Some(msg.clone()),
+                                    false,
+                                    window,
+                                    cx,
+                                ),
+                                _ => other = true,
+                            }
+                        }
+                        if other {
+                            this.set_status(format!("{}: {e}", host.name), true);
+                        }
                     }
                 }
                 cx.notify();
@@ -578,6 +640,44 @@ impl Root {
                 })
                 .detach();
             }
+            Open::Reattach(view, attempt) => {
+                // The terminal was closed while reconnecting: don't open a shell for nobody.
+                let Ok(cmd) = view.read_with(cx, |v, _| v.command.clone()) else {
+                    return;
+                };
+                cx.spawn_in(window, async move |this, cx| {
+                    let c = conn.clone();
+                    let r =
+                        runtime::spawn(async move { c.open_shell(100, 30, cmd.as_deref()).await })
+                            .await;
+                    this.update_in(cx, |this, window, cx| match r {
+                        Ok(shell) => {
+                            // Point the tab at the new connection.
+                            for t in this.tabs.iter_mut() {
+                                if let TabKind::Terminal(tt) = &mut t.kind
+                                    && tt.panes.iter().any(|p| p.entity_id() == view.entity_id())
+                                {
+                                    tt.conn = conn.clone();
+                                    tt.password = password.clone();
+                                }
+                            }
+                            view.update(cx, |v, cx| v.attach(shell, password.clone(), cx))
+                                .ok();
+                            cx.notify();
+                        }
+                        Err(e) => this.start_reconnect(
+                            view,
+                            attempt + 1,
+                            Some(e.to_string()),
+                            false,
+                            window,
+                            cx,
+                        ),
+                    })
+                    .ok();
+                })
+                .detach();
+            }
             Open::SftpSource(view, side) => {
                 cx.spawn_in(window, async move |this, cx| {
                     let c = conn.clone();
@@ -635,6 +735,138 @@ impl Root {
         }
     }
 
+    fn on_terminal_event(
+        &mut self,
+        view: gpui::WeakEntity<TerminalView>,
+        ev: &TerminalEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match ev {
+            TerminalEvent::Ended => self.start_reconnect(view, 0, None, false, window, cx),
+            TerminalEvent::Retry => self.start_reconnect(view, 0, None, true, window, cx),
+            _ => {}
+        }
+    }
+
+    /// Wait out the backoff for `attempt`, then try to reopen the terminal's shell. The
+    /// terminal shows a countdown meanwhile.
+    fn start_reconnect(
+        &mut self,
+        view: gpui::WeakEntity<TerminalView>,
+        attempt: u32,
+        last_error: Option<String>,
+        manual: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // With the setting off, only an explicit Enter reconnects.
+        if !manual && !crate::prefs::get().auto_reconnect() {
+            let text = match &last_error {
+                Some(e) => format!("Connection lost ({e}). Press Enter to reconnect."),
+                None => "Connection lost. Press Enter to reconnect.".into(),
+            };
+            view.update(cx, |v, cx| v.set_notice(Some(text), true, cx))
+                .ok();
+            return;
+        }
+        cx.spawn_in(window, async move |this, cx| {
+            if attempt == 0 && !manual {
+                // A shell that ends while its connection stays up simply exited. A dropping
+                // connection can lag behind its channels, so give it a few seconds.
+                let mut dropped = false;
+                for _ in 0..20 {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(250))
+                        .await;
+                    dropped = this
+                        .update(cx, |this, cx| this.connection_dropped(&view, cx))
+                        .unwrap_or(false);
+                    if dropped {
+                        break;
+                    }
+                }
+                if !dropped {
+                    view.update(cx, |v, cx| v.set_notice(None, false, cx)).ok();
+                    return;
+                }
+            }
+            for left in (1..=backoff(attempt)).rev() {
+                let text = match &last_error {
+                    Some(e) => format!("Connection lost ({e}). Retrying in {left}s..."),
+                    None => format!("Connection lost. Reconnecting in {left}s..."),
+                };
+                if view
+                    .update(cx, |v, cx| v.set_notice(Some(text), false, cx))
+                    .is_err()
+                {
+                    return; // the terminal was closed
+                }
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+            }
+            this.update_in(cx, |this, window, cx| {
+                this.try_reattach(view, attempt, window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The tab holding `view`: its index and host account.
+    fn terminal_tab(
+        &self,
+        view: &gpui::WeakEntity<TerminalView>,
+    ) -> Option<(usize, String, Arc<Connection>)> {
+        self.tabs
+            .iter()
+            .enumerate()
+            .find_map(|(i, t)| match &t.kind {
+                TabKind::Terminal(tt)
+                    if tt.panes.iter().any(|p| p.entity_id() == view.entity_id()) =>
+                {
+                    Some((i, tt.account.clone(), tt.conn.clone()))
+                }
+                _ => None,
+            })
+    }
+
+    fn connection_dropped(
+        &self,
+        view: &gpui::WeakEntity<TerminalView>,
+        _: &mut Context<Self>,
+    ) -> bool {
+        self.terminal_tab(view)
+            .is_some_and(|(_, _, conn)| conn.is_closed())
+    }
+
+    fn try_reattach(
+        &mut self,
+        view: gpui::WeakEntity<TerminalView>,
+        attempt: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((_, account, _)) = self.terminal_tab(&view) else {
+            return; // closed meanwhile
+        };
+        let Some(ix) = self.cfg.hosts.iter().position(|h| h.account() == account) else {
+            view.update(cx, |v, cx| {
+                v.set_notice(
+                    Some("Connection lost. The host was removed.".into()),
+                    false,
+                    cx,
+                )
+            })
+            .ok();
+            return;
+        };
+        view.update(cx, |v, cx| {
+            v.set_notice(Some("Reconnecting...".into()), false, cx)
+        })
+        .ok();
+        self.open_host(ix, Open::Reattach(view, attempt), window, cx);
+    }
+
     fn open_shell(
         &mut self,
         label: String,
@@ -659,14 +891,33 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let account = self
+            .conns
+            .iter()
+            .find(|(_, l)| Arc::ptr_eq(&l.conn, &conn))
+            .map(|(k, _)| k.clone())
+            .unwrap_or_default();
+        let saved_command = command.clone();
         cx.spawn_in(window, async move |this, cx| {
             let c = conn.clone();
             let r = runtime::spawn(async move { c.open_shell(100, 30, command.as_deref()).await })
                 .await;
             this.update_in(cx, |this, window, cx| match r {
                 Ok(shell) => {
-                    let view = cx.new(|cx| TerminalView::new(shell, password.clone(), cx));
+                    let view = cx.new(|cx| {
+                        let mut v = TerminalView::new(shell, password.clone(), cx);
+                        v.command = saved_command;
+                        v
+                    });
                     cx.observe(&view, |_, _, cx| cx.notify()).detach();
+                    cx.subscribe_in(
+                        &view,
+                        window,
+                        |this, view, ev: &TerminalEvent, window, cx| {
+                            this.on_terminal_event(view.downgrade(), ev, window, cx)
+                        },
+                    )
+                    .detach();
                     let target =
                         split_into.and_then(|id| this.tabs.iter().position(|t| t.id == id));
                     if let Some(ix) = target
@@ -684,6 +935,7 @@ impl Root {
                             panes: vec![view],
                             focused: 0,
                             conn,
+                            account,
                             password,
                             sizes: vec![1.0],
                         }),

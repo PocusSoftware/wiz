@@ -43,6 +43,14 @@ pub struct TerminalView {
     cell_h: Pixels,
     origin: Point<Pixels>,
     exited: Option<Option<u32>>,
+    /// The connection dropped under this terminal (as opposed to the shell exiting).
+    lost: bool,
+    /// Status line shown at the bottom, like "Reconnecting in 4s". Replaces the exit banner.
+    notice: Option<SharedString>,
+    /// Enter asks for another reconnect attempt.
+    retry_ready: bool,
+    /// Command this terminal runs instead of a login shell (`docker exec`), re-run on reconnect.
+    pub command: Option<String>,
     title: Option<SharedString>,
     saved_password: Option<String>,
     selecting: bool,
@@ -50,15 +58,48 @@ pub struct TerminalView {
 
 pub enum TerminalEvent {
     TitleChanged,
-    Exited,
+    /// The shell ended: either it exited, or the connection dropped under it.
+    Ended,
+    /// Enter was pressed on a lost terminal.
+    Retry,
 }
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
 
 impl TerminalView {
     pub fn new(shell: Shell, saved_password: Option<String>, cx: &mut Context<Self>) -> Self {
-        let Shell { input, mut events } = shell;
+        let Shell { input, events } = shell;
         let (cols, rows) = (100, 30);
+        let this = Self {
+            search: None,
+            hover_link: None,
+            term: Terminal::with_scrollback(
+                cols,
+                rows,
+                crate::prefs::get().terminal_scrollback() as usize,
+            ),
+            input,
+            focus: cx.focus_handle(),
+            cols,
+            rows,
+            cell_w: px(8.),
+            cell_h: px(16.),
+            origin: point(px(0.), px(0.)),
+            exited: None,
+            title: None,
+            saved_password,
+            selecting: false,
+            lost: false,
+            notice: None,
+            retry_ready: false,
+            command: None,
+        };
+        this.pump(events, cx);
+        this
+    }
+
+    /// Feed shell events into the terminal until the stream ends.
+    fn pump(&self, mut events: mpsc::Receiver<ShellEvent>, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             while let Some(first) = events.recv().await {
                 // Coalesce bursts into one repaint.
@@ -84,26 +125,34 @@ impl TerminalView {
             None::<()>
         })
         .detach();
-        Self {
-            search: None,
-            hover_link: None,
-            term: Terminal::with_scrollback(
-                cols,
-                rows,
-                crate::prefs::get().terminal_scrollback() as usize,
-            ),
-            input,
-            focus: cx.focus_handle(),
-            cols,
-            rows,
-            cell_w: px(8.),
-            cell_h: px(16.),
-            origin: point(px(0.), px(0.)),
-            exited: None,
-            title: None,
-            saved_password,
-            selecting: false,
-        }
+    }
+
+    /// Show (or clear) the status line. With `retry`, Enter asks for another attempt.
+    pub fn set_notice(&mut self, text: Option<String>, retry: bool, cx: &mut Context<Self>) {
+        self.notice = text.map(SharedString::from);
+        self.retry_ready = retry;
+        cx.notify();
+    }
+
+    /// Continue on a fresh shell after a reconnect, keeping the scrollback.
+    pub fn attach(&mut self, shell: Shell, password: Option<String>, cx: &mut Context<Self>) {
+        self.saved_password = password;
+        let Shell { input, events } = shell;
+        self.input = input;
+        self.exited = None;
+        self.lost = false;
+        self.notice = None;
+        self.retry_ready = false;
+        // Leave a full-screen app's screen, then mark the gap.
+        self.term.advance(ssh_core::terminal::RESET_MODES);
+        self.term
+            .advance(b"\r\n\x1b[2m--- reconnected ---\x1b[0m\r\n");
+        let _ = self.input.try_send(ShellInput::Resize {
+            cols: self.cols,
+            rows: self.rows,
+        });
+        self.pump(events, cx);
+        cx.notify();
     }
 
     pub fn title(&self) -> Option<SharedString> {
@@ -129,7 +178,9 @@ impl TerminalView {
             }
             ShellEvent::Exit(status) => {
                 self.exited = Some(status);
-                cx.emit(TerminalEvent::Exited);
+                self.lost = status.is_none();
+                // The owner decides whether the connection dropped or the shell just exited.
+                cx.emit(TerminalEvent::Ended);
             }
         }
     }
@@ -375,6 +426,12 @@ impl TerminalView {
             }
             return;
         }
+        if self.retry_ready && k.key == "enter" {
+            self.retry_ready = false;
+            cx.emit(TerminalEvent::Retry);
+            cx.stop_propagation();
+            return;
+        }
         let app_cursor = self.term.term.mode().contains(TermMode::APP_CURSOR);
         let Some(bytes) = key_bytes(&k.key, k.key_char.as_deref(), m, app_cursor) else {
             cx.propagate();
@@ -551,7 +608,8 @@ impl Render for TerminalView {
         let view = cx.entity();
         let view2 = view.clone();
         let focused = self.focus.is_focused(window);
-        let exited = self.exited;
+        let notice = self.notice.clone();
+        let exited = self.exited.filter(|_| notice.is_none());
         let search_bar = self.search_bar(cx);
 
         let grid = canvas(
@@ -663,6 +721,17 @@ impl Render for TerminalView {
             .bg(c(BG))
             .child(div().flex_1().px(px(6.)).py(px(2.)).child(grid))
             .children(search_bar)
+            .when_some(notice, |d, text| {
+                d.child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .bg(c(PANEL))
+                        .text_xs()
+                        .text_color(c(YELLOW))
+                        .child(text),
+                )
+            })
             .when_some(exited, |d, status| {
                 d.child(
                     div()

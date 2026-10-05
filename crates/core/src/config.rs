@@ -325,6 +325,8 @@ pub struct Settings {
     pub keepalive_secs: Option<u32>,
     /// Ask before closing a tab or pane that holds an SSH session.
     pub confirm_close: Option<bool>,
+    /// Reconnect a terminal on its own after the connection drops (network loss, reboot).
+    pub auto_reconnect: Option<bool>,
     /// Refuse to quit while sessions are open.
     pub block_quit: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
@@ -367,6 +369,7 @@ getters! {
     keepalive_secs: u32 = 30;
     confirm_close: bool = true;
     block_quit: bool = true;
+    auto_reconnect: bool = true;
     connect_timeout_secs: u32 = 15;
 }
 

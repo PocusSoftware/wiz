@@ -514,3 +514,49 @@ async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
 
     sftp.remove(base).await.unwrap();
 }
+
+/// The terminal's reconnect logic relies on this: when the server goes away, the shell ends
+/// and the connection reports closed within a few seconds.
+#[tokio::test]
+#[ignore = "restarts sshc-password and breaks other tests running at once; run alone with --ignored"]
+async fn server_restart_ends_shell_and_closes_connection() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let h = host(2222, AuthMethod::Password);
+    let c = Connection::connect(
+        &h,
+        &Credentials::Password("hunter2".into()),
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let mut shell = c.open_shell(80, 24, None).await.unwrap();
+    let mut term = Terminal::new(80, 24);
+    read_until(&mut shell, &mut term, "$").await;
+    assert!(!c.is_closed());
+
+    let restart = std::process::Command::new("docker")
+        .args(["restart", "-t", "0", "sshc-password"])
+        .status()
+        .unwrap();
+    assert!(restart.success());
+
+    let ended = tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(ev) = shell.events.recv().await {
+            if let ShellEvent::Exit(status) = ev {
+                return Some(status);
+            }
+        }
+        None
+    })
+    .await
+    .expect("shell did not end after the server restarted");
+    eprintln!("shell ended with status {ended:?}");
+    for _ in 0..20 {
+        if c.is_closed() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    panic!("connection still open 5 s after the shell ended");
+}
