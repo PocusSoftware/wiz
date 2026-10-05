@@ -193,6 +193,8 @@ pub struct Root {
     pane_drag: Option<PaneDrag>,
     /// A close waiting for "are you sure": tab id, and the pane for a split.
     confirm: Option<(u64, Option<usize>)>,
+    /// A host delete waiting for "are you sure": index into the host list.
+    confirm_delete: Option<usize>,
     tab_scroll: gpui::ScrollHandle,
     next_pending: u64,
     next_tab: u64,
@@ -260,6 +262,7 @@ impl Root {
             next_tab: 0,
             pane_drag: None,
             confirm: None,
+            confirm_delete: None,
             tab_scroll: gpui::ScrollHandle::new(),
             collapsed: HashSet::new(),
             epoch: 0,
@@ -945,6 +948,23 @@ impl Root {
         cx.notify();
     }
 
+    fn ask_delete_host(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.confirm_delete = Some(ix);
+        // Take keyboard focus so Enter and Esc reach the dialog.
+        window.focus(&self.focus);
+        cx.notify();
+    }
+
+    fn answer_delete_host(&mut self, yes: bool, cx: &mut Context<Self>) {
+        let Some(ix) = self.confirm_delete.take() else {
+            return;
+        };
+        if yes {
+            self.delete_host(ix, cx);
+        }
+        cx.notify();
+    }
+
     fn delete_host(&mut self, ix: usize, cx: &mut Context<Self>) {
         if ix >= self.cfg.hosts.len() {
             return;
@@ -1126,9 +1146,9 @@ impl Root {
                     )
                     .child(
                         icon_button(("h-del", ix), "trash", "Delete host", RED).on_click(
-                            cx.listener(move |t, _, _, cx| {
+                            cx.listener(move |t, _, w, cx| {
                                 cx.stop_propagation();
-                                t.delete_host(ix, cx)
+                                t.ask_delete_host(ix, w, cx)
                             }),
                         ),
                     ),
@@ -1766,6 +1786,45 @@ impl Render for Root {
             .form
             .clone()
             .map(|f| overlay("form", f.into_any_element()));
+        let delete_dialog = self.confirm_delete.and_then(|ix| {
+            let h = self.cfg.hosts.get(ix)?;
+            Some(overlay(
+                "confirm-delete",
+                div()
+                    .w(px(340.))
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .rounded(px(3.))
+                    .bg(c(ELEVATED))
+                    .border_1()
+                    .border_color(c(BORDER))
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(format!("Delete {}?", privacy::redact(&h.name))),
+                    )
+                    .child(
+                        div()
+                            .text_color(c(MUTED))
+                            .child("This removes the host and its saved passwords."),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(button("del-no", "Cancel").on_click(
+                                cx.listener(|t, _, _, cx| t.answer_delete_host(false, cx)),
+                            ))
+                            .child(primary_button("del-yes", "Delete").on_click(
+                                cx.listener(|t, _, _, cx| t.answer_delete_host(true, cx)),
+                            )),
+                    )
+                    .into_any_element(),
+            ))
+        });
         let confirm_dialog =
             self.confirm.and_then(|(id, pane)| {
                 let tab = self.tabs.iter().find(|t| t.id == id)?;
@@ -1816,6 +1875,15 @@ impl Render for Root {
             .track_focus(&self.focus)
             .key_context("Root")
             .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                if t.confirm_delete.is_some() {
+                    match ev.keystroke.key.as_str() {
+                        "enter" => t.answer_delete_host(true, cx),
+                        "escape" => t.answer_delete_host(false, cx),
+                        _ => return,
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
                 if t.confirm.is_none() {
                     return;
                 }
@@ -1908,6 +1976,7 @@ impl Render for Root {
             .children(trust_dialog)
             .children(form)
             .children(confirm_dialog)
+            .children(delete_dialog)
     }
 }
 
