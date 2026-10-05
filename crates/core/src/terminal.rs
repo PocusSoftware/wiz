@@ -68,6 +68,29 @@ pub const RESET_MODES: &[u8] =
 /// Clear the screen and the scrollback and home the cursor.
 pub const CLEAR_ALL: &[u8] = b"\x1b[2J\x1b[3J\x1b[H";
 
+/// Remove the "System is booting up ... pam_nologin(8)." notice (and its line break) that a
+/// server prints while it starts. `None` when `data` has no complete notice.
+pub fn strip_boot_notice(data: &[u8]) -> Option<Vec<u8>> {
+    const START: &[u8] = b"System is booting up";
+    const END: &[u8] = b"pam_nologin(8).";
+    let find = |from: usize, pat: &[u8]| {
+        data[from..]
+            .windows(pat.len())
+            .position(|w| w == pat)
+            .map(|i| i + from)
+    };
+    let start = find(0, START)?;
+    let mut end = find(start, END)? + END.len();
+    if data[end..].starts_with(b"\r\n") {
+        end += 2;
+    } else if data[end..].starts_with(b"\n") {
+        end += 1;
+    }
+    let mut out = data[..start].to_vec();
+    out.extend_from_slice(&data[end..]);
+    Some(out)
+}
+
 /// Most hits kept, so a one-letter query on a huge scrollback stays cheap.
 const MAX_MATCHES: usize = 10_000;
 
@@ -287,6 +310,17 @@ mod tests {
         t.advance(CLEAR_ALL);
         assert_eq!(t.term.grid().history_size(), 0);
         assert!(t.screen_text().trim().is_empty());
+    }
+
+    #[test]
+    fn strips_boot_notice_only_when_complete() {
+        let msg = "System is booting up. Unprivileged users are not permitted to log in yet. \
+                   Please come back later. For technical details, see pam_nologin(8).";
+        let data = format!("{msg}\r\nWelcome to Ubuntu\r\n");
+        let out = strip_boot_notice(data.as_bytes()).unwrap();
+        assert_eq!(out, b"Welcome to Ubuntu\r\n");
+        assert!(strip_boot_notice(b"Welcome to Ubuntu\r\n").is_none());
+        assert!(strip_boot_notice(b"System is booting up. Unpriv").is_none());
     }
 
     #[test]

@@ -47,6 +47,8 @@ pub struct TerminalView {
     lost: bool,
     /// Status line shown at the bottom, like "Reconnecting in 4s". Replaces the exit banner.
     notice: Option<SharedString>,
+    /// After a reconnect, drop the server's "System is booting up" notice until this time.
+    strip_boot_until: Option<std::time::Instant>,
     /// Enter asks for another reconnect attempt.
     retry_ready: bool,
     /// Command this terminal runs instead of a login shell (`docker exec`), re-run on reconnect.
@@ -92,6 +94,7 @@ impl TerminalView {
             lost: false,
             notice: None,
             retry_ready: false,
+            strip_boot_until: None,
             command: None,
         };
         this.pump(events, cx);
@@ -148,6 +151,9 @@ impl TerminalView {
         self.term.advance(ssh_core::terminal::CLEAR_ALL);
         self.term.term.selection = None;
         self.term.term.scroll_display(Scroll::Bottom);
+        // A server that is still booting prints a notice even to users it lets in.
+        self.strip_boot_until =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
         let _ = self.input.try_send(ShellInput::Resize {
             cols: self.cols,
             rows: self.rows,
@@ -166,7 +172,15 @@ impl TerminalView {
 
     fn on_event(&mut self, ev: ShellEvent, cx: &mut Context<Self>) {
         match ev {
-            ShellEvent::Data(d) => {
+            ShellEvent::Data(mut d) => {
+                if let Some(until) = self.strip_boot_until {
+                    if std::time::Instant::now() > until {
+                        self.strip_boot_until = None;
+                    } else if let Some(clean) = ssh_core::terminal::strip_boot_notice(&d) {
+                        d = clean;
+                        self.strip_boot_until = None;
+                    }
+                }
                 let reply = self.term.advance(&d);
                 if !reply.is_empty() {
                     self.write(reply, cx);
