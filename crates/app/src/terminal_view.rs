@@ -60,8 +60,9 @@ pub struct TerminalView {
 
 pub enum TerminalEvent {
     TitleChanged,
-    /// The shell ended: either it exited, or the connection dropped under it.
-    Ended,
+    /// The shell ended, with its exit status if the server sent one: either it exited, or the
+    /// connection dropped under it.
+    Ended(Option<u32>),
     /// Enter was pressed on a lost terminal.
     Retry,
 }
@@ -195,7 +196,7 @@ impl TerminalView {
                 self.exited = Some(status);
                 self.lost = status.is_none();
                 // The owner decides whether the connection dropped or the shell just exited.
-                cx.emit(TerminalEvent::Ended);
+                cx.emit(TerminalEvent::Ended(status));
             }
         }
     }

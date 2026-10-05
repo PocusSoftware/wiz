@@ -743,9 +743,71 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match ev {
-            TerminalEvent::Ended => self.start_reconnect(view, 0, None, false, window, cx),
+            TerminalEvent::Ended(status) => self.on_shell_ended(view, *status, window, cx),
             TerminalEvent::Retry => self.start_reconnect(view, 0, None, true, window, cx),
             _ => {}
+        }
+    }
+
+    /// A shell ended. If its connection dropped, reconnect; if the shell just exited (`exit`,
+    /// Ctrl+D), close the terminal, or leave "Session closed" when that is turned off.
+    fn on_shell_ended(
+        &mut self,
+        view: gpui::WeakEntity<TerminalView>,
+        status: Option<u32>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn_in(window, async move |this, cx| {
+            // A dropping connection can lag behind its channels. With an exit status the shell
+            // most likely just exited, so look only briefly to keep `exit` snappy.
+            let (polls, step) = match status {
+                Some(_) => (3, Duration::from_millis(100)),
+                None => (20, Duration::from_millis(250)),
+            };
+            let mut dropped = false;
+            for _ in 0..polls {
+                cx.background_executor().timer(step).await;
+                dropped = this
+                    .update(cx, |this, cx| this.connection_dropped(&view, cx))
+                    .unwrap_or(false);
+                if dropped {
+                    break;
+                }
+            }
+            this.update_in(cx, |this, window, cx| {
+                if dropped {
+                    this.start_reconnect(view, 0, None, false, window, cx);
+                } else if crate::prefs::get().close_on_exit() {
+                    this.close_ended(&view, window, cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Close the pane (or tab) of a terminal whose shell exited. No question: it is over.
+    fn close_ended(
+        &mut self,
+        view: &gpui::WeakEntity<TerminalView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let found = self
+            .tabs
+            .iter()
+            .enumerate()
+            .find_map(|(i, t)| match &t.kind {
+                TabKind::Terminal(tt) => tt
+                    .panes
+                    .iter()
+                    .position(|p| p.entity_id() == view.entity_id())
+                    .map(|p| (i, p)),
+                _ => None,
+            });
+        if let Some((ix, pane)) = found {
+            self.do_close(ix, Some(pane), window, cx);
         }
     }
 
@@ -771,26 +833,6 @@ impl Root {
             return;
         }
         cx.spawn_in(window, async move |this, cx| {
-            if attempt == 0 && !manual {
-                // A shell that ends while its connection stays up simply exited. A dropping
-                // connection can lag behind its channels, so give it a few seconds.
-                let mut dropped = false;
-                for _ in 0..20 {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(250))
-                        .await;
-                    dropped = this
-                        .update(cx, |this, cx| this.connection_dropped(&view, cx))
-                        .unwrap_or(false);
-                    if dropped {
-                        break;
-                    }
-                }
-                if !dropped {
-                    view.update(cx, |v, cx| v.set_notice(None, false, cx)).ok();
-                    return;
-                }
-            }
             for left in (1..=backoff(attempt)).rev() {
                 let text = match &last_error {
                     Some(e) => format!("Connection lost ({e}). Retrying in {left}s..."),

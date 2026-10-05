@@ -560,3 +560,36 @@ async fn server_restart_ends_shell_and_closes_connection() {
     }
     panic!("connection still open 5 s after the shell ended");
 }
+
+/// Typing `exit` ends the shell with a status while the connection stays up, which is what
+/// lets the app close the terminal instead of reconnecting.
+#[tokio::test]
+async fn exit_ends_shell_with_status_and_keeps_connection() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let h = host(2222, AuthMethod::Password);
+    let c = Connection::connect(
+        &h,
+        &Credentials::Password("hunter2".into()),
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let mut shell = c.open_shell(80, 24, None).await.unwrap();
+    let mut term = Terminal::new(80, 24);
+    read_until(&mut shell, &mut term, "$").await;
+    shell.send("exit\r").await;
+    let status = tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(ev) = shell.events.recv().await {
+            if let ShellEvent::Exit(status) = ev {
+                return status;
+            }
+        }
+        None
+    })
+    .await
+    .expect("shell did not end after exit");
+    assert_eq!(status, Some(0));
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(!c.is_closed());
+}

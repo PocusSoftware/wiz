@@ -206,7 +206,18 @@ impl Connection {
 
         tokio::spawn(async move {
             let mut status = None;
-            while let Some(msg) = reader.wait().await {
+            let mut eof = false;
+            loop {
+                // The exit status can arrive just after EOF, so after EOF wait a moment for it
+                // (or for the close) before ending.
+                let msg = if eof {
+                    tokio::time::timeout(Duration::from_millis(500), reader.wait())
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    reader.wait().await
+                };
+                let Some(msg) = msg else { break };
                 let ev = match msg {
                     ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
                         ShellEvent::Data(data.to_vec())
@@ -215,7 +226,11 @@ impl Connection {
                         status = Some(exit_status);
                         continue;
                     }
-                    ChannelMsg::Eof | ChannelMsg::Close => break,
+                    ChannelMsg::Eof => {
+                        eof = true;
+                        continue;
+                    }
+                    ChannelMsg::Close => break,
                     _ => continue,
                 };
                 if ev_tx.send(ev).await.is_err() {

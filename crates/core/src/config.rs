@@ -327,6 +327,8 @@ pub struct Settings {
     pub confirm_close: Option<bool>,
     /// Reconnect a terminal on its own after the connection drops (network loss, reboot).
     pub auto_reconnect: Option<bool>,
+    /// Close a terminal tab or pane when its shell exits (`exit`, Ctrl+D).
+    pub close_on_exit: Option<bool>,
     /// Refuse to quit while sessions are open.
     pub block_quit: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
@@ -370,6 +372,7 @@ getters! {
     confirm_close: bool = true;
     block_quit: bool = true;
     auto_reconnect: bool = true;
+    close_on_exit: bool = true;
     connect_timeout_secs: u32 = 15;
 }
 
