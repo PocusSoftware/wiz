@@ -363,7 +363,7 @@ getters! {
     docker_refresh_secs: u32 = 5;
     terminal_scrollback: u32 = 10_000;
     keepalive_secs: u32 = 30;
-    confirm_close: bool = false;
+    confirm_close: bool = true;
     connect_timeout_secs: u32 = 15;
 }
 

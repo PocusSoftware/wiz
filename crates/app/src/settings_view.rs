@@ -9,7 +9,7 @@ use ssh_core::config::Settings;
 use crate::input::{InputEvent, TextInput};
 use crate::prefs;
 use crate::theme::*;
-use crate::ui::{button, checkbox, icon_button};
+use crate::ui::{button, checkbox, icon_button, primary_button};
 
 /// Emitted after any change so the rest of the app can refresh.
 pub enum SettingsEvent {
@@ -25,7 +25,38 @@ pub struct SettingsView {
     extra_mask: Entity<TextInput>,
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
+    /// Known editors found in the Applications folders.
+    editors: Vec<&'static str>,
     error: Option<SharedString>,
+}
+
+/// Editors offered as quick picks when installed.
+const KNOWN_EDITORS: &[&str] = &[
+    "Visual Studio Code",
+    "Cursor",
+    "Zed",
+    "Sublime Text",
+    "BBEdit",
+    "Nova",
+    "TextMate",
+    "CotEditor",
+    "Windsurf",
+    "VSCodium",
+    "Xcode",
+    "TextEdit",
+];
+
+fn installed_editors() -> Vec<&'static str> {
+    let user = dirs::home_dir().map(|h| h.join("Applications"));
+    KNOWN_EDITORS
+        .iter()
+        .copied()
+        .filter(|n| {
+            let app = format!("{n}.app");
+            std::path::Path::new("/Applications").join(&app).exists()
+                || user.as_ref().is_some_and(|u| u.join(&app).exists())
+        })
+        .collect()
 }
 
 fn split_list(s: &str) -> Vec<String> {
@@ -47,6 +78,7 @@ impl SettingsView {
             extra_mask: make("project-name, client-name", cx),
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
+            editors: installed_editors(),
             error: None,
         };
         this.load_inputs(cx);
@@ -249,6 +281,37 @@ impl SettingsView {
         )
     }
 
+    /// Quick picks for the editor field: the system default plus installed known editors.
+    fn editor_picks(&self, current: &str, cx: &mut Context<Self>) -> gpui::Div {
+        let pick = |t: &mut Self, name: String, cx: &mut Context<Self>| {
+            t.editor.update(cx, |i, _| i.set_value(&name));
+            t.sync_inputs(cx);
+        };
+        let mut chips = div().flex().flex_wrap().gap_1().child(
+            if current.is_empty() {
+                primary_button("ed-default", "System default")
+            } else {
+                button("ed-default", "System default")
+            }
+            .on_click(cx.listener(move |t, _, _, cx| pick(t, String::new(), cx))),
+        );
+        for (i, name) in self.editors.iter().enumerate() {
+            let b = if *name == current {
+                primary_button(("ed", i), name)
+            } else {
+                button(("ed", i), name)
+            };
+            let name = name.to_string();
+            chips =
+                chips.child(b.on_click(cx.listener(move |t, _, _, cx| pick(t, name.clone(), cx))));
+        }
+        div()
+            .py(px(4.))
+            .border_b_1()
+            .border_color(c(BORDER_VARIANT))
+            .child(chips)
+    }
+
     fn text(&self, label: &str, desc: &str, input: &Entity<TextInput>) -> gpui::Div {
         Self::row(label, desc, div().w(px(320.)).child(input.clone()))
     }
@@ -310,7 +373,8 @@ impl Render for SettingsView {
                         v if v < 1024 => format!("{v} KB/s"),
                         v => format!("{} MB/s", v / 1024),
                     }, |s, v| s.transfer_limit_kbps = Some(v), cx))
-                    .child(self.text("Editor for server files", "App name for Open (Enter on a file), like Visual Studio Code or Zed. Empty uses the system default.", &self.editor))
+                    .child(self.text("Editor for server files", "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.", &self.editor))
+                    .child(self.editor_picks(&s.editor_app(), cx))
                     .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
                     .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))
                     .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Bastion's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
