@@ -51,6 +51,14 @@ pub struct Match {
     pub len: usize,
 }
 
+/// A web link found in the terminal text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Link {
+    pub url: String,
+    /// Grid (line, column) of every cell the link covers, across wrapped rows.
+    pub cells: Vec<(i32, usize)>,
+}
+
 /// Most hits kept, so a one-letter query on a huge scrollback stays cheap.
 const MAX_MATCHES: usize = 10_000;
 
@@ -144,6 +152,86 @@ impl Terminal {
         out
     }
 
+    /// The http(s) link under grid cell (`line`, `col`), if any. Follows lines the terminal
+    /// wrapped, and drops trailing punctuation like the `.` or `)` after a link in prose.
+    pub fn link_at(&self, line: i32, col: usize) -> Option<Link> {
+        use alacritty_terminal::index::{Column, Line};
+        use alacritty_terminal::term::cell::Flags;
+        let grid = self.term.grid();
+        let last = Column(grid.columns().checked_sub(1)?);
+        if line < grid.topmost_line().0 || line > grid.bottommost_line().0 {
+            return None;
+        }
+        let wraps = |l: i32| grid[Line(l)][last].flags.contains(Flags::WRAPLINE);
+        let (mut a, mut b) = (line, line);
+        while a > grid.topmost_line().0 && wraps(a - 1) {
+            a -= 1;
+        }
+        while b < grid.bottommost_line().0 && wraps(b) {
+            b += 1;
+        }
+        let mut chars: Vec<(char, i32, usize)> = Vec::new();
+        for l in a..=b {
+            for c in 0..grid.columns() {
+                let cell = &grid[Line(l)][Column(c)];
+                if !cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+                    chars.push((cell.c, l, c));
+                }
+            }
+        }
+        let click = chars.iter().position(|&(_, l, c)| l == line && c >= col)?;
+        let stop = |ch: char| ch.is_whitespace() || ch == '\0' || "<>\"'`".contains(ch);
+        if stop(chars[click].0) {
+            return None;
+        }
+        let mut lo = click;
+        while lo > 0 && !stop(chars[lo - 1].0) {
+            lo -= 1;
+        }
+        let mut hi = click + 1;
+        while hi < chars.len() && !stop(chars[hi].0) {
+            hi += 1;
+        }
+        let tok: String = chars[lo..hi].iter().map(|x| x.0).collect();
+        // Start at the last scheme at or before the click.
+        let click_in = click - lo;
+        let start = ["https://", "http://"]
+            .iter()
+            .flat_map(|sch| tok.match_indices(sch).map(|(i, _)| i))
+            .filter(|&i| tok[..i].chars().count() <= click_in)
+            .max()?;
+        let mut url: Vec<char> = tok[start..].chars().collect();
+        let first = tok[..start].chars().count();
+        while let Some(&ch) = url.last() {
+            let count = |x: char| url.iter().filter(|&&y| y == x).count();
+            let unbalanced = |open: char| count(ch) > count(open);
+            if ".,;:!?".contains(ch)
+                || (ch == ')' && unbalanced('('))
+                || (ch == ']' && unbalanced('['))
+                || (ch == '}' && unbalanced('{'))
+            {
+                url.pop();
+            } else {
+                break;
+            }
+        }
+        let scheme = if tok[start..].starts_with("https") {
+            8
+        } else {
+            7
+        };
+        if url.len() <= scheme || click_in >= first + url.len() {
+            return None;
+        }
+        Some(Link {
+            url: url.iter().collect(),
+            cells: chars[lo + first..lo + first + url.len()]
+                .iter()
+                .map(|&(_, l, c)| (l, c))
+                .collect(),
+        })
+    }
+
     /// Visible screen as plain text, trailing blanks trimmed. Handy for tests.
     pub fn screen_text(&self) -> String {
         use alacritty_terminal::index::{Column, Line};
@@ -171,6 +259,22 @@ mod tests {
         assert!(text.starts_with("hello\nred\n"), "{text}");
         // CPR reply: ESC [ row ; col R
         assert_eq!(String::from_utf8_lossy(&reply), "\x1b[2;4R");
+    }
+
+    #[test]
+    fn finds_links_with_trailing_punctuation_and_wraps() {
+        let mut t = Terminal::new(20, 5);
+        t.advance(b"see https://a.io/x_(y). ok\r\nhttps://example.com/very/long/path, end");
+        let l = t.link_at(0, 8).unwrap();
+        assert_eq!(l.url, "https://a.io/x_(y)");
+        assert_eq!(l.cells.len(), 18);
+        assert!(t.link_at(0, 1).is_none());
+        assert!(t.link_at(1, 4).is_none());
+        // Wrapped over two rows; the comma is dropped.
+        let l = t.link_at(3, 3).unwrap();
+        assert_eq!(l.url, "https://example.com/very/long/path");
+        assert_eq!(l.cells[0], (2, 0));
+        assert_eq!(*l.cells.last().unwrap(), (3, 13));
     }
 
     #[test]

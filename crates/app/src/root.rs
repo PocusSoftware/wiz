@@ -193,6 +193,8 @@ pub struct Root {
     pane_drag: Option<PaneDrag>,
     /// A close waiting for "are you sure": tab id, and the pane for a split.
     confirm: Option<(u64, Option<usize>)>,
+    /// Quit was refused because this many sessions are open.
+    quit_notice: Option<usize>,
     /// A host delete waiting for "are you sure": index into the host list.
     confirm_delete: Option<usize>,
     tab_scroll: gpui::ScrollHandle,
@@ -263,6 +265,7 @@ impl Root {
             pane_drag: None,
             confirm: None,
             confirm_delete: None,
+            quit_notice: None,
             tab_scroll: gpui::ScrollHandle::new(),
             collapsed: HashSet::new(),
             epoch: 0,
@@ -761,12 +764,7 @@ impl Root {
         let Some(tab) = self.tabs.get(ix) else {
             return;
         };
-        let remote = match &tab.kind {
-            TabKind::Terminal(_) | TabKind::Sftp(_) => true,
-            TabKind::Docker(v) => v.read(cx).is_remote(),
-            TabKind::Logs(_) => false,
-        };
-        if remote && crate::prefs::get().confirm_close() {
+        if Self::holds_session(tab, cx) && crate::prefs::get().confirm_close() {
             self.confirm = Some((tab.id, pane));
             // Take keyboard focus from the terminal so Enter and Esc reach the dialog.
             window.focus(&self.focus);
@@ -774,6 +772,40 @@ impl Root {
             return;
         }
         self.do_close(ix, pane, window, cx);
+    }
+
+    /// Tabs on a server (terminal, files, remote Docker) hold an SSH session.
+    fn holds_session(tab: &Tab, cx: &App) -> bool {
+        match &tab.kind {
+            TabKind::Terminal(_) | TabKind::Sftp(_) => true,
+            TabKind::Docker(v) => v.read(cx).is_remote(),
+            TabKind::Logs(_) => false,
+        }
+    }
+
+    /// Quit, unless the setting is on and sessions are still open.
+    pub fn request_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let open = self
+            .tabs
+            .iter()
+            .filter(|t| Self::holds_session(t, cx))
+            .count();
+        if open > 0 && crate::prefs::get().block_quit() {
+            self.quit_notice = Some(open);
+            window.focus(&self.focus);
+            cx.notify();
+        } else {
+            cx.quit();
+        }
+    }
+
+    fn dismiss_quit_notice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.quit_notice = None;
+        if self.page == Page::Tab {
+            self.select_tab(self.active, window, cx);
+        } else {
+            cx.notify();
+        }
     }
 
     fn do_close(
@@ -1512,13 +1544,16 @@ impl Root {
                     .h_full()
                     .border_l_1()
                     .border_color(c(BORDER_VARIANT))
-                    .child(win_button("win-min", "minus", ACTIVE, |w| {
+                    .child(win_button("win-min", "minus", ACTIVE, |w, _| {
                         w.minimize_window()
                     }))
-                    .child(win_button("win-max", "maximize", ACTIVE, |w| {
+                    .child(win_button("win-max", "maximize", ACTIVE, |w, _| {
                         w.zoom_window()
                     }))
-                    .child(win_button("win-close", "x", RED, |w| w.remove_window())),
+                    // Closing the window quits, so it goes through the same check.
+                    .child(win_button("win-close", "x", RED, |w, cx| {
+                        w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
+                    })),
             )
     }
 
@@ -1870,11 +1905,51 @@ impl Render for Root {
                 ))
             });
 
+        let quit_dialog = self.quit_notice.map(|n| {
+            overlay(
+                "quit-notice",
+                div()
+                    .w(px(340.))
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .rounded(px(3.))
+                    .bg(c(ELEVATED))
+                    .border_1()
+                    .border_color(c(BORDER))
+                    .child(div().text_sm().child("Can't quit yet"))
+                    .child(div().text_color(c(MUTED)).child(format!(
+                        "{} open. Close {} first, or allow quitting in Settings.",
+                        if n == 1 {
+                            "1 session is".to_string()
+                        } else {
+                            format!("{n} sessions are")
+                        },
+                        if n == 1 { "it" } else { "them" },
+                    )))
+                    .child(
+                        div().flex().justify_end().gap_2().child(
+                            primary_button("quit-ok", "OK")
+                                .on_click(cx.listener(|t, _, w, cx| t.dismiss_quit_notice(w, cx))),
+                        ),
+                    )
+                    .into_any_element(),
+            )
+        });
+
         div()
             .id("root")
             .track_focus(&self.focus)
             .key_context("Root")
             .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                if t.quit_notice.is_some() {
+                    if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
+                        t.dismiss_quit_notice(w, cx);
+                        cx.stop_propagation();
+                    }
+                    return;
+                }
                 if t.confirm_delete.is_some() {
                     match ev.keystroke.key.as_str() {
                         "enter" => t.answer_delete_host(true, cx),
@@ -1977,6 +2052,7 @@ impl Render for Root {
             .children(form)
             .children(confirm_dialog)
             .children(delete_dialog)
+            .children(quit_dialog)
     }
 }
 
@@ -1985,7 +2061,7 @@ fn win_button(
     id: &'static str,
     name: &str,
     hover: u32,
-    action: impl Fn(&mut Window) + 'static,
+    action: impl Fn(&mut Window, &mut App) + 'static,
 ) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -1996,7 +2072,7 @@ fn win_button(
         .justify_center()
         .cursor_pointer()
         .hover(move |s| s.bg(c(hover)))
-        .on_click(move |_, w, _| action(w))
+        .on_click(move |_, w, cx| action(w, cx))
         .child(icon(name, 14., TEXT))
 }
 

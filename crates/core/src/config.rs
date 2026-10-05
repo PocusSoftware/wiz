@@ -325,6 +325,8 @@ pub struct Settings {
     pub keepalive_secs: Option<u32>,
     /// Ask before closing a tab or pane that holds an SSH session.
     pub confirm_close: Option<bool>,
+    /// Refuse to quit while sessions are open.
+    pub block_quit: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
     pub connect_timeout_secs: Option<u32>,
 }
@@ -364,6 +366,7 @@ getters! {
     terminal_scrollback: u32 = 10_000;
     keepalive_secs: u32 = 30;
     confirm_close: bool = true;
+    block_quit: bool = true;
     connect_timeout_secs: u32 = 15;
 }
 

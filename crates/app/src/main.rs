@@ -81,7 +81,14 @@ fn main() {
                 &settings,
             );
             mark("after fonts");
-            cx.on_action(|_: &Quit, cx| cx.quit());
+            // Quit goes through Root, which refuses while sessions are open (if set).
+            cx.on_action(|_: &Quit, cx| {
+                let root = cx.windows().into_iter().find_map(|w| w.downcast::<Root>());
+                match root {
+                    Some(r) if r.update(cx, |t, w, cx| t.request_quit(w, cx)).is_ok() => {}
+                    _ => cx.quit(),
+                }
+            });
             cx.bind_keys([
                 KeyBinding::new("cmd-q", Quit, None),
                 KeyBinding::new("cmd-w", CloseTab, None),

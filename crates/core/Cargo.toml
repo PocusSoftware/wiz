@@ -4,6 +4,9 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 alacritty_terminal = "0.26.0"
 bollard = "0.21.1"

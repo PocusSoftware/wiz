@@ -7,6 +7,13 @@ edition = "2024"
 version = "0.1.0"
 license = "MIT"
 
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = { level = "deny" }
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
+uninlined_format_args = "warn"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

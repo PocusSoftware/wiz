@@ -13,7 +13,7 @@ use gpui::{
     Window, canvas, div, fill, font, outline, point, prelude::*, px, size,
 };
 use ssh_core::session::{Shell, ShellEvent, ShellInput};
-use ssh_core::terminal::{Match, Terminal};
+use ssh_core::terminal::{Link, Match, Terminal};
 use tokio::sync::mpsc;
 
 use crate::input::{InputEvent, TextInput};
@@ -32,6 +32,8 @@ struct Search {
 
 pub struct TerminalView {
     search: Option<Search>,
+    /// Link under the mouse while ⌘ is held.
+    hover_link: Option<Link>,
     term: Terminal,
     input: mpsc::Sender<ShellInput>,
     focus: FocusHandle,
@@ -84,6 +86,7 @@ impl TerminalView {
         .detach();
         Self {
             search: None,
+            hover_link: None,
             term: Terminal::with_scrollback(
                 cols,
                 rows,
@@ -167,6 +170,11 @@ impl TerminalView {
             Side::Right
         };
         (GridPoint::new(Line(row as i32 - off), Column(col)), side)
+    }
+
+    fn link_under(&self, p: Point<Pixels>) -> Option<Link> {
+        let (pt, _) = self.grid_point(p);
+        self.term.link_at(pt.line.0, pt.column.0)
     }
 
     fn paste(&mut self, text: &str, cx: &mut Context<Self>) {
@@ -575,6 +583,13 @@ impl Render for TerminalView {
                 MouseButton::Left,
                 cx.listener(|this, ev: &MouseDownEvent, window, cx| {
                     window.focus(&this.focus);
+                    // ⌘-click opens a link instead of selecting.
+                    if ev.modifiers.platform
+                        && let Some(l) = this.link_under(ev.position)
+                    {
+                        let _ = std::process::Command::new("open").arg(l.url).spawn();
+                        return;
+                    }
                     let (p, side) = this.grid_point(ev.position);
                     let ty = match ev.click_count {
                         2 => SelectionType::Semantic,
@@ -587,6 +602,15 @@ impl Render for TerminalView {
                 }),
             )
             .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
+                let link = if ev.modifiers.platform && !this.selecting {
+                    this.link_under(ev.position)
+                } else {
+                    None
+                };
+                if link != this.hover_link {
+                    this.hover_link = link;
+                    cx.notify();
+                }
                 if this.selecting && ev.pressed_button == Some(MouseButton::Left) {
                     let (p, side) = this.grid_point(ev.position);
                     if let Some(sel) = this.term.term.selection.as_mut() {
@@ -631,6 +655,7 @@ impl Render for TerminalView {
                 }
                 cx.notify();
             }))
+            .when(self.hover_link.is_some(), |d| d.cursor_pointer())
             .size_full()
             .relative()
             .flex()
@@ -728,6 +753,17 @@ fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
                 dim: f.contains(Flags::DIM),
             },
         );
+    }
+
+    if let Some(l) = &t.hover_link {
+        for &(line, col) in &l.cells {
+            let row = line + off;
+            if row >= 0 && (row as usize) < rows && col < cols {
+                let st = &mut lines[row as usize][col].1;
+                st.underline = true;
+                st.fg = ACCENT_TEXT;
+            }
+        }
     }
 
     if let Some(s) = &t.search {
