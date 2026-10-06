@@ -4,9 +4,13 @@
 use std::path::Path;
 
 use gpui::{
-    App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, Stateful, TitlebarOptions, Window,
-    WindowControlArea,
+    App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
+    Stateful, StatefulInteractiveElement, TitlebarOptions, Window, WindowControlArea,
 };
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
+use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, PostMessageW, WM_NCLBUTTONDOWN};
 
 use crate::workspace::{
     CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, SplitPane, Workspace,
@@ -99,18 +103,48 @@ pub fn on_window_open(window: &mut Window, workspace: &Entity<Workspace>, cx: &m
 }
 
 /// Windows moves, snaps and maximizes the window itself when told where the title bar is.
+/// Where that hit test misses, the mouse-down starts the same move by hand.
 pub fn title_bar<E: InteractiveElement>(el: E) -> E {
     el.window_control_area(WindowControlArea::Drag)
+        .on_mouse_down(MouseButton::Left, |ev: &MouseDownEvent, window, _| {
+            if ev.click_count >= 2 {
+                window.zoom_window();
+            } else {
+                drag(window);
+            }
+        })
 }
 
-/// The title bar buttons are native areas, so snap layouts and hover work like elsewhere.
-/// Windows runs the action itself (the close goes through `on_window_open`'s check).
+/// Native areas give snap layouts and hover; the click runs the action when the native
+/// hit test misses (a click Windows handles itself never reaches it).
 pub fn window_button(
     el: Stateful<Div>,
     area: WindowControlArea,
-    _: impl Fn(&mut Window, &mut App) + 'static,
+    action: impl Fn(&mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
     el.window_control_area(area)
+        .on_click(move |_, w, cx| action(w, cx))
+}
+
+/// Hand the press to Windows as a title bar press, which starts its move loop.
+fn drag(window: &Window) {
+    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+        return;
+    };
+    let RawWindowHandle::Win32(h) = handle.as_raw() else {
+        return;
+    };
+    let hwnd = HWND(h.hwnd.get() as *mut std::ffi::c_void);
+    // SAFETY: the handle comes from the live window, and both calls only take it by value.
+    unsafe {
+        let _ = ReleaseCapture();
+        let _ = PostMessageW(
+            Some(hwnd),
+            WM_NCLBUTTONDOWN,
+            WPARAM(HTCAPTION as usize),
+            LPARAM(0),
+        );
+    }
 }
 
 /// Open a local file in `app`, or in Notepad without one. Never the file association: a
