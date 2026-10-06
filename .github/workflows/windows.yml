@@ -1,0 +1,29 @@
+# Builds the Windows release of Wiz and runs the tests on Windows. Started by hand
+# (Actions tab or `gh workflow run windows.yml`), so it only uses minutes when wanted.
+# A Windows runner is needed: GPUI compiles its shaders with fxc.exe from the Windows SDK.
+name: Windows build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace
+      - name: Build release
+        run: cargo build --release -p ssh-app
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/release/wiz.exe dist/Wiz.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiz-windows-x64
+          path: dist/Wiz.exe
+          if-no-files-found: error
