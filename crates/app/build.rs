@@ -1,4 +1,4 @@
-//! Embeds the git commit (`BASTION_COMMIT`) so builds can be told apart beyond the version.
+//! Embeds the git commit (`WIZ_COMMIT`) so builds can be told apart beyond the version.
 
 use std::path::Path;
 use std::process::Command;
@@ -26,5 +26,5 @@ fn main() {
         }
     }
     let commit = git(&["rev-parse", "--short=7", "HEAD"]).unwrap_or_default();
-    println!("cargo:rustc-env=BASTION_COMMIT={commit}");
+    println!("cargo:rustc-env=WIZ_COMMIT={commit}");
 }

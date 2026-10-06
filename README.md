@@ -1,6 +1,6 @@
-# Bastion
+# Wiz
 
-A castle-keep for your servers: a fast, macOS-only SSH client in Rust (terminal, SFTP, Docker). Frontend: GPUI (pending Xcode). Backend in `crates/core`.
+A fast, macOS-only SSH client in Rust (terminal, SFTP, Docker). Frontend: GPUI (pending Xcode). Backend in `crates/core`.
 
 ## Status
 - Done: password, key (ed25519/RSA, encrypted) and keyboard-interactive auth, Keychain secrets,
@@ -43,10 +43,10 @@ Settings, Credentials picks where passwords and key passphrases are kept:
 - Keychain (default): macOS Keychain.
 - Encrypted file: `secrets.toml` next to `hosts.toml`, mode 0600. A master password goes through Argon2id (64 MiB, 3 passes, random 32-byte salt) into a 256-bit key that only lives in memory. Each secret is sealed with AES-256-GCM under its own random nonce, with its kind and account as associated data. These are symmetric primitives, which stay safe against quantum attacks (the SSH connection itself already negotiates the hybrid post-quantum `mlkem768x25519-sha256` key exchange first). The file holds an encrypted check value, so a wrong master password is reported as such.
 
-The file is unlocked on first use (connecting, adding or editing a host) and stays unlocked until Bastion quits or you press "Lock now". Switching stores moves every saved secret across. The master password can't be recovered: forget it and the saved passwords are gone (the hosts stay).
+The file is unlocked on first use (connecting, adding or editing a host) and stays unlocked until Wiz quits or you press "Lock now". Switching stores moves every saved secret across. The master password can't be recovered: forget it and the saved passwords are gone (the hosts stay).
 
 ## Notes
-- Startup: `SSHC_TIMING=1 target/release/bastion` prints launch milestones (about 170-195 ms to first render warm).
+- Startup: `SSHC_TIMING=1 target/release/wiz` prints launch milestones (about 170-195 ms to first render warm).
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.
 - Directory symlinks are skipped by transfers so link loops cannot run forever. File symlinks are followed.
 
@@ -63,7 +63,7 @@ Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.
 The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scripts/version.sh` prints it, `scripts/version.sh 0.2.0` sets it; then commit and tag `v0.2.0`. The app shows the version and build commit at the bottom of Settings, and `scripts/bundle.sh` writes it into `Info.plist` (build number = commit count).
 
 ## App bundle and icon
-`scripts/bundle.sh` builds `Bastion.app` (release binary, castle icon, ad-hoc signature) and installs it to `/Applications`, replacing the previous build. The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/castle.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.
+`scripts/bundle.sh` builds `Wiz.app` (release binary, icon, ad-hoc signature) and installs it to `/Applications`, replacing the previous build. The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/castle.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.
 
 ## Hide sensitive information
 Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.

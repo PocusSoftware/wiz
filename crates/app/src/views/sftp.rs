@@ -481,7 +481,7 @@ impl SftpView {
 
 /// Delete an edit's temp folder, but only ever something inside our own temp root.
 fn remove_edit_dir(dir: &std::path::Path) {
-    if dir.starts_with(std::env::temp_dir().join("bastion-edit")) {
+    if dir.starts_with(std::env::temp_dir().join("wiz-edit")) {
         let _ = std::fs::remove_dir_all(dir);
     }
 }

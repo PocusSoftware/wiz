@@ -370,7 +370,7 @@ impl SettingsView {
                 } else {
                     "Secrets file is locked"
                 },
-                "Unlocked until Bastion quits or you lock it. Connecting while locked asks for the master password.",
+                "Unlocked until Wiz quits or you lock it. Connecting while locked asks for the master password.",
                 controls,
             ));
         }
@@ -445,7 +445,7 @@ impl Render for SettingsView {
                     .child(self.editor_picks(&s.editor_app(), cx))
                     .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
                     .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))
-                    .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Bastion's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
+                    .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Wiz's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
                     .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
                     .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx))
                     // ---------- Logs & Docker ----------
@@ -488,7 +488,7 @@ impl Render for SettingsView {
                             )),
                     )
                     .when_some(self.error.clone(), |d, e| d.child(div().mt_2().text_color(c(RED)).child(e)))
-                    .child(div().mt_4().text_xs().text_color(c(PLACEHOLDER)).child(format!("Bastion {}", crate::version()))),
+                    .child(div().mt_4().text_xs().text_color(c(PLACEHOLDER)).child(format!("Wiz {}", crate::version()))),
             )
     }
 }

@@ -1,15 +1,15 @@
 #!/bin/sh
-# Builds Bastion.app (release binary, icon, ad-hoc signature) and installs it to
+# Builds Wiz.app (release binary, icon, ad-hoc signature) and installs it to
 # /Applications, replacing the previous build. The staging copy in dist/ is removed so
 # Launchpad and Spotlight only see the installed app.
 set -e
 cd "$(dirname "$0")/.."
 cargo build --release -p ssh-app
-APP=dist/Bastion.app
+APP=dist/Wiz.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp target/release/bastion "$APP/Contents/MacOS/bastion"
-cp crates/app/assets/brand/Bastion.icns "$APP/Contents/Resources/Bastion.icns"
+cp target/release/wiz "$APP/Contents/MacOS/wiz"
+cp crates/app/assets/brand/Wiz.icns "$APP/Contents/Resources/Wiz.icns"
 VERSION=$(scripts/version.sh)
 # Build number: commits on the current branch, so every bundle gets a higher one.
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
@@ -18,11 +18,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Bastion</string>
-  <key>CFBundleDisplayName</key><string>Bastion</string>
-  <key>CFBundleIdentifier</key><string>dev.enty.bastion</string>
-  <key>CFBundleExecutable</key><string>bastion</string>
-  <key>CFBundleIconFile</key><string>Bastion</string>
+  <key>CFBundleName</key><string>Wiz</string>
+  <key>CFBundleDisplayName</key><string>Wiz</string>
+  <key>CFBundleIdentifier</key><string>dev.enty.wiz</string>
+  <key>CFBundleExecutable</key><string>wiz</string>
+  <key>CFBundleIconFile</key><string>Wiz</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD</string>
@@ -34,10 +34,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 codesign --force --deep -s - "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
-rm -rf /Applications/Bastion.app
-ditto "$APP" /Applications/Bastion.app
+rm -rf /Applications/Wiz.app
+ditto "$APP" /Applications/Wiz.app
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 "$LSREGISTER" -u "$APP" 2>/dev/null || true
 rm -rf "$APP"
-"$LSREGISTER" -f /Applications/Bastion.app
-echo "installed /Applications/Bastion.app"
+"$LSREGISTER" -f /Applications/Wiz.app
+echo "installed /Applications/Wiz.app"

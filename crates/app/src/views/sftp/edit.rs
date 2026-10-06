@@ -64,7 +64,7 @@ impl SftpView {
         let id = self.next_id;
         self.next_id += 1;
         let dir = std::env::temp_dir()
-            .join("bastion-edit")
+            .join("wiz-edit")
             .join(format!("{}-{id}", std::process::id()));
         let local = dir.join(&name);
         let task_dir = dir.clone();

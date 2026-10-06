@@ -1,6 +1,6 @@
-# Rules for working on Bastion
+# Rules for working on Wiz
 
-Bastion is a macOS SSH client in Rust: `crates/core` (backend, no UI) and `crates/app` (GPUI).
+Wiz is a macOS SSH client in Rust: `crates/core` (backend, no UI) and `crates/app` (GPUI).
 These rules apply to every change, by people and by agents. A change is done only when
 the checks at the end pass.
 

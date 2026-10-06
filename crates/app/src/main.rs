@@ -1,4 +1,4 @@
-//! Bastion: app startup, key bindings, menus and the main window.
+//! Wiz: app startup, key bindings, menus and the main window.
 
 mod assets;
 mod dialogs;
@@ -25,7 +25,7 @@ use workspace::{
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
 pub fn version() -> String {
     let v = env!("CARGO_PKG_VERSION");
-    match env!("BASTION_COMMIT") {
+    match env!("WIZ_COMMIT") {
         "" => v.to_string(),
         c => format!("{v} ({c})"),
     }
@@ -104,7 +104,7 @@ fn main() {
                 KeyBinding::new("cmd-k", QuickConnect, None),
             ]);
             cx.set_menus(vec![Menu {
-                name: "Bastion".into(),
+                name: "Wiz".into(),
                 items: vec![
                     MenuItem::action("Settings...", OpenSettings),
                     MenuItem::action("New Host", NewHost),
@@ -127,7 +127,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("Bastion".into()),
+                        title: Some("Wiz".into()),
                         appears_transparent: true,
                         // Native buttons are parked off-screen; the title bar draws its own.
                         traffic_light_position: Some(point(px(-100.), px(-100.))),

@@ -107,8 +107,8 @@ async fn rsync_over_connection() {
     }
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     // SAFETY: set once, before anything reads it.
-    unsafe { std::env::set_var("BASTION_RSH_EXE", root.join("target/debug/bastion")) };
-    let tmp = std::env::temp_dir().join(format!("bastion-rsync-test-{}", std::process::id()));
+    unsafe { std::env::set_var("WIZ_RSH_EXE", root.join("target/debug/wiz")) };
+    let tmp = std::env::temp_dir().join(format!("wiz-rsync-test-{}", std::process::id()));
     let (up, down) = (tmp.join("up"), tmp.join("down"));
     std::fs::create_dir_all(up.join("dir with space")).unwrap();
     std::fs::create_dir_all(&down).unwrap();
@@ -135,7 +135,7 @@ async fn rsync_over_connection() {
     );
     let local = local().await.expect("local rsync");
     assert!(conn.has_command("rsync").await);
-    let remote_dir = format!("/tmp/bastion rsync {}", std::process::id());
+    let remote_dir = format!("/tmp/wiz rsync {}", std::process::id());
     conn.exec(&format!("mkdir -p {}", q(&remote_dir)))
         .await
         .unwrap();

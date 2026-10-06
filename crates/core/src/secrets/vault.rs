@@ -25,6 +25,7 @@ const NONCE_LEN: usize = 12;
 const SALT_LEN: usize = 32;
 /// Encrypted at creation and checked on unlock, so a wrong master password is caught even
 /// when the file holds no secrets yet.
+/// Part of the file format: it keeps the app's old name so existing files still open.
 const CHECK: &[u8] = b"bastion-vault-v1";
 const CHECK_AAD: &[u8] = b"check";
 

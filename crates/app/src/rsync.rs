@@ -1,6 +1,6 @@
 //! rsync for large transfers. Two ways:
 //!
-//! - Built in (`run`): the local rsync is started with `-e "<bastion> --rsync-rsh"`, so its
+//! - Built in (`run`): the local rsync is started with `-e "<wiz> --rsync-rsh"`, so its
 //!   remote shell is this app again in bridge mode (`bridge_main`). The bridge hands rsync's
 //!   remote command and byte stream over a Unix socket to the running app, which runs it on
 //!   the already open SSH connection. No second login, so password hosts work too.
@@ -176,14 +176,14 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 /// Argument that turns the app binary into the rsync remote-shell bridge.
 pub const BRIDGE_ARG: &str = "--rsync-rsh";
-const SOCK_ENV: &str = "BASTION_RSH_SOCK";
+const SOCK_ENV: &str = "WIZ_RSH_SOCK";
 /// Per-transfer secret the bridge must present, so nothing else can use the socket.
-const TOKEN_ENV: &str = "BASTION_RSH_TOKEN";
+const TOKEN_ENV: &str = "WIZ_RSH_TOKEN";
 /// Set when the local rsync passes remote arguments unescaped (openrsync, rsync < 3.2.4):
 /// the bridge then quotes them so paths with spaces survive the remote shell.
-const QUOTE_ENV: &str = "BASTION_RSH_QUOTE";
+const QUOTE_ENV: &str = "WIZ_RSH_QUOTE";
 /// Host name in rsync paths. Never resolved: the bridge ignores it.
-const FAKE_HOST: &str = "bastion";
+const FAKE_HOST: &str = "wiz";
 
 /// The local rsync, if it runs. `quote` says whether it leaves remote arguments unescaped.
 #[derive(Clone, Copy, Debug)]
@@ -239,7 +239,7 @@ pub async fn run(
 ) -> ssh_core::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sock = std::env::temp_dir().join(format!(
-        "bastion-rsync-{}-{}.sock",
+        "wiz-rsync-{}-{}.sock",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
@@ -289,7 +289,7 @@ async fn run_rsync(
     moved: &AtomicU64,
 ) -> ssh_core::Result<()> {
     // Tests run as the test harness, so they point this at the real app binary.
-    let exe = match std::env::var_os("BASTION_RSH_EXE") {
+    let exe = match std::env::var_os("WIZ_RSH_EXE") {
         Some(p) => std::path::PathBuf::from(p),
         None => std::env::current_exe()?,
     };
@@ -443,14 +443,14 @@ async fn pump(
     to.shutdown().await
 }
 
-/// Bridge mode: rsync runs us as `<bastion> --rsync-rsh [ssh options] bastion <command...>`.
+/// Bridge mode: rsync runs us as `<wiz> --rsync-rsh [ssh options] wiz <command...>`.
 /// Plain blocking I/O, no GUI, no runtime.
 pub fn bridge_main() -> ! {
     use std::io::{Read, Write};
     use std::os::unix::net::UnixStream;
 
     let fail = |msg: &str| -> ! {
-        eprintln!("bastion rsync bridge: {msg}");
+        eprintln!("wiz rsync bridge: {msg}");
         std::process::exit(255)
     };
     let args: Vec<String> = std::env::args().skip(2).collect();
@@ -466,7 +466,7 @@ pub fn bridge_main() -> ! {
         .collect::<Vec<_>>()
         .join(" ");
     let Some(path) = std::env::var_os(SOCK_ENV) else {
-        fail("not started by Bastion");
+        fail("not started by Wiz");
     };
     // openrsync hands us non-blocking pipes; plain blocking copies need blocking ones.
     for fd in [0, 1] {
@@ -484,7 +484,7 @@ pub fn bridge_main() -> ! {
         .write_all(format!("{token}\n{command}\n").as_bytes())
         .is_err()
     {
-        fail("could not reach Bastion");
+        fail("could not reach Wiz");
     }
     let mut to_app = sock.try_clone().unwrap_or_else(|e| fail(&e.to_string()));
     std::thread::spawn(move || {
