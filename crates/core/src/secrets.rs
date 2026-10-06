@@ -2,12 +2,20 @@
 //! secrets file (`vault`), chosen by the `secret_store` setting. Everything that reads or
 //! writes a secret goes through here.
 
+pub mod keychain;
+pub mod vault;
+
 use std::sync::{Mutex, RwLock};
 
-use crate::keychain;
-pub use crate::keychain::Kind;
-use crate::vault::Vault;
 use crate::{Error, Result};
+use vault::Vault;
+
+/// Which secret of a host.
+#[derive(Debug, Clone, Copy)]
+pub enum Kind {
+    Password,
+    KeyPassphrase,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Store {

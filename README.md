@@ -15,7 +15,7 @@ A castle-keep for your servers: a fast, macOS-only SSH client in Rust (terminal,
 sh docker/gen-keys.sh && (cd docker && docker compose up -d --build)
 SSHC_DOCKER_TESTS=1 cargo test --workspace
 ```
-Tests for the backend are in `crates/core/tests/`, tests for the app in `crates/app/src/tests/` (see its `mod.rs` for how they attach). Older unit tests still sit at the bottom of some source files.
+Unit tests sit in a `tests.rs` next to the code they test (`views/sftp/tests.rs` for `views/sftp.rs`). Backend tests that use only the public API are in `crates/core/tests/`.
 Password server: `tester`/`hunter2` on :2222. Key-only server on :2223 (mounts docker.sock).
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
 

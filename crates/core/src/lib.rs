@@ -5,12 +5,10 @@ pub mod config;
 pub mod docker;
 pub mod error;
 pub mod hostkey;
-pub mod keychain;
 pub mod secrets;
 pub mod session;
 pub mod sftp;
 pub mod terminal;
-pub mod vault;
 
 pub use error::{Error, Result};
 

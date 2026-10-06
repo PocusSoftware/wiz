@@ -2,7 +2,7 @@
 
 use ssh_core::Error;
 use ssh_core::secrets::Kind;
-use ssh_core::vault::Vault;
+use ssh_core::secrets::vault::Vault;
 
 #[test]
 fn roundtrip_wrong_password_and_tamper() {

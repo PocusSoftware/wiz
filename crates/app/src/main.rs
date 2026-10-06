@@ -1,32 +1,25 @@
-mod anim;
+//! Bastion: app startup, key bindings, menus and the main window.
+
 mod assets;
-mod docker_view;
-mod host_form;
-mod input;
-mod log_view;
+mod dialogs;
 mod prefs;
 mod privacy;
-mod quick_connect;
-mod root;
 mod rsync;
 mod runtime;
-mod settings_view;
-mod sftp_view;
-mod terminal_view;
 #[cfg(test)]
-mod tests;
+mod testing;
 mod theme;
-mod ui;
-mod unlock_view;
-mod window_drag;
+mod views;
+mod widgets;
+mod workspace;
 
 use gpui::{
     App, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds,
     WindowOptions, point, prelude::*, px, size,
 };
 
-use root::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, Root, SplitPane,
+use workspace::{
+    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SplitPane, Workspace,
 };
 
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
@@ -87,11 +80,14 @@ fn main() {
                 &settings,
             );
             mark("after fonts");
-            // Quit goes through Root, which refuses while sessions are open (if set).
+            // Quit goes through Workspace, which refuses while sessions are open (if set).
             cx.on_action(|_: &Quit, cx| {
-                let root = cx.windows().into_iter().find_map(|w| w.downcast::<Root>());
+                let root = cx
+                    .windows()
+                    .into_iter()
+                    .find_map(|w| w.downcast::<Workspace>());
                 match root {
-                    Some(r) if r.update(cx, Root::request_quit).is_ok() => {}
+                    Some(r) if r.update(cx, Workspace::request_quit).is_ok() => {}
                     _ => cx.quit(),
                 }
             });
@@ -138,7 +134,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |_, cx| cx.new(Root::new),
+                |_, cx| cx.new(Workspace::new),
             )
             .unwrap();
             mark("window opened");

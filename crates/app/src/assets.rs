@@ -1,3 +1,5 @@
+//! Icons and brand images compiled into the binary, served to gpui by path.
+
 use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};

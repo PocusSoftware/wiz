@@ -8,7 +8,7 @@ use std::time::Duration;
 use ssh_core::config::{AuthMethod, Host};
 use ssh_core::docker;
 use ssh_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
-use ssh_core::keychain::{self, Kind};
+use ssh_core::secrets::{Kind, keychain};
 use ssh_core::session::{Connection, Credentials, Shell, ShellEvent};
 use ssh_core::{Error, terminal::Terminal};
 

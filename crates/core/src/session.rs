@@ -1,3 +1,5 @@
+//! SSH connections: connect and authenticate, run commands, open shells and SFTP.
+
 use std::sync::Arc;
 use std::time::Duration;
 

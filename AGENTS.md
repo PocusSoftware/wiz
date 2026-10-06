@@ -30,7 +30,7 @@ the checks at the end pass.
 
 - Write the smallest change that does the job. No speculative options, parameters,
   traits, generics or config for cases nobody asked for.
-- Before writing a helper, search for an existing one (`privacy`, `ui`, `config`,
+- Before writing a helper, search for an existing one (`privacy`, `widgets`, `config`,
   `secrets`, `runtime`). Two copies of the same logic means one should go.
 - No wrappers that only forward, no `.clone()` of something that is moved anyway, no
   `collect()` just to iterate again (several of these are enforced by lints).
@@ -58,24 +58,36 @@ the checks at the end pass.
   boolean flags or strings for states. `Option` instead of sentinel values.
 - **Imports:** grouped `std`, external crates, then `crate::`, each block sorted
   (rustfmt does this). No glob imports except `gpui::prelude::*`, `crate::theme::*`, and
-  `use super::*` inside `root/` submodules and tests.
+  `use super::*` in a module's own submodules (`workspace/`, `views/sftp/`, ...) and tests.
 - **Docs:** every file starts with a `//!` line saying what it is for. Public items and
   non-obvious private ones get `///`.
-- **Size:** split a file by concern once it passes roughly 500 to 800 lines (see
-  `crates/app/src/root/`). Functions over about 80 lines usually hide a helper.
+- **Modules:** a module with submodules is `foo.rs` next to a `foo/` folder (no `mod.rs`).
+  `mod` lines come first, then `use`. Re-export (`pub use`) to keep public paths short,
+  as `ssh_core::config` does.
+- **Size:** split a file by concern once it passes roughly 500 lines (see
+  `crates/app/src/views/sftp/`). Functions over about 80 lines usually hide a helper.
 
 ## 4. Project conventions
 
 - `crates/core` must build without the UI. GPUI code lives only in `crates/app`.
+- **Layout:**
+  - `crates/core/src`: `config/` (hosts, settings, quick connect targets), `secrets/`
+    (Keychain, encrypted file), `session`, `hostkey`, `sftp`, `docker`, `terminal`.
+  - `crates/app/src`: `workspace/` (the window: tabs, splits, connecting, dialogs on top),
+    `views/` (what a tab or page shows), `dialogs/` (forms shown over the window),
+    `widgets/` (buttons, text input, animations), plus `prefs`, `privacy`, `rsync`,
+    `runtime`, `theme`, `assets` at the top.
 - **New setting:** add an `Option` field to `Settings`, a default in the `getters!`
-  macro, a row in `settings_view.rs`, and a line in the README settings table.
-- **`root/`:** shared types live in `root/mod.rs`, so every submodule can reach their
-  fields. Behavior lives in the submodule for its concern. Methods used across
-  submodules are `pub(super)`, everything else stays private.
-- **Tests:** backend tests go in `crates/core/tests/`. App tests go in
-  `crates/app/src/tests/`, attached to the code they test with `#[path]` (see
-  `tests/mod.rs`). Tests that change process-wide state hold `tests::GLOBALS`. Tests that
-  need the SSH servers check `SSHC_DOCKER_TESTS`.
+  macro, a row in `views/settings.rs`, and a line in the README settings table.
+- **Split modules** (`workspace`, `views/sftp`, `views/terminal`): shared types live in
+  the parent file, so every submodule can reach their fields. Behavior lives in the
+  submodule for its concern. Methods used across submodules are `pub(super)`,
+  everything else stays private.
+- **Tests:** unit tests live in a `tests.rs` next to the code, declared with
+  `#[cfg(test)] mod tests;` (for `foo.rs` that is `foo/tests.rs`), never inline in the
+  source file. Backend tests that only need the public API go in `crates/core/tests/`.
+  Tests that change process-wide state hold `testing::GLOBALS`. Tests that need the SSH
+  servers check `SSHC_DOCKER_TESTS`.
 - **Text:** UI text uses sentence case and plain words. No em dashes anywhere (code,
   comments, UI, docs).
 - **Commits:** a single short summary line, a body only for a non-obvious reason. No
