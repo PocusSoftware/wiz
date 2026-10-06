@@ -1,4 +1,5 @@
-//! Add/edit host dialog. Secrets go to the keychain, never to the config file.
+//! Add/edit host dialog. Secrets go to the secret store (Keychain or the encrypted file),
+//! never to the config file.
 
 use std::path::PathBuf;
 
@@ -7,7 +8,7 @@ use gpui::{
     PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Host};
-use ssh_core::keychain::{self, Kind};
+use ssh_core::secrets::{self, Kind};
 
 use crate::input::{Hide, TextInput};
 use crate::theme::*;
@@ -204,7 +205,7 @@ impl HostForm {
         if self.taken.contains(&acct) {
             return Err("Another saved host already uses this user, host and port.".into());
         }
-        // Every check above runs before the Keychain is touched.
+        // Every check above runs before the secret store is touched.
         let (pw, pass) = (
             self.password.read(cx).value().to_string(),
             self.passphrase.read(cx).value().to_string(),
@@ -215,27 +216,30 @@ impl HostForm {
             let oa = old.account();
             if oa != acct {
                 for kind in [Kind::Password, Kind::KeyPassphrase] {
-                    if let Some(s) = keychain::get(kind, &oa).map_err(|e| e.to_string())? {
-                        keychain::set(kind, &acct, &s).map_err(|e| e.to_string())?;
+                    if let Some(s) = secrets::get(kind, &oa).map_err(|e| e.to_string())? {
+                        secrets::set(kind, &acct, &s).map_err(|e| e.to_string())?;
                     }
-                    keychain::delete(kind, &oa).map_err(|e| e.to_string())?;
+                    secrets::delete(kind, &oa).map_err(|e| e.to_string())?;
                 }
             }
         }
         if self.key_mode {
-            keychain::delete(Kind::Password, &acct).map_err(|e| e.to_string())?;
+            secrets::delete(Kind::Password, &acct).map_err(|e| e.to_string())?;
             if !pass.is_empty() {
-                keychain::set(Kind::KeyPassphrase, &acct, &pass).map_err(|e| e.to_string())?;
+                secrets::set(Kind::KeyPassphrase, &acct, &pass).map_err(|e| e.to_string())?;
             }
         } else {
-            keychain::delete(Kind::KeyPassphrase, &acct).map_err(|e| e.to_string())?;
+            secrets::delete(Kind::KeyPassphrase, &acct).map_err(|e| e.to_string())?;
             if !pw.is_empty() {
-                keychain::set(Kind::Password, &acct, &pw).map_err(|e| e.to_string())?;
-            } else if keychain::get(Kind::Password, &acct)
+                secrets::set(Kind::Password, &acct, &pw).map_err(|e| e.to_string())?;
+            } else if secrets::get(Kind::Password, &acct)
                 .map_err(|e| e.to_string())?
                 .is_none()
             {
-                return Err("Enter a password (it is stored in the Keychain).".into());
+                return Err(format!(
+                    "Enter a password (it is stored in the {}).",
+                    secrets::store().label()
+                ));
             }
         }
         Ok(new)
@@ -352,7 +356,10 @@ impl Render for HostForm {
                     .child(tab("auth-key", "SSH key", key_mode, true)),
             )
             .when(!key_mode, |d| {
-                d.child(field("Password (stored in Keychain)", &self.password))
+                d.child(field(
+                    &format!("Password (stored in the {})", secrets::store().label()),
+                    &self.password,
+                ))
             })
             .when(key_mode, |d| {
                 d.child(
@@ -367,7 +374,10 @@ impl Render for HostForm {
                         ),
                 )
                 .child(field(
-                    "Key passphrase (stored in Keychain)",
+                    &format!(
+                        "Key passphrase (stored in the {})",
+                        secrets::store().label()
+                    ),
                     &self.passphrase,
                 ))
             })

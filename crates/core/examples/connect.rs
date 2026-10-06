@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let creds = match creds {
         Some(c) => c,
-        None => Credentials::from_keychain(&host)?,
+        None => Credentials::from_store(&host)?,
     };
     let verifier = HostKeyVerifier {
         known_hosts: HostKeyVerifier::default_path()?,

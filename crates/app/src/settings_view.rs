@@ -5,15 +5,21 @@ use gpui::{
     Render, SharedString, Window, div, prelude::*, px,
 };
 use ssh_core::config::Settings;
+use ssh_core::secrets::{self, Store};
 
 use crate::input::{InputEvent, TextInput};
 use crate::prefs;
 use crate::theme::*;
 use crate::ui::{button, checkbox, icon_button, primary_button};
 
-/// Emitted after any change so the rest of the app can refresh.
+/// Emitted after any change so the rest of the app can refresh. The secret store actions
+/// need the master password dialog and the host list, so the root view handles them.
 pub enum SettingsEvent {
     Changed,
+    SwitchStore(Store),
+    Unlock,
+    Lock,
+    ChangeMaster,
 }
 
 impl EventEmitter<SettingsEvent> for SettingsView {}
@@ -312,6 +318,59 @@ impl SettingsView {
             .child(chips)
     }
 
+    /// Keychain or encrypted file, plus lock state and master password for the file.
+    fn credentials(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let store = secrets::store();
+        let pick = |id: &'static str, text: &str, s: Store| {
+            if store == s {
+                primary_button(id, text)
+            } else {
+                button(id, text).on_click(
+                    cx.listener(move |_, _, _, cx| cx.emit(SettingsEvent::SwitchStore(s))),
+                )
+            }
+        };
+        let mut d = div().flex().flex_col().child(Self::row(
+            "Store passwords in",
+            "Keychain uses macOS. Encrypted file keeps them in secrets.toml, sealed with AES-256 under a key from your master password (Argon2id). Switching moves every saved secret across.",
+            div()
+                .flex()
+                .gap_1()
+                .child(pick("s-keychain", "Keychain", Store::Keychain))
+                .child(pick("s-file", "Encrypted file", Store::File)),
+        ));
+        if store == Store::File {
+            let unlocked = secrets::is_unlocked();
+            let mut controls = div().flex().gap_1();
+            if unlocked {
+                controls =
+                    controls
+                        .child(button("s-change", "Change password").on_click(
+                            cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::ChangeMaster)),
+                        ))
+                        .child(
+                            button("s-lock", "Lock now")
+                                .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::Lock))),
+                        );
+            } else {
+                controls = controls.child(
+                    primary_button("s-unlock", "Unlock")
+                        .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::Unlock))),
+                );
+            }
+            d = d.child(Self::row(
+                if unlocked {
+                    "Secrets file is unlocked"
+                } else {
+                    "Secrets file is locked"
+                },
+                "Unlocked until Bastion quits or you lock it. Connecting while locked asks for the master password.",
+                controls,
+            ));
+        }
+        d
+    }
+
     fn text(&self, label: &str, desc: &str, input: &Entity<TextInput>) -> gpui::Div {
         Self::row(label, desc, div().w(px(320.)).child(input.clone()))
     }
@@ -359,6 +418,9 @@ impl Render for SettingsView {
                     .child(self.toggle("p-files", "Hide secret files", "Leave files matching the patterns below out of file lists.", s.hide_secret_files(), |s, v| s.hide_secret_files = Some(v), cx))
                     .child(self.text("Secret file patterns", "Comma separated. * matches any run, ? one character.", &self.patterns))
                     .child(self.text("Extra words to mask", "Comma separated, 3+ letters, case-insensitive (project or client names).", &self.extra_mask))
+                    // ---------- Credentials ----------
+                    .child(Self::section("Credentials"))
+                    .child(self.credentials(cx))
                     // ---------- Appearance ----------
                     .child(Self::section("Appearance"))
                     .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
@@ -403,7 +465,13 @@ impl Render for SettingsView {
                             .gap_3()
                             .child(button("reset", "Reset to defaults").on_click(cx.listener(
                                 |t, _, _, cx| {
-                                    t.apply(cx, |s| *s = Settings::default());
+                                    // The secret store stays: switching it means moving secrets.
+                                    t.apply(cx, |s| {
+                                        *s = Settings {
+                                            secret_store: s.secret_store.take(),
+                                            ..Default::default()
+                                        }
+                                    });
                                     t.load_inputs(cx);
                                 },
                             )))

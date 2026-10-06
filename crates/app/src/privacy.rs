@@ -577,6 +577,9 @@ mod tests {
     // The statics are shared, so everything runs in one test.
     #[test]
     fn privacy_engine() {
+        let _g = crate::tests::GLOBALS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Off: nothing changes.
         configure(&Settings::default());
         assert_eq!(redact("tester@10.0.0.5"), "tester@10.0.0.5");

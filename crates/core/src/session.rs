@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 
 use crate::config::{AuthMethod, Host};
 use crate::hostkey::HostKeyVerifier;
-use crate::keychain::{self, Kind};
+use crate::secrets::{self, Kind};
 use crate::{Error, Result};
 
 #[derive(Clone)]
@@ -21,16 +21,16 @@ pub enum Credentials {
 }
 
 impl Credentials {
-    /// Load secrets for `host` from the keychain.
-    pub fn from_keychain(host: &Host) -> Result<Self> {
+    /// Load secrets for `host` from the configured store (Keychain or secrets file).
+    pub fn from_store(host: &Host) -> Result<Self> {
         let account = host.account();
         match &host.auth {
-            AuthMethod::Password => keychain::get(Kind::Password, &account)?
+            AuthMethod::Password => secrets::get(Kind::Password, &account)?
                 .map(Credentials::Password)
                 .ok_or_else(|| Error::NoCredentials(format!("no password for {account}"))),
             AuthMethod::Key { path } => Ok(Credentials::Key {
                 path: path.clone(),
-                passphrase: keychain::get(Kind::KeyPassphrase, &account)?,
+                passphrase: secrets::get(Kind::KeyPassphrase, &account)?,
             }),
         }
     }

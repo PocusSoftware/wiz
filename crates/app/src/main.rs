@@ -6,14 +6,18 @@ mod input;
 mod log_view;
 mod prefs;
 mod privacy;
+mod quick_connect;
 mod root;
 mod rsync;
 mod runtime;
 mod settings_view;
 mod sftp_view;
 mod terminal_view;
+#[cfg(test)]
+mod tests;
 mod theme;
 mod ui;
+mod unlock_view;
 mod window_drag;
 
 use gpui::{
@@ -21,7 +25,9 @@ use gpui::{
     WindowOptions, point, prelude::*, px, size,
 };
 
-use root::{CloseTab, NewHost, NextTab, OpenSettings, PrevTab, Quit, Root, SplitPane};
+use root::{
+    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, Root, SplitPane,
+};
 
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
 pub fn version() -> String {
@@ -99,12 +105,14 @@ fn main() {
                 KeyBinding::new("cmd-n", NewHost, None),
                 KeyBinding::new("cmd-,", OpenSettings, None),
                 KeyBinding::new("cmd-d", SplitPane, None),
+                KeyBinding::new("cmd-k", QuickConnect, None),
             ]);
             cx.set_menus(vec![Menu {
                 name: "Bastion".into(),
                 items: vec![
                     MenuItem::action("Settings...", OpenSettings),
                     MenuItem::action("New Host", NewHost),
+                    MenuItem::action("Quick Connect...", QuickConnect),
                     MenuItem::action("Split Terminal", SplitPane),
                     MenuItem::action("Close Tab", CloseTab),
                     MenuItem::separator(),

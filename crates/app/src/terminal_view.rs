@@ -431,7 +431,7 @@ impl TerminalView {
                     self.step_match(!shift, cx);
                     cx.stop_propagation();
                 }
-                // Type the saved keychain password (for sudo and friends).
+                // Type the saved password (for sudo and friends).
                 ("p", true) => {
                     if let Some(pw) = self.saved_password.clone() {
                         self.write(format!("{pw}\r").into_bytes(), cx);

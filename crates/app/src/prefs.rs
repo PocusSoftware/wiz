@@ -1,5 +1,5 @@
 //! Process-wide settings: loaded once, changed through `update`, which applies the effects
-//! (privacy engine) and saves `settings.toml`.
+//! (privacy engine, secret store) and saves `settings.toml`.
 
 use std::sync::{Arc, RwLock};
 
@@ -9,8 +9,13 @@ use crate::privacy;
 
 static PREFS: RwLock<Option<Arc<Settings>>> = RwLock::new(None);
 
+fn apply(s: &Settings) {
+    privacy::configure(s);
+    ssh_core::secrets::set_store(ssh_core::secrets::Store::from_setting(&s.secret_store()));
+}
+
 pub fn init(s: Settings) {
-    privacy::configure(&s);
+    apply(&s);
     *PREFS.write().unwrap() = Some(Arc::new(s));
 }
 
@@ -24,7 +29,7 @@ pub fn get() -> Arc<Settings> {
 pub fn update(f: impl FnOnce(&mut Settings)) -> ssh_core::Result<()> {
     let mut s = (*get()).clone();
     f(&mut s);
-    privacy::configure(&s);
+    apply(&s);
     *PREFS.write().unwrap() = Some(Arc::new(s.clone()));
     s.save()
 }

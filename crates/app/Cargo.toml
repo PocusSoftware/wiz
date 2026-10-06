@@ -23,3 +23,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 raw-window-handle = "0.6"
 ssh-core = { path = "../core" }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }
+
+[dev-dependencies]
+gpui = { version = "0.2.2", features = ["test-support"] }
+tempfile = "3.27.0"

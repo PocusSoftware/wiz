@@ -1,4 +1,4 @@
-//! Backend for the ssh client: config, keychain, SSH sessions, Docker, terminal state.
+//! Backend for the ssh client: config, secrets (Keychain or encrypted file), SSH sessions, Docker, terminal state.
 //! No UI dependency, builds with Command Line Tools only.
 
 pub mod config;
@@ -6,9 +6,11 @@ pub mod docker;
 pub mod error;
 pub mod hostkey;
 pub mod keychain;
+pub mod secrets;
 pub mod session;
 pub mod sftp;
 pub mod terminal;
+pub mod vault;
 
 pub use error::{Error, Result};
 

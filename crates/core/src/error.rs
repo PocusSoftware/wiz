@@ -40,6 +40,12 @@ pub enum Error {
     Cancelled,
     #[error("connection timed out after {0} s")]
     Timeout(u32),
+    #[error("the secrets file is locked, enter the master password")]
+    Locked,
+    #[error("wrong master password")]
+    WrongMasterPassword,
+    #[error("secrets file: {0}")]
+    Vault(String),
     #[error("remote command failed: {0}")]
     Remote(String),
 }
