@@ -13,8 +13,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Tests run in release too, so dependencies are compiled once for both steps.
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --release
       - name: Build release
         run: cargo build --release -p ssh-app
       - name: Package
