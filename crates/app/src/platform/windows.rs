@@ -10,7 +10,9 @@ use gpui::{
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
-use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, PostMessageW, WM_NCLBUTTONDOWN};
+use windows::Win32::UI::WindowsAndMessaging::{
+    HTCAPTION, IsZoomed, PostMessageW, SW_MAXIMIZE, SW_RESTORE, ShowWindowAsync, WM_NCLBUTTONDOWN,
+};
 
 use crate::workspace::{
     CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, SplitPane, Workspace,
@@ -108,7 +110,7 @@ pub fn title_bar<E: InteractiveElement>(el: E) -> E {
     el.window_control_area(WindowControlArea::Drag)
         .on_mouse_down(MouseButton::Left, |ev: &MouseDownEvent, window, _| {
             if ev.click_count >= 2 {
-                window.zoom_window();
+                toggle_maximize(window);
             } else {
                 drag(window);
             }
@@ -123,18 +125,45 @@ pub fn window_button(
     action: impl Fn(&mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
     el.window_control_area(area)
-        .on_click(move |_, w, cx| action(w, cx))
+        .on_click(move |_, w, cx| match area {
+            WindowControlArea::Max => toggle_maximize(w),
+            _ => action(w, cx),
+        })
+}
+
+/// gpui's `zoom_window` only maximizes on Windows, so a second press never restores.
+fn toggle_maximize(window: &Window) {
+    let Some(hwnd) = hwnd(window) else {
+        return;
+    };
+    // SAFETY: the handle comes from the live window, and both calls only take it by value.
+    unsafe {
+        let _ = ShowWindowAsync(
+            hwnd,
+            if IsZoomed(hwnd).as_bool() {
+                SW_RESTORE
+            } else {
+                SW_MAXIMIZE
+            },
+        );
+    }
+}
+
+fn hwnd(window: &Window) -> Option<HWND> {
+    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+        return None;
+    };
+    let RawWindowHandle::Win32(h) = handle.as_raw() else {
+        return None;
+    };
+    Some(HWND(h.hwnd.get() as *mut std::ffi::c_void))
 }
 
 /// Hand the press to Windows as a title bar press, which starts its move loop.
 fn drag(window: &Window) {
-    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+    let Some(hwnd) = hwnd(window) else {
         return;
     };
-    let RawWindowHandle::Win32(h) = handle.as_raw() else {
-        return;
-    };
-    let hwnd = HWND(h.hwnd.get() as *mut std::ffi::c_void);
     // SAFETY: the handle comes from the live window, and both calls only take it by value.
     unsafe {
         let _ = ReleaseCapture();
