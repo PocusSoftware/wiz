@@ -57,6 +57,7 @@ pub struct RemoteRef {
     pub host: Host,
     pub sftp: Arc<Sftp>,
     /// The SSH connection behind `sftp`, for running rsync over it.
+    #[cfg_attr(not(unix), expect(dead_code, reason = "only the rsync runner uses it"))]
     pub conn: Arc<ssh_core::session::Connection>,
 }
 

@@ -258,20 +258,20 @@ impl Vault {
         self.save()
     }
 
-    /// Owner-only file, written to a temp file and renamed so a crash never truncates it.
+    /// Owner-only file (mode 0600 on unix; on Windows the per-user config folder already
+    /// keeps other users out), written to a temp file and renamed so a crash never
+    /// truncates it.
     fn save(&self) -> Result<()> {
-        use std::os::unix::fs::OpenOptionsExt;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let s = toml::to_string_pretty(&self.file).map_err(|e| Error::Vault(e.to_string()))?;
         let tmp = self.path.with_extension("toml.tmp");
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)?;
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+        let mut f = opts.open(&tmp)?;
         f.write_all(s.as_bytes())?;
         f.sync_all()?;
         std::fs::rename(tmp, &self.path)?;

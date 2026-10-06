@@ -8,6 +8,7 @@ use std::time::Duration;
 use ssh_core::config::{AuthMethod, Host};
 use ssh_core::docker;
 use ssh_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
+#[cfg(target_os = "macos")]
 use ssh_core::secrets::{Kind, keychain};
 use ssh_core::session::{Connection, Credentials, Shell, ShellEvent};
 use ssh_core::{Error, terminal::Terminal};
@@ -241,6 +242,7 @@ async fn local_docker_list() {
     assert!(list.iter().any(|c| c.name == "sshc-key"));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn keychain_roundtrip() {
     gate!();
@@ -438,6 +440,8 @@ async fn sftp_server_to_server_and_local_copy() {
     }
 }
 
+// Makes local symlinks, which need extra rights on Windows.
+#[cfg(unix)]
 #[tokio::test]
 async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
     use ssh_core::sftp::{self, Progress};

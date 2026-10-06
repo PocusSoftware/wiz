@@ -1,0 +1,193 @@
+//! macOS: Cmd shortcuts, the Dock icon, AppKit window dragging, `open` for files.
+
+use std::path::Path;
+
+use gpui::{
+    App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
+    Stateful, StatefulInteractiveElement, TitlebarOptions, Window, WindowControlArea, point, px,
+};
+use objc2::MainThreadMarker;
+use objc2_app_kit::{NSApplication, NSView};
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+use crate::workspace::{
+    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SplitPane, Workspace,
+};
+
+/// Fallback fonts when none of the preferred ones is installed.
+pub const UI_FONT: &str = ".SystemUIFont";
+pub const MONO_FONT: &str = "Menlo";
+
+/// Large transfers between this Mac and a server can run through rsync.
+pub const RSYNC: bool = true;
+
+/// How quitting is done, for settings text.
+pub const QUIT_KEYS: &str = "⌘Q";
+
+pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
+
+pub fn key_bindings() -> Vec<KeyBinding> {
+    vec![
+        KeyBinding::new("cmd-q", Quit, None),
+        KeyBinding::new("cmd-w", CloseTab, None),
+        KeyBinding::new("cmd-shift-]", NextTab, None),
+        KeyBinding::new("cmd-shift-[", PrevTab, None),
+        KeyBinding::new("ctrl-tab", NextTab, None),
+        KeyBinding::new("ctrl-shift-tab", PrevTab, None),
+        KeyBinding::new("cmd-n", NewHost, None),
+        KeyBinding::new("cmd-,", OpenSettings, None),
+        KeyBinding::new("cmd-d", SplitPane, None),
+        KeyBinding::new("cmd-k", QuickConnect, None),
+    ]
+}
+
+/// Label of an app-wide shortcut (`key_bindings`), like "⌘D".
+pub fn app_shortcut(key: &str) -> String {
+    format!("⌘{key}")
+}
+
+/// Label of a shortcut inside a view (files, logs), like "⌘R" or "⇧⌘N".
+pub fn view_shortcut(shift: bool, key: &str) -> String {
+    format!("{}⌘{key}", if shift { "⇧" } else { "" })
+}
+
+/// Terminal shortcuts (copy, paste, find, ...) use Cmd, which never reaches the shell.
+/// `Some(shift)` when the chord is held, `shift` picking the variant (previous match,
+/// type password).
+pub fn terminal_chord(m: Modifiers) -> Option<bool> {
+    m.platform.then_some(m.shift)
+}
+
+/// Whether a key press with these modifiers types its character into a text field (no Cmd
+/// or Ctrl shortcut).
+pub fn types_char(m: Modifiers) -> bool {
+    !m.platform && !m.control
+}
+
+/// macOS has no AltGr: Option composes characters and is handled as Alt.
+pub fn alt_gr(_: Modifiers, _: &str, _: Option<&str>) -> bool {
+    false
+}
+
+/// Cmd-click opens a link in the terminal.
+pub fn link_click(m: Modifiers) -> bool {
+    m.platform
+}
+
+/// Show the castle in the Dock even when running unbundled (cargo run).
+pub fn on_launch() {
+    use objc2::AnyThread;
+    use objc2_app_kit::NSImage;
+    use objc2_foundation::NSData;
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let data = NSData::with_bytes(include_bytes!("../../assets/brand/icon-512.png"));
+    if let Some(img) = NSImage::initWithData(NSImage::alloc(), &data) {
+        // SAFETY: called on the main thread with a valid image.
+        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&img)) };
+    }
+}
+
+pub fn titlebar() -> TitlebarOptions {
+    TitlebarOptions {
+        title: Some("Wiz".into()),
+        appears_transparent: true,
+        // Native buttons are parked off-screen; the title bar draws its own.
+        traffic_light_position: Some(point(px(-100.), px(-100.))),
+    }
+}
+
+/// Closing the window already goes through the title bar's own button and Quit.
+pub fn on_window_open(_: &mut Window, _: &Entity<Workspace>, _: &mut App) {}
+
+/// Make an element a title bar: drag moves the window, double-click zooms it. GPUI's
+/// macOS backend has no hook for this, so hand the mouse-down event to AppKit.
+pub fn title_bar<E: InteractiveElement>(el: E) -> E {
+    el.on_mouse_down(MouseButton::Left, |ev: &MouseDownEvent, window, _| {
+        if ev.click_count >= 2 {
+            window.titlebar_double_click();
+        } else {
+            drag(window);
+        }
+    })
+}
+
+/// The title bar buttons work through their click handlers.
+pub fn window_button(
+    el: Stateful<Div>,
+    _: WindowControlArea,
+    action: impl Fn(&mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    el.on_click(move |_, w, cx| action(w, cx))
+}
+
+fn drag(window: &Window) {
+    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+        return;
+    };
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else {
+        return;
+    };
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    // SAFETY: the handle comes from the live window, and this runs on the main thread.
+    let view: &NSView = unsafe { h.ns_view.cast().as_ref() };
+    let Some(ns_window) = view.window() else {
+        return;
+    };
+    if let Some(event) = NSApplication::sharedApplication(mtm).currentEvent() {
+        ns_window.performWindowDragWithEvent(&event);
+    }
+}
+
+/// Editors offered as quick picks when installed.
+const KNOWN_EDITORS: &[&str] = &[
+    "Visual Studio Code",
+    "Cursor",
+    "Zed",
+    "Sublime Text",
+    "BBEdit",
+    "Nova",
+    "TextMate",
+    "CotEditor",
+    "Windsurf",
+    "VSCodium",
+    "Xcode",
+    "TextEdit",
+];
+
+/// The editor setting offers quick picks (the system default plus `installed_editors`).
+pub const EDITOR_PICKS: bool = true;
+
+/// Known editors found in the Applications folders.
+pub fn installed_editors() -> Vec<&'static str> {
+    let user = dirs::home_dir().map(|h| h.join("Applications"));
+    KNOWN_EDITORS
+        .iter()
+        .copied()
+        .filter(|n| {
+            let app = format!("{n}.app");
+            Path::new("/Applications").join(&app).exists()
+                || user.as_ref().is_some_and(|u| u.join(&app).exists())
+        })
+        .collect()
+}
+
+/// Open a local file in `app`, or without one in the default text editor (`-t`), so a
+/// server file named like an app or script is never launched.
+pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
+    let mut cmd = std::process::Command::new("open");
+    if app.is_empty() {
+        cmd.arg("-t");
+    } else {
+        cmd.arg("-a").arg(app);
+    }
+    cmd.arg(path).spawn().map(drop)
+}
+
+/// The logged-in user, masked by "hide sensitive information".
+pub fn local_user() -> Option<String> {
+    std::env::var("USER").ok()
+}

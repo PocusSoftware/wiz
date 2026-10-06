@@ -1,5 +1,5 @@
 //! Container logs: opens at the newest entry, optional auto-scroll that refreshes every
-//! two seconds, and text selection (drag, double-click word, triple-click line, ⌘A, ⌘C).
+//! two seconds, and text selection (drag, double-click word, triple-click line, select all and copy).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -216,7 +216,7 @@ impl LogView {
 
     fn on_key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
         let k = &ev.keystroke;
-        if !k.modifiers.platform {
+        if !k.modifiers.secondary() {
             cx.propagate();
             return;
         }

@@ -127,27 +127,30 @@ async fn secret_store_flow() {
     );
 
     // Move file -> Keychain and back, under a throwaway account.
-    let temp = format!("migrate-{}@localhost:1", std::process::id());
-    secrets::set(Kind::Password, &temp, "moved").unwrap();
-    let accounts = vec![temp.clone()];
-    assert_eq!(
-        secrets::migrate(&accounts, Store::File, Store::Keychain).unwrap(),
-        1
-    );
-    assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
-    secrets::set_store(Store::Keychain);
-    assert_eq!(
-        secrets::get(Kind::Password, &temp).unwrap().as_deref(),
-        Some("moved")
-    );
-    assert_eq!(
-        secrets::migrate(&accounts, Store::Keychain, Store::File).unwrap(),
-        1
-    );
-    assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
-    secrets::set_store(Store::File);
-    assert_eq!(
-        secrets::get(Kind::Password, &temp).unwrap().as_deref(),
-        Some("moved")
-    );
+    #[cfg(target_os = "macos")]
+    {
+        let temp = format!("migrate-{}@localhost:1", std::process::id());
+        secrets::set(Kind::Password, &temp, "moved").unwrap();
+        let accounts = vec![temp.clone()];
+        assert_eq!(
+            secrets::migrate(&accounts, Store::File, Store::Keychain).unwrap(),
+            1
+        );
+        assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
+        secrets::set_store(Store::Keychain);
+        assert_eq!(
+            secrets::get(Kind::Password, &temp).unwrap().as_deref(),
+            Some("moved")
+        );
+        assert_eq!(
+            secrets::migrate(&accounts, Store::Keychain, Store::File).unwrap(),
+            1
+        );
+        assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
+        secrets::set_store(Store::File);
+        assert_eq!(
+            secrets::get(Kind::Password, &temp).unwrap().as_deref(),
+            Some("moved")
+        );
+    }
 }

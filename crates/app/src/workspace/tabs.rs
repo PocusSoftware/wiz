@@ -1,5 +1,7 @@
 //! The tab strip (also the title bar), opening, selecting and closing tabs, and quitting.
 
+use gpui::WindowControlArea::{self, Close, Max, Min};
+
 use super::*;
 
 impl Workspace {
@@ -88,7 +90,7 @@ impl Workspace {
         }
     }
 
-    /// ⌘W: close the focused pane of a split, otherwise the whole tab.
+    /// Close Tab: close the focused pane of a split, otherwise the whole tab.
     pub(super) fn close_current(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let ix = self.active;
         let pane = match self.tabs.get(ix) {
@@ -270,12 +272,17 @@ impl Workspace {
                     )
                 })
                 .child(
-                    icon_button(("tab-close", ix), "x", "Close (⌘W)", MUTED)
-                        .size(px(16.))
-                        .on_click(cx.listener(move |t, _, w, cx| {
-                            cx.stop_propagation();
-                            t.request_close(ix, None, w, cx)
-                        })),
+                    icon_button(
+                        ("tab-close", ix),
+                        "x",
+                        format!("Close ({})", crate::platform::app_shortcut("W")),
+                        MUTED,
+                    )
+                    .size(px(16.))
+                    .on_click(cx.listener(move |t, _, w, cx| {
+                        cx.stop_propagation();
+                        t.request_close(ix, None, w, cx)
+                    })),
                 )
         });
         div()
@@ -334,7 +341,7 @@ impl Workspace {
                     .track_scroll(&self.tab_scroll)
                     .children(tabs),
             )
-            .child(crate::widgets::window_drag::title_bar(
+            .child(crate::platform::title_bar(
                 div().id("title-drag").flex_1().min_w(px(32.)).h_full(),
             ))
             .child(
@@ -352,14 +359,27 @@ impl Workspace {
                             ),
                         |d| {
                             d.child(
-                                icon_button("split-btn", "columns", "Split terminal (⌘D)", MUTED)
-                                    .on_click(cx.listener(|t, _, w, cx| t.split(w, cx))),
+                                icon_button(
+                                    "split-btn",
+                                    "columns",
+                                    format!(
+                                        "Split terminal ({})",
+                                        crate::platform::app_shortcut("D")
+                                    ),
+                                    MUTED,
+                                )
+                                .on_click(cx.listener(|t, _, w, cx| t.split(w, cx))),
                             )
                         },
                     )
                     .child(
-                        icon_button("quick-btn", "arrow-right", "Quick connect (⌘K)", MUTED)
-                            .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
+                        icon_button(
+                            "quick-btn",
+                            "arrow-right",
+                            format!("Quick connect ({})", crate::platform::app_shortcut("K")),
+                            MUTED,
+                        )
+                        .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
                     )
                     .child(
                         icon_button(
@@ -374,7 +394,7 @@ impl Workspace {
                         icon_button(
                             "settings-btn",
                             "sliders",
-                            "Settings (⌘,)",
+                            format!("Settings ({})", crate::platform::app_shortcut(",")),
                             if self.page == Page::Settings {
                                 ACCENT_TEXT
                             } else {
@@ -391,14 +411,14 @@ impl Workspace {
                     .h_full()
                     .border_l_1()
                     .border_color(c(BORDER_VARIANT))
-                    .child(win_button("win-min", "minus", ACTIVE, |w, _| {
+                    .child(win_button("win-min", "minus", ACTIVE, Min, |w, _| {
                         w.minimize_window()
                     }))
-                    .child(win_button("win-max", "maximize", ACTIVE, |w, _| {
+                    .child(win_button("win-max", "maximize", ACTIVE, Max, |w, _| {
                         w.zoom_window()
                     }))
                     // Closing the window quits, so it goes through the same check.
-                    .child(win_button("win-close", "x", RED, |w, cx| {
+                    .child(win_button("win-close", "x", RED, Close, |w, cx| {
                         w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
                     })),
             )
@@ -438,9 +458,10 @@ fn win_button(
     id: &'static str,
     name: &str,
     hover: u32,
+    area: WindowControlArea,
     action: impl Fn(&mut Window, &mut App) + 'static,
 ) -> gpui::Stateful<gpui::Div> {
-    div()
+    let el = div()
         .id(id)
         .w(px(40.))
         .h_full()
@@ -449,6 +470,6 @@ fn win_button(
         .justify_center()
         .cursor_pointer()
         .hover(move |s| s.bg(c(hover)))
-        .on_click(move |_, w, cx| action(w, cx))
-        .child(icon(name, 14., TEXT))
+        .child(icon(name, 14., TEXT));
+    crate::platform::window_button(el, area, action)
 }

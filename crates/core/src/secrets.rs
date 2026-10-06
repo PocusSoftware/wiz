@@ -1,7 +1,8 @@
-//! Where passwords and key passphrases live: the macOS Keychain (default) or the encrypted
-//! secrets file (`vault`), chosen by the `secret_store` setting. Everything that reads or
-//! writes a secret goes through here.
+//! Where passwords and key passphrases live: the macOS Keychain (default there) or the
+//! encrypted secrets file (`vault`), chosen by the `secret_store` setting. Other systems
+//! have only the secrets file. Everything that reads or writes a secret goes through here.
 
+#[cfg(target_os = "macos")]
 pub mod keychain;
 pub mod vault;
 
@@ -19,22 +20,35 @@ pub enum Kind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Store {
+    #[cfg(target_os = "macos")]
     Keychain,
     File,
 }
 
 impl Store {
+    /// The store a `secret_store` value names. Without a Keychain it is always the file.
     pub fn from_setting(s: &str) -> Self {
-        if s == "file" {
-            Store::File
-        } else {
-            Store::Keychain
+        #[cfg(target_os = "macos")]
+        if s != "file" {
+            return Store::Keychain;
+        }
+        let _ = s;
+        Store::File
+    }
+
+    /// Name on its own, for a choice between stores.
+    pub fn name(self) -> &'static str {
+        match self {
+            #[cfg(target_os = "macos")]
+            Store::Keychain => "Keychain",
+            Store::File => "Encrypted file",
         }
     }
 
     /// How the UI names it, after "the" ("stored in the Keychain").
     pub fn label(self) -> &'static str {
         match self {
+            #[cfg(target_os = "macos")]
             Store::Keychain => "Keychain",
             Store::File => "secrets file",
         }
@@ -42,13 +56,23 @@ impl Store {
 
     pub fn setting(self) -> &'static str {
         match self {
+            #[cfg(target_os = "macos")]
             Store::Keychain => "keychain",
             Store::File => "file",
         }
     }
 }
 
+/// The stores this system has, the default first.
+#[cfg(target_os = "macos")]
+pub const STORES: &[Store] = &[Store::Keychain, Store::File];
+#[cfg(not(target_os = "macos"))]
+pub const STORES: &[Store] = &[Store::File];
+
+#[cfg(target_os = "macos")]
 static STORE: RwLock<Store> = RwLock::new(Store::Keychain);
+#[cfg(not(target_os = "macos"))]
+static STORE: RwLock<Store> = RwLock::new(Store::File);
 /// The unlocked secrets file, if any. Locking drops it (and the key with it).
 static VAULT: Mutex<Option<Vault>> = Mutex::new(None);
 
@@ -62,7 +86,11 @@ pub fn set_store(s: Store) {
 
 /// True when secrets can be read without asking for the master password.
 pub fn ready() -> bool {
-    store() == Store::Keychain || is_unlocked()
+    match store() {
+        #[cfg(target_os = "macos")]
+        Store::Keychain => true,
+        Store::File => is_unlocked(),
+    }
 }
 
 pub fn is_unlocked() -> bool {
@@ -103,6 +131,7 @@ fn with_vault<T>(f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T> {
 
 fn get_in(store: Store, kind: Kind, account: &str) -> Result<Option<String>> {
     match store {
+        #[cfg(target_os = "macos")]
         Store::Keychain => keychain::get(kind, account),
         Store::File => with_vault(|v| v.get(kind, account)),
     }
@@ -110,6 +139,7 @@ fn get_in(store: Store, kind: Kind, account: &str) -> Result<Option<String>> {
 
 fn set_in(store: Store, kind: Kind, account: &str, secret: &str) -> Result<()> {
     match store {
+        #[cfg(target_os = "macos")]
         Store::Keychain => keychain::set(kind, account, secret),
         Store::File => with_vault(|v| v.set(kind, account, secret)),
     }
@@ -117,6 +147,7 @@ fn set_in(store: Store, kind: Kind, account: &str, secret: &str) -> Result<()> {
 
 fn delete_in(store: Store, kind: Kind, account: &str) -> Result<()> {
     match store {
+        #[cfg(target_os = "macos")]
         Store::Keychain => keychain::delete(kind, account),
         Store::File => with_vault(|v| v.delete(kind, account)),
     }

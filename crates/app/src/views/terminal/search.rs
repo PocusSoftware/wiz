@@ -111,8 +111,10 @@ impl TerminalView {
                     match ev.keystroke.key.as_str() {
                         "escape" => this.close_search(window, cx),
                         "enter" => this.step_match(!m.shift, cx),
-                        "g" if m.platform => this.step_match(!m.shift, cx),
-                        _ if m.platform => {
+                        "g" if let Some(back) = crate::platform::terminal_chord(*m) => {
+                            this.step_match(!back, cx)
+                        }
+                        _ if crate::platform::terminal_chord(*m).is_some() => {
                             cx.propagate();
                             return;
                         }

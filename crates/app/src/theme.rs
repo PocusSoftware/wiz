@@ -55,29 +55,34 @@ fn pick(
 }
 
 /// UI font: settings.toml, else IBM Plex Sans / Noto Sans, else the system font.
-/// Terminal font: settings.toml, else the Zed buffer font when installed, else Menlo.
+/// Terminal font: settings.toml, else the Zed buffer font when installed, else the system
+/// monospace font (`platform::MONO_FONT`).
 /// `exists` must be cheap: listing every installed font costs ~150 ms at startup.
 pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &ssh_core::config::Settings) {
     let _ = UI.set(pick(
         s.ui_font.as_deref(),
         &["IBM Plex Sans", "Noto Sans", "Inter", "Input Sans"],
         exists,
-        ".SystemUIFont",
+        crate::platform::UI_FONT,
     ));
     let _ = MONO.set(pick(
         s.terminal_font.as_deref(),
         &["JetBrainsMono Nerd Font", "Input Mono"],
         exists,
-        "Menlo",
+        crate::platform::MONO_FONT,
     ));
 }
 
 pub fn ui() -> SharedString {
-    UI.get().cloned().unwrap_or_else(|| ".SystemUIFont".into())
+    UI.get()
+        .cloned()
+        .unwrap_or_else(|| crate::platform::UI_FONT.into())
 }
 
 pub fn mono() -> SharedString {
-    MONO.get().cloned().unwrap_or_else(|| "Menlo".into())
+    MONO.get()
+        .cloned()
+        .unwrap_or_else(|| crate::platform::MONO_FONT.into())
 }
 
 pub fn mono_size() -> f32 {

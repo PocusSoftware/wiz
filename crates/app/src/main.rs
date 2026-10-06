@@ -1,7 +1,10 @@
 //! Wiz: app startup, key bindings, menus and the main window.
+// Release builds on Windows are a GUI app: no console window next to it.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod assets;
 mod dialogs;
+mod platform;
 mod prefs;
 mod privacy;
 mod rsync;
@@ -14,13 +17,10 @@ mod widgets;
 mod workspace;
 
 use gpui::{
-    App, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds,
-    WindowOptions, point, prelude::*, px, size,
+    App, Application, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size,
 };
 
-use workspace::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SplitPane, Workspace,
-};
+use workspace::{CloseTab, NewHost, OpenSettings, QuickConnect, Quit, SplitPane, Workspace};
 
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
 pub fn version() -> String {
@@ -43,24 +43,10 @@ pub fn mark(what: &str) {
 /// Set at process start; read by `mark`.
 static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
-/// Show the castle in the Dock even when running unbundled (cargo run).
-fn set_dock_icon() {
-    use objc2::{AnyThread, MainThreadMarker};
-    use objc2_app_kit::{NSApplication, NSImage};
-    use objc2_foundation::NSData;
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-    let data = NSData::with_bytes(include_bytes!("../assets/brand/icon-512.png"));
-    if let Some(img) = NSImage::initWithData(NSImage::alloc(), &data) {
-        // SAFETY: called on the main thread with a valid image.
-        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&img)) };
-    }
-}
-
 fn main() {
-    if std::env::args().nth(1).as_deref() == Some(rsync::BRIDGE_ARG) {
-        rsync::bridge_main();
+    #[cfg(unix)]
+    if std::env::args().nth(1).as_deref() == Some(rsync::runner::BRIDGE_ARG) {
+        rsync::runner::bridge_main();
     }
     START.get_or_init(std::time::Instant::now);
     mark("main");
@@ -91,18 +77,7 @@ fn main() {
                     _ => cx.quit(),
                 }
             });
-            cx.bind_keys([
-                KeyBinding::new("cmd-q", Quit, None),
-                KeyBinding::new("cmd-w", CloseTab, None),
-                KeyBinding::new("cmd-shift-]", NextTab, None),
-                KeyBinding::new("cmd-shift-[", PrevTab, None),
-                KeyBinding::new("ctrl-tab", NextTab, None),
-                KeyBinding::new("ctrl-shift-tab", PrevTab, None),
-                KeyBinding::new("cmd-n", NewHost, None),
-                KeyBinding::new("cmd-,", OpenSettings, None),
-                KeyBinding::new("cmd-d", SplitPane, None),
-                KeyBinding::new("cmd-k", QuickConnect, None),
-            ]);
+            cx.bind_keys(platform::key_bindings());
             cx.set_menus(vec![Menu {
                 name: "Wiz".into(),
                 items: vec![
@@ -126,19 +101,18 @@ fn main() {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("Wiz".into()),
-                        appears_transparent: true,
-                        // Native buttons are parked off-screen; the title bar draws its own.
-                        traffic_light_position: Some(point(px(-100.), px(-100.))),
-                    }),
+                    titlebar: Some(platform::titlebar()),
                     ..Default::default()
                 },
-                |_, cx| cx.new(Workspace::new),
+                |window, cx| {
+                    let workspace = cx.new(Workspace::new);
+                    platform::on_window_open(window, &workspace, cx);
+                    workspace
+                },
             )
             .unwrap();
             mark("window opened");
-            set_dock_icon();
+            platform::on_launch();
             cx.activate(true);
         });
 }

@@ -36,35 +36,6 @@ pub struct SettingsView {
     error: Option<SharedString>,
 }
 
-/// Editors offered as quick picks when installed.
-const KNOWN_EDITORS: &[&str] = &[
-    "Visual Studio Code",
-    "Cursor",
-    "Zed",
-    "Sublime Text",
-    "BBEdit",
-    "Nova",
-    "TextMate",
-    "CotEditor",
-    "Windsurf",
-    "VSCodium",
-    "Xcode",
-    "TextEdit",
-];
-
-fn installed_editors() -> Vec<&'static str> {
-    let user = dirs::home_dir().map(|h| h.join("Applications"));
-    KNOWN_EDITORS
-        .iter()
-        .copied()
-        .filter(|n| {
-            let app = format!("{n}.app");
-            std::path::Path::new("/Applications").join(&app).exists()
-                || user.as_ref().is_some_and(|u| u.join(&app).exists())
-        })
-        .collect()
-}
-
 fn split_list(s: &str) -> Vec<String> {
     s.split(',')
         .map(|p| p.trim().to_string())
@@ -84,7 +55,7 @@ impl SettingsView {
             extra_mask: make("project-name, client-name", cx),
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
-            editors: installed_editors(),
+            editors: crate::platform::installed_editors(),
             error: None,
         };
         this.load_inputs(cx);
@@ -327,24 +298,29 @@ impl SettingsView {
     /// Keychain or encrypted file, plus lock state and master password for the file.
     fn credentials(&self, cx: &mut Context<Self>) -> gpui::Div {
         let store = secrets::store();
-        let pick = |id: &'static str, text: &str, s: Store| {
-            if store == s {
-                primary_button(id, text)
+        let mut picks = div().flex().gap_1();
+        for (i, &s) in secrets::STORES.iter().enumerate() {
+            picks = picks.child(if store == s {
+                primary_button(("s-store", i), s.name())
             } else {
-                button(id, text).on_click(
+                button(("s-store", i), s.name()).on_click(
                     cx.listener(move |_, _, _, cx| cx.emit(SettingsEvent::SwitchStore(s))),
                 )
-            }
-        };
-        let mut d = div().flex().flex_col().child(Self::row(
-            "Store passwords in",
-            "Keychain uses macOS. Encrypted file keeps them in secrets.toml, sealed with AES-256 under a key from your master password (Argon2id). Switching moves every saved secret across.",
-            div()
-                .flex()
-                .gap_1()
-                .child(pick("s-keychain", "Keychain", Store::Keychain))
-                .child(pick("s-file", "Encrypted file", Store::File)),
-        ));
+            });
+        }
+        let mut d = div().flex().flex_col().child(if secrets::STORES.len() > 1 {
+            Self::row(
+                "Store passwords in",
+                "Keychain uses macOS. Encrypted file keeps them in secrets.toml, sealed with AES-256 under a key from your master password (Argon2id). Switching moves every saved secret across.",
+                picks,
+            )
+        } else {
+            Self::row(
+                "Passwords",
+                "Kept in secrets.toml, sealed with AES-256 under a key from your master password (Argon2id).",
+                div(),
+            )
+        });
         if store == Store::File {
             let unlocked = secrets::is_unlocked();
             let mut controls = div().flex().gap_1();
@@ -441,13 +417,15 @@ impl Render for SettingsView {
                         v if v < 1024 => format!("{v} KB/s"),
                         v => format!("{} MB/s", v / 1024),
                     }, |s, v| s.transfer_limit_kbps = Some(v), cx))
-                    .child(self.text("Editor for server files", "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.", &self.editor))
-                    .child(self.editor_picks(&s.editor_app(), cx))
+                    .child(self.text("Editor for server files", crate::platform::EDITOR_HINT, &self.editor))
+                    .when(crate::platform::EDITOR_PICKS, |d| d.child(self.editor_picks(&s.editor_app(), cx)))
                     .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
                     .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))
-                    .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Wiz's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
-                    .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
-                    .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx))
+                    // rsync and its hint exist only where the rsync bridge does.
+                    .when(crate::platform::RSYNC, |d| d
+                        .child(self.toggle("f-rsync", "Use rsync for large transfers", "Between this Mac and a server, when both have rsync installed. It runs over Wiz's own connection, so password hosts work too. Otherwise files go over SFTP.", s.use_rsync(), |s, v| s.use_rsync = Some(v), cx))
+                        .child(self.stepper("f-rfiles", "Large transfer from", "Number of files in a transfer.", s.rsync_hint_files(), (50, 100_000, 50), "files", |s, v| s.rsync_hint_files = Some(v), cx))
+                        .child(self.stepper("f-rmb", "...or from", "Total size of a transfer.", s.rsync_hint_mb(), (64, 102_400, 64), "MB", |s, v| s.rsync_hint_mb = Some(v), cx)))
                     // ---------- Logs & Docker ----------
                     .child(Self::section("Logs and Docker"))
                     .child(self.stepper("l-refresh", "Log auto-scroll refresh", "How often followed logs reload.", s.log_refresh_secs(), (1, 60, 1), "s", |s, v| s.log_refresh_secs = Some(v), cx))
@@ -460,7 +438,7 @@ impl Render for SettingsView {
                     .child(self.toggle("n-confirm", "Ask before closing a session", "Confirm before a terminal, files or Docker tab (or a split pane) on a server is closed.", s.confirm_close(), |s, v| s.confirm_close = Some(v), cx))
                     .child(self.toggle("n-reconnect", "Reconnect lost terminals", "When a connection drops or the server reboots, keep retrying and reopen the terminal in the same tab.", s.auto_reconnect(), |s, v| s.auto_reconnect = Some(v), cx))
                     .child(self.toggle("n-exit", "Close terminal when the shell exits", "Typing exit or pressing Ctrl+D closes the tab, or the pane of a split.", s.close_on_exit(), |s, v| s.close_on_exit = Some(v), cx))
-                    .child(self.toggle("n-quit", "Block quitting with open sessions", "Quit (⌘Q or the window close button) is refused while a terminal, files or Docker tab on a server is open.", s.block_quit(), |s, v| s.block_quit = Some(v), cx))
+                    .child(self.toggle("n-quit", "Block quitting with open sessions", &format!("Quit ({} or the window close button) is refused while a terminal, files or Docker tab on a server is open.", crate::platform::QUIT_KEYS), s.block_quit(), |s, v| s.block_quit = Some(v), cx))
                     .child(self.stepper("n-timeout", "Connect timeout", "Give up on a connection that takes longer than this. 0 turns it off and waits until you cancel. Time spent on the host key prompt doesn't count.", s.connect_timeout_secs(), (0, 300, 5), "s", |s, v| s.connect_timeout_secs = Some(v), cx))
                     // ---------- footer ----------
                     .child(

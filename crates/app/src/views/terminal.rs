@@ -36,7 +36,7 @@ struct Search {
 
 pub struct TerminalView {
     search: Option<Search>,
-    /// Link under the mouse while ⌘ is held.
+    /// Link under the mouse while the link modifier (`platform::link_click`) is held.
     hover_link: Option<Link>,
     term: Terminal,
     input: mpsc::Sender<ShellInput>,
@@ -307,11 +307,11 @@ impl Render for TerminalView {
                 MouseButton::Left,
                 cx.listener(|this, ev: &MouseDownEvent, window, cx| {
                     window.focus(&this.focus);
-                    // ⌘-click opens a link instead of selecting.
-                    if ev.modifiers.platform
+                    // Cmd-click (Ctrl-click on Windows) opens a link instead of selecting.
+                    if crate::platform::link_click(ev.modifiers)
                         && let Some(l) = this.link_under(ev.position)
                     {
-                        let _ = std::process::Command::new("open").arg(l.url).spawn();
+                        cx.open_url(&l.url);
                         return;
                     }
                     let (p, side) = this.grid_point(ev.position);
@@ -326,7 +326,7 @@ impl Render for TerminalView {
                 }),
             )
             .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
-                let link = if ev.modifiers.platform && !this.selecting {
+                let link = if crate::platform::link_click(ev.modifiers) && !this.selecting {
                     this.link_under(ev.position)
                 } else {
                     None

@@ -1,6 +1,6 @@
 # Wiz
 
-A fast, macOS-only SSH client in Rust (terminal, SFTP, Docker). Frontend: GPUI (pending Xcode). Backend in `crates/core`.
+A fast SSH client for macOS and Windows in Rust (terminal, SFTP, Docker). Frontend: GPUI. Backend in `crates/core`.
 
 ## Status
 - Done: password, key (ed25519/RSA, encrypted) and keyboard-interactive auth, Keychain secrets,
@@ -20,7 +20,7 @@ Password server: `tester`/`hunter2` on :2222. Key-only server on :2223 (mounts d
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
 
 ## Settings
-Open the Settings tab with the sliders icon in the title bar or ⌘, . Everything is saved as you change it to `~/Library/Application Support/dev.enty.ssh-client/settings.toml` (all keys optional):
+Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on Windows). Everything is saved as you change it to `settings.toml` in the data folder (see Data locations; all keys optional):
 
 | Area | Keys |
 |---|---|
@@ -50,6 +50,12 @@ The file is unlocked on first use (connecting, adding or editing a host) and sta
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.
 - Directory symlinks are skipped by transfers so link loops cannot run forever. File symlinks are followed.
 
+## macOS and Windows
+macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
+- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
+- Missing on purpose: the Keychain (passwords always live in the encrypted secrets file), rsync transfers and the rsync hint (files go over SFTP), and the installed-editor picks (the editor setting takes a program name or path; empty opens Notepad, never the file's default app).
+- Build on Windows with `cargo build --release -p ssh-app` (gives `target\release\wiz.exe`). Release builds compile GPUI's shaders with `fxc.exe` from the Windows SDK. From a Mac, `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu` checks the Windows side (needs `brew install mingw-w64` and `rustup target add x86_64-pc-windows-gnu`).
+
 ## Building
 - `cargo build -p ssh-app` for development (incremental, a couple of seconds).
 - `cargo build --profile fast -p ssh-app` for optimized local runs (incremental, no LTO, a few seconds).
@@ -57,7 +63,7 @@ The file is unlocked on first use (connecting, adding or editing a host) and sta
 - SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).
 
 ## Data locations
-Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.ssh-client/`. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked. Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
+Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.ssh-client/` on macOS and `%APPDATA%\dev.enty.ssh-client\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
 
 ## Versioning
 The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scripts/version.sh` prints it, `scripts/version.sh 0.2.0` sets it; then commit and tag `v0.2.0`. The app shows the version and build commit at the bottom of Settings, and `scripts/bundle.sh` writes it into `Info.plist` (build number = commit count).

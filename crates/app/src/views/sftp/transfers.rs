@@ -185,6 +185,7 @@ impl SftpView {
             crate::prefs::get().transfer_limit_kbps() as u64 * 1024,
             Ordering::Relaxed,
         );
+        #[cfg(unix)]
         let via = tr.via_rsync.clone();
         cx.spawn(async move |this, cx| {
             let r = runtime::spawn(async move {
@@ -207,23 +208,27 @@ impl SftpView {
                 }
                 progress.set_prescan(bytes, files);
                 // Large and between this Mac and one server: rsync, if both sides have it.
-                let prefs = crate::prefs::get();
-                let big = files >= prefs.rsync_hint_files() as u64
-                    || bytes >= (prefs.rsync_hint_mb() as u64) << 20;
-                let job = match (&from_src, &to_src) {
-                    (Source::Local, Source::Remote(r)) => Some((r.conn.clone(), true)),
-                    (Source::Remote(r), Source::Local) => Some((r.conn.clone(), false)),
-                    _ => None,
-                };
-                if prefs.use_rsync()
-                    && big
-                    && let Some((conn, upload)) = job
-                    && let Some(local) = rsync::local().await
-                    && conn.has_command("rsync").await
+                #[cfg(unix)]
                 {
-                    via.store(true, Ordering::Relaxed);
-                    return rsync::run(conn, local, upload, &src_dir, &names, &dst_dir, progress)
-                        .await;
+                    let prefs = crate::prefs::get();
+                    let big = files >= prefs.rsync_hint_files() as u64
+                        || bytes >= (prefs.rsync_hint_mb() as u64) << 20;
+                    let job = match (&from_src, &to_src) {
+                        (Source::Local, Source::Remote(r)) => Some((r.conn.clone(), true)),
+                        (Source::Remote(r), Source::Local) => Some((r.conn.clone(), false)),
+                        _ => None,
+                    };
+                    if prefs.use_rsync()
+                        && big
+                        && let Some((conn, upload)) = job
+                        && let Some(local) = rsync::runner::local().await
+                        && conn.has_command("rsync").await
+                    {
+                        via.store(true, Ordering::Relaxed);
+                        let (src, dst) = (&src_dir, &dst_dir);
+                        return rsync::runner::run(conn, local, upload, src, &names, dst, progress)
+                            .await;
+                    }
                 }
                 for n in names {
                     let (sp, dp) = (from_src.join(&src_dir, &n), to_src.join(&dst_dir, &n));
@@ -396,7 +401,11 @@ impl SftpView {
                         cx.notify();
                     })),
                 );
-            let hint = (big && running && !tr.via_rsync.load(Ordering::Relaxed)).then(|| {
+            let hint = (crate::platform::RSYNC
+                && big
+                && running
+                && !tr.via_rsync.load(Ordering::Relaxed))
+            .then(|| {
                 let cmd = tr.rsync.clone();
                 div()
                     .px_2()

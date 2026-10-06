@@ -342,50 +342,50 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     assert_eq!(secrets::get(Kind::Password, &acct).unwrap(), None);
     root.read_with(cx, |r, _| assert!(r.cfg.hosts.is_empty()));
 
-    if !docker() {
-        // Store switching touches the real Keychain, like the core Keychain test.
-        return;
+    // Store switching touches the real Keychain (macOS only), like the core Keychain test.
+    #[cfg(target_os = "macos")]
+    if docker() {
+        // Switch to the Keychain and back with a throwaway host: the secret moves both ways.
+        let temp = test_host(&format!("switch{}", std::process::id()));
+        let tacct = temp.account();
+        root.update(cx, |r, _| r.cfg.hosts.push(temp));
+        secrets::set(Kind::Password, &tacct, "moveme").unwrap();
+        settings.update(cx, |_, cx| {
+            cx.emit(SettingsEvent::SwitchStore(Store::Keychain))
+        });
+        cx.run_until_parked();
+        assert_eq!(secrets::store(), Store::Keychain);
+        assert_eq!(crate::prefs::get().secret_store(), "keychain");
+        assert!(
+            status(&root, cx).contains("Moved 1 secret."),
+            "{}",
+            status(&root, cx)
+        );
+        assert_eq!(
+            secrets::keychain::get(Kind::Password, &tacct)
+                .unwrap()
+                .as_deref(),
+            Some("moveme")
+        );
+        // Back to the file, locked first: it asks for the master password, then moves.
+        secrets::lock();
+        settings.update(cx, |_, cx| cx.emit(SettingsEvent::SwitchStore(Store::File)));
+        cx.run_until_parked();
+        assert!(root.read_with(cx, |r, _| r.unlock.is_some()));
+        assert_eq!(secrets::store(), Store::Keychain);
+        type_text(cx, "masterpass2");
+        cx.simulate_keystrokes("enter");
+        wait(cx, &root, "the switch", |r, _| r.unlock.is_none());
+        assert_eq!(secrets::store(), Store::File);
+        assert_eq!(
+            secrets::keychain::get(Kind::Password, &tacct).unwrap(),
+            None
+        );
+        assert_eq!(
+            secrets::get(Kind::Password, &tacct).unwrap().as_deref(),
+            Some("moveme")
+        );
     }
-    // Switch to the Keychain and back with a throwaway host: the secret moves both ways.
-    let temp = test_host(&format!("switch{}", std::process::id()));
-    let tacct = temp.account();
-    root.update(cx, |r, _| r.cfg.hosts.push(temp));
-    secrets::set(Kind::Password, &tacct, "moveme").unwrap();
-    settings.update(cx, |_, cx| {
-        cx.emit(SettingsEvent::SwitchStore(Store::Keychain))
-    });
-    cx.run_until_parked();
-    assert_eq!(secrets::store(), Store::Keychain);
-    assert_eq!(crate::prefs::get().secret_store(), "keychain");
-    assert!(
-        status(&root, cx).contains("Moved 1 secret."),
-        "{}",
-        status(&root, cx)
-    );
-    assert_eq!(
-        secrets::keychain::get(Kind::Password, &tacct)
-            .unwrap()
-            .as_deref(),
-        Some("moveme")
-    );
-    // Back to the file, locked first: it asks for the master password, then moves.
-    secrets::lock();
-    settings.update(cx, |_, cx| cx.emit(SettingsEvent::SwitchStore(Store::File)));
-    cx.run_until_parked();
-    assert!(root.read_with(cx, |r, _| r.unlock.is_some()));
-    assert_eq!(secrets::store(), Store::Keychain);
-    type_text(cx, "masterpass2");
-    cx.simulate_keystrokes("enter");
-    wait(cx, &root, "the switch", |r, _| r.unlock.is_none());
-    assert_eq!(secrets::store(), Store::File);
-    assert_eq!(
-        secrets::keychain::get(Kind::Password, &tacct).unwrap(),
-        None
-    );
-    assert_eq!(
-        secrets::get(Kind::Password, &tacct).unwrap().as_deref(),
-        Some("moveme")
-    );
 }
 
 #[gpui::test]

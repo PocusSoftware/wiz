@@ -240,18 +240,18 @@ impl TextInput {
         let m = &k.modifiers;
         let shift = m.shift;
         match k.key.as_str() {
-            "a" if m.platform => {
+            "a" if m.secondary() => {
                 self.anchor = 0;
                 self.cursor = self.text.len();
             }
-            "c" if m.platform => {
+            "c" if m.secondary() => {
                 if self.has_selection() && !self.masked {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         self.selected_text().to_string(),
                     ));
                 }
             }
-            "x" if m.platform => {
+            "x" if m.secondary() => {
                 if self.has_selection() && !self.masked {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         self.selected_text().to_string(),
@@ -259,12 +259,12 @@ impl TextInput {
                     self.delete_selection();
                 }
             }
-            "v" if m.platform => {
+            "v" if m.secondary() => {
                 if let Some(t) = cx.read_from_clipboard().and_then(|c| c.text()) {
                     self.insert(&t.replace(['\n', '\r'], ""));
                 }
             }
-            "backspace" if m.platform => {
+            "backspace" if m.secondary() => {
                 if !self.delete_selection() {
                     let end = self.cursor;
                     self.text.drain(..end);
@@ -294,8 +294,8 @@ impl TextInput {
                     self.text.drain(self.cursor..n);
                 }
             }
-            "left" if m.platform => self.move_to(0, shift),
-            "right" if m.platform => self.move_to(self.text.len(), shift),
+            "left" if m.secondary() => self.move_to(0, shift),
+            "right" if m.secondary() => self.move_to(self.text.len(), shift),
             "left" if m.alt => self.move_to(self.word_start(self.cursor), shift),
             "right" if m.alt => self.move_to(self.word_end(self.cursor), shift),
             "left" => {
@@ -320,7 +320,9 @@ impl TextInput {
                 return;
             }
             _ => match &k.key_char {
-                Some(ch) if !m.control && !m.platform && !ch.chars().any(char::is_control) => {
+                Some(ch)
+                    if crate::platform::types_char(*m) && !ch.chars().any(char::is_control) =>
+                {
                     self.insert(ch);
                 }
                 _ => {

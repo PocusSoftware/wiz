@@ -22,3 +22,11 @@ fn allows_normal_copies() {
     // Different file systems can use identical paths.
     assert!(self_copy_error(false, "/a", "/a", &n(&["x"])).is_none());
 }
+
+#[cfg(windows)]
+#[test]
+fn refuses_self_nesting_with_windows_paths() {
+    assert!(self_copy_error(true, r"C:\a", r"C:\a", &n(&["f"])).is_some());
+    assert!(self_copy_error(true, r"C:\a", r"C:\a\dir", &n(&["dir"])).is_some());
+    assert!(self_copy_error(true, r"C:\a", r"C:\b", &n(&["dir"])).is_none());
+}

@@ -108,7 +108,7 @@ impl QuickConnect {
     }
 
     fn build(&self, cx: &Context<Self>) -> Result<(Host, Credentials), String> {
-        let me = std::env::var("USER").unwrap_or_else(|_| "root".into());
+        let me = crate::platform::local_user().unwrap_or_else(|| "root".into());
         let (user, host, port) = parse_target(self.target.read(cx).value(), &me)?;
         let (auth, creds) = if self.key_mode {
             let typed = self.key_path.read(cx).value().trim().to_string();
@@ -258,5 +258,6 @@ impl Render for QuickConnect {
     }
 }
 
-#[cfg(test)]
+// The tests point HOME at a temp folder; Windows finds the profile folder without HOME.
+#[cfg(all(test, unix))]
 mod tests;

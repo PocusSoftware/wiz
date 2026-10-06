@@ -6,17 +6,13 @@ use super::*;
 const EDIT_MAX: u64 = 64 << 20;
 
 impl SftpView {
-    /// Without a configured app, `-t` opens the default text editor, so a server file named
-    /// like an app or script is never launched.
-    fn launch_editor(path: &std::path::Path) {
+    /// Open `path` in the configured editor; a failure (no such program) shows on `side`.
+    fn launch_editor(&mut self, side: Side, path: &std::path::Path, cx: &mut Context<Self>) {
         let app = crate::prefs::get().editor_app();
-        let mut cmd = std::process::Command::new("open");
-        if app.is_empty() {
-            cmd.arg("-t");
-        } else {
-            cmd.arg("-a").arg(app);
+        if let Err(e) = crate::platform::open_in_editor(path, &app) {
+            self.pane_mut(side).error = Some(format!("Could not open the editor: {e}").into());
+            cx.notify();
         }
-        let _ = cmd.arg(path).spawn();
     }
 
     /// Open a file in the local editor. Server files are downloaded to a temp folder first
@@ -31,7 +27,7 @@ impl SftpView {
     ) {
         let remote = match &self.pane(side).source {
             Source::Local => {
-                Self::launch_editor(std::path::Path::new(&path));
+                self.launch_editor(side, std::path::Path::new(&path), cx);
                 return;
             }
             Source::Remote(r) => r.clone(),
@@ -43,12 +39,13 @@ impl SftpView {
             return;
         }
         // Already open: just bring the editor forward.
-        if let Some(e) = self
+        if let Some(local) = self
             .edits
             .iter()
             .find(|e| e.remote_path == path && e.remote.host.account() == remote.host.account())
+            .map(|e| e.local.clone())
         {
-            Self::launch_editor(&e.local);
+            self.launch_editor(side, &local, cx);
             return;
         }
         // The name comes from the server: never let it point outside the temp folder.
@@ -102,7 +99,8 @@ impl SftpView {
                         e.downloaded = true;
                         e.state = EState::Synced;
                         e.synced_at = Some(chrono::Local::now());
-                        Self::launch_editor(&e.local);
+                        let local = e.local.clone();
+                        t.launch_editor(side, &local, cx);
                     }
                     Err(err) => e.state = EState::Failed(err.to_string()),
                 }

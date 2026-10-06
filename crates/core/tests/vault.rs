@@ -15,9 +15,12 @@ fn roundtrip_wrong_password_and_tamper() {
 
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(!text.contains("s3cret") && text.contains("u@h:22"));
-    use std::os::unix::fs::PermissionsExt;
-    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
-    assert_eq!(mode & 0o777, 0o600);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
 
     let v = Vault::unlock(&path, "correct horse").unwrap();
     assert_eq!(

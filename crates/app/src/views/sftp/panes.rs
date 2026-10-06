@@ -80,8 +80,8 @@ impl SftpView {
                                     .entries
                                     .get(ix)
                                     .is_some_and(|e| t.pane(side).selected.contains(&e.name));
-                            if !(already && !m.shift && !m.platform) {
-                                t.select_row(side, ix, m.shift, m.platform);
+                            if !(already && !m.shift && !m.secondary()) {
+                                t.select_row(side, ix, m.shift, m.secondary());
                             }
                             cx.notify();
                         }),
@@ -244,7 +244,10 @@ impl SftpView {
                 icon_button(
                     (side.tag(), 1001usize),
                     "arrow-up",
-                    "Parent folder (⌘↑)",
+                    format!(
+                        "Parent folder ({})",
+                        crate::platform::view_shortcut(false, "↑")
+                    ),
                     MUTED,
                 )
                 .on_click(cx.listener(move |t, _, _, cx| t.up(side, cx))),
@@ -255,8 +258,13 @@ impl SftpView {
             )
             .child(div().flex_1().min_w_0().child(p.input.clone()))
             .child(
-                icon_button((side.tag(), 1003usize), "refresh", "Refresh (⌘R)", MUTED)
-                    .on_click(cx.listener(move |t, _, _, cx| t.refresh(side, cx))),
+                icon_button(
+                    (side.tag(), 1003usize),
+                    "refresh",
+                    format!("Refresh ({})", crate::platform::view_shortcut(false, "R")),
+                    MUTED,
+                )
+                .on_click(cx.listener(move |t, _, _, cx| t.refresh(side, cx))),
             )
             .child(
                 icon_button(
@@ -280,7 +288,7 @@ impl SftpView {
                 icon_button(
                     (side.tag(), 1005usize),
                     "folder-plus",
-                    "New folder (⇧⌘N)",
+                    format!("New folder ({})", crate::platform::view_shortcut(true, "N")),
                     MUTED,
                 )
                 .on_click(cx.listener(move |t, _, w, cx| t.ask_new_folder(side, w, cx))),

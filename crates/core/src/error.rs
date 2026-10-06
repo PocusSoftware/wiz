@@ -12,6 +12,7 @@ pub enum Error {
     Key(#[from] russh::keys::Error),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[cfg(target_os = "macos")]
     #[error("keychain: {0}")]
     Keychain(#[from] security_framework::base::Error),
     #[error("docker: {0}")]

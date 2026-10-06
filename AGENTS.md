@@ -1,6 +1,6 @@
 # Rules for working on Wiz
 
-Wiz is a macOS SSH client in Rust: `crates/core` (backend, no UI) and `crates/app` (GPUI).
+Wiz is an SSH client for macOS and Windows in Rust: `crates/core` (backend, no UI) and `crates/app` (GPUI).
 These rules apply to every change, by people and by agents. A change is done only when
 the checks at the end pass.
 
@@ -75,8 +75,13 @@ the checks at the end pass.
     (Keychain, encrypted file), `session`, `hostkey`, `sftp`, `docker`, `terminal`.
   - `crates/app/src`: `workspace/` (the window: tabs, splits, connecting, dialogs on top),
     `views/` (what a tab or page shows), `dialogs/` (forms shown over the window),
-    `widgets/` (buttons, text input, animations), plus `prefs`, `privacy`, `rsync`,
-    `runtime`, `theme`, `assets` at the top.
+    `widgets/` (buttons, text input, animations), `platform/` (what differs per OS), plus
+    `prefs`, `privacy`, `rsync`, `runtime`, `theme`, `assets` at the top.
+- **Platforms:** macOS is the main platform and must keep behaving the same. Anything
+  OS-specific goes in `platform/macos.rs` and `platform/windows.rs`, with the same
+  functions in both; the rest of the app calls `crate::platform::...` and never checks the
+  OS itself. A feature that only makes sense on macOS is left out on Windows (Keychain,
+  rsync, editor picks) rather than faked. In core, gate with `cfg(target_os = "macos")`.
 - **New setting:** add an `Option` field to `Settings`, a default in the `getters!`
   macro, a row in `views/settings.rs`, and a line in the README settings table.
 - **Split modules** (`workspace`, `views/sftp`, `views/terminal`): shared types live in
@@ -98,6 +103,7 @@ the checks at the end pass.
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets      # zero warnings: warnings count as failures
+cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu   # the Windows side
 cargo test --workspace
 # Connection, SFTP, Docker or secret store changes, with the servers from docker/ running:
 SSHC_DOCKER_TESTS=1 cargo test --workspace

@@ -555,8 +555,6 @@ impl Render for Workspace {
 fn refresh_privacy_tokens<'a>(hosts: impl Iterator<Item = &'a Host> + Clone) {
     let mut users: Vec<String> = hosts.clone().map(|h| h.user.clone()).collect();
     let hosts = hosts.map(|h| h.host.clone()).collect();
-    if let Some(u) = std::env::var_os("USER") {
-        users.push(u.to_string_lossy().into_owned());
-    }
+    users.extend(crate::platform::local_user());
     privacy::set_known(hosts, users);
 }

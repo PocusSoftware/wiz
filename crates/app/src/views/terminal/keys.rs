@@ -56,7 +56,7 @@ pub(super) fn key_bytes(
         "f11" => tilde(23),
         "f12" => tilde(24),
         _ => {
-            if m.control {
+            if m.control && !crate::platform::alt_gr(m, key, key_char) {
                 let ch = key.chars().next().filter(|_| key.chars().count() == 1)?;
                 let code = match ch.to_ascii_lowercase() {
                     c @ 'a'..='z' => c as u8 - b'a' + 1,
@@ -103,8 +103,8 @@ impl TerminalView {
     ) {
         let k = &ev.keystroke;
         let m = &k.modifiers;
-        if m.platform {
-            match (k.key.as_str(), m.shift) {
+        if let Some(variant) = crate::platform::terminal_chord(*m) {
+            match (k.key.as_str(), variant) {
                 ("c", false) => {
                     if let Some(s) = self.term.term.selection_to_string() {
                         cx.write_to_clipboard(ClipboardItem::new_string(s));

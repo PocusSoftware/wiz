@@ -78,16 +78,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
-    let mut winch = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())?;
     let mut out = std::io::stdout();
-    loop {
-        tokio::select! {
-            ev = shell.events.recv() => match ev {
-                Some(ShellEvent::Data(d)) => { out.write_all(&d)?; out.flush()?; }
-                _ => break,
-            },
-            _ = winch.recv() => { let (c, r) = size()?; shell.resize(c, r).await; }
+    #[cfg(unix)]
+    {
+        let mut winch =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())?;
+        loop {
+            tokio::select! {
+                ev = shell.events.recv() => match ev {
+                    Some(ShellEvent::Data(d)) => { out.write_all(&d)?; out.flush()?; }
+                    _ => break,
+                },
+                _ = winch.recv() => { let (c, r) = size()?; shell.resize(c, r).await; }
+            }
         }
+    }
+    // No resize signal on Windows: just pass output through.
+    #[cfg(not(unix))]
+    while let Some(ShellEvent::Data(d)) = shell.events.recv().await {
+        out.write_all(&d)?;
+        out.flush()?;
     }
     disable_raw_mode()?;
     Ok(())

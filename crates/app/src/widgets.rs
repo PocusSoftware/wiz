@@ -1,9 +1,8 @@
 //! Small building blocks shared by every view: buttons, icons, tooltips, checkboxes, plus
-//! the text input, animations and window dragging in the submodules.
+//! the text input and animations in the submodules.
 
 pub mod anim;
 pub mod input;
-pub mod window_drag;
 
 use gpui::{
     AnyView, App, Context, Div, ElementId, IntoElement, Render, SharedString, Stateful, Window,
@@ -30,8 +29,9 @@ impl Render for Tip {
     }
 }
 
-pub fn tip(text: &'static str) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
-    move |_, cx| cx.new(|_| Tip(text.into())).into()
+pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let text = text.into();
+    move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
 
 pub fn icon(name: &str, size: f32, color: u32) -> gpui::Svg {
@@ -46,7 +46,7 @@ pub fn icon(name: &str, size: f32, color: u32) -> gpui::Svg {
 pub fn icon_button(
     id: impl Into<ElementId>,
     name: &str,
-    tooltip: &'static str,
+    tooltip: impl Into<SharedString>,
     color: u32,
 ) -> Stateful<Div> {
     div()
