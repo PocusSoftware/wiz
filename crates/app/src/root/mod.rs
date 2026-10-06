@@ -200,8 +200,16 @@ pub struct Root {
     trust: VecDeque<TrustRequest>,
     trust_tx: UnboundedSender<TrustRequest>,
     status: Option<(SharedString, bool)>,
+    /// Bumped by every `set_status`, so a hide timer only clears the message it was set for.
+    status_seq: u64,
+    /// The `status_seq` whose hide timer is running.
+    status_timer: u64,
     focus: FocusHandle,
 }
+
+/// How long a status line message stays up. Errors stay longer so there is time to read them.
+const STATUS_SECS: u64 = 5;
+const STATUS_ERROR_SECS: u64 = 10;
 
 impl Root {
     pub fn new(cx: &mut Context<Self>) -> Self {
@@ -211,6 +219,7 @@ impl Root {
             Ok(c) => c,
             Err(e) => {
                 // Keep the unreadable file: the next save would otherwise overwrite it.
+                // Set without `set_status`, so this one stays until something replaces it.
                 let backup = cfg_path.with_extension("toml.bak");
                 let kept = std::fs::copy(&cfg_path, &backup).is_ok();
                 status = Some((
@@ -268,12 +277,48 @@ impl Root {
             trust: VecDeque::new(),
             trust_tx,
             status,
+            status_seq: 0,
+            status_timer: 0,
             focus: cx.focus_handle(),
         }
     }
 
+    /// Show a message in the status line. It hides itself after a few seconds (see
+    /// `hide_status_later`), or when clicked.
     fn set_status(&mut self, msg: impl Into<SharedString>, error: bool) {
         self.status = Some((msg.into(), error));
+        self.status_seq += 1;
+    }
+
+    /// Start the hide timer for the current message, once per message. Runs from `render`,
+    /// which every status change goes through, so callers don't need a context for it.
+    fn hide_status_later(&mut self, cx: &mut Context<Self>) {
+        let Some((_, error)) = &self.status else {
+            return;
+        };
+        if self.status_timer == self.status_seq {
+            return;
+        }
+        let seq = self.status_seq;
+        self.status_timer = seq;
+        let secs = if *error {
+            STATUS_ERROR_SECS
+        } else {
+            STATUS_SECS
+        };
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_secs(secs))
+                .await;
+            this.update(cx, |t, cx| {
+                if t.status_seq == seq {
+                    t.status = None;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Hosts and users to mask: saved hosts and quick connect hosts.
@@ -355,6 +400,7 @@ impl Focusable for Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.hide_status_later(cx);
         // Remember which split pane has focus, for the tab title and for re-selecting the tab.
         if self.page == Page::Tab
             && let Some(Tab {
@@ -486,11 +532,18 @@ impl Render for Root {
                     .when_some(self.status.clone(), |d, (msg, err)| {
                         d.child(
                             div()
+                                .id("status")
                                 .px_2()
                                 .py(px(3.))
                                 .border_t_1()
                                 .border_color(c(BORDER_VARIANT))
                                 .text_color(c(if err { RED } else { MUTED }))
+                                .cursor_pointer()
+                                .tooltip(crate::ui::tip("Click to dismiss"))
+                                .on_click(cx.listener(|t, _, _, cx| {
+                                    t.status = None;
+                                    cx.notify();
+                                }))
                                 .child(privacy::redact(&msg).into_owned()),
                         )
                     }),

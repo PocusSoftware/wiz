@@ -425,3 +425,42 @@ fn quick_connect_save_as_host_stores_secret(cx: &mut TestAppContext) {
     cx.run_until_parked();
     root.read_with(cx, |r, _| assert_eq!(r.cfg.hosts.len(), 1));
 }
+
+#[gpui::test]
+fn status_messages_hide_after_a_while(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    let shown = |root: &Entity<Root>, cx: &mut VisualTestContext| {
+        cx.run_until_parked();
+        root.read_with(cx, |r, _| r.status.as_ref().map(|s| s.0.to_string()))
+    };
+
+    root.update(cx, |r, cx| {
+        r.set_status("info", false);
+        cx.notify();
+    });
+    assert_eq!(shown(&root, cx).as_deref(), Some("info"));
+    cx.executor()
+        .advance_clock(Duration::from_secs(STATUS_SECS - 1));
+    assert_eq!(shown(&root, cx).as_deref(), Some("info"));
+    cx.executor().advance_clock(Duration::from_secs(1));
+    assert_eq!(shown(&root, cx), None);
+
+    // Errors stay longer, and a newer message is not cut short by an older timer.
+    root.update(cx, |r, cx| {
+        r.set_status("first", true);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.executor()
+        .advance_clock(Duration::from_secs(STATUS_ERROR_SECS - 2));
+    root.update(cx, |r, cx| {
+        r.set_status("second", true);
+        cx.notify();
+    });
+    cx.executor().advance_clock(Duration::from_secs(5));
+    assert_eq!(shown(&root, cx).as_deref(), Some("second"));
+    cx.executor()
+        .advance_clock(Duration::from_secs(STATUS_ERROR_SECS - 5));
+    assert_eq!(shown(&root, cx), None);
+}
