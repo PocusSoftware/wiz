@@ -372,7 +372,7 @@ impl Root {
                     }
                 }
                 TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
-                TabKind::Sftp(v) => v.update(cx, |v, cx| v.settings_changed(cx)),
+                TabKind::Sftp(v) => v.update(cx, SftpView::settings_changed),
                 TabKind::Logs(v) => v.update(cx, |_, cx| cx.notify()),
             }
         }
@@ -411,8 +411,8 @@ impl Render for Root {
             t.focused = Self::focused_pane(t, window, cx);
         }
         self.arrange_splits(window);
-        static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-        if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        static FIRST: AtomicBool = AtomicBool::new(true);
+        if FIRST.swap(false, Ordering::Relaxed) {
             crate::mark("first render");
         }
         let dialogs = self.dialogs(cx);

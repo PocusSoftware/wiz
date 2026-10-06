@@ -173,12 +173,12 @@ impl Render for DockerView {
                             cx.listener(move |t, _, _, cx| t.act(i.clone(), Action::Start, cx)),
                         ));
                 }
-                let (i, n) = (id.clone(), name.clone());
+                let (i, n) = (id.clone(), name);
                 actions = actions
                     .child(icon_button(("logs", ix), "logs", "Logs", MUTED).on_click(
                         cx.listener(move |t, _, _, cx| t.logs(i.clone(), n.clone(), cx)),
                     ));
-                let i = id.clone();
+                let i = id;
                 let rm = icon_button(
                     ("rm", ix),
                     "trash",

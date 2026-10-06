@@ -130,7 +130,7 @@ fn parse_ipv4(chars: &[char], i: usize) -> Option<usize> {
 /// True when the candidate is really part of a longer dotted number (1.2.3.4.5).
 fn continues_number(chars: &[char], start: usize, end: usize) -> bool {
     let after =
-        chars.get(end) == Some(&'.') && chars.get(end + 1).is_some_and(|c| c.is_ascii_digit());
+        chars.get(end) == Some(&'.') && chars.get(end + 1).is_some_and(char::is_ascii_digit);
     let before = start >= 2 && chars[start - 1] == '.' && chars[start - 2].is_ascii_digit();
     after || before
 }
@@ -579,7 +579,7 @@ mod tests {
     fn privacy_engine() {
         let _g = crate::tests::GLOBALS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // Off: nothing changes.
         configure(&Settings::default());
         assert_eq!(redact("tester@10.0.0.5"), "tester@10.0.0.5");

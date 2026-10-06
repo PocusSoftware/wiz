@@ -14,7 +14,7 @@ fn fill(d: &mut QuickConnect, target: &str, key_path: &str, cx: &mut Context<Qui
 fn key_auth_finds_default_key_or_reports_missing(cx: &mut TestAppContext) {
     let _g = crate::tests::GLOBALS
         .lock()
-        .unwrap_or_else(|e| e.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let home = tempfile::tempdir().unwrap();
     let old_home = std::env::var_os("HOME");
     // SAFETY: GLOBALS is held, no other test reads the environment meanwhile.

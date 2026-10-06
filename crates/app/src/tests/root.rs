@@ -38,7 +38,7 @@ static DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
 fn setup() -> MutexGuard<'static, ()> {
     let guard = crate::tests::GLOBALS
         .lock()
-        .unwrap_or_else(|e| e.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = DIR.get_or_init(|| tempfile::tempdir().unwrap());
     // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
     unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
@@ -285,7 +285,7 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     }
 
     // Settings: lock, then unlock with a wrong and the right password.
-    root.update_in(cx, |r, w, cx| r.open_settings(w, cx));
+    root.update_in(cx, Root::open_settings);
     let settings = root.read_with(cx, |r, _| r.settings.clone().unwrap());
     settings.update(cx, |_, cx| cx.emit(SettingsEvent::Lock));
     cx.run_until_parked();

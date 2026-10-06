@@ -1171,7 +1171,7 @@ impl SftpView {
             remote: remote.clone(),
             remote_path: path.clone(),
             local: local.clone(),
-            dir: dir.clone(),
+            dir,
             downloaded: false,
             mtime: None,
             state: EState::Downloading,
@@ -2145,7 +2145,7 @@ mod tests {
     use super::*;
 
     fn n(v: &[&str]) -> Vec<String> {
-        v.iter().map(|s| s.to_string()).collect()
+        v.iter().map(ToString::to_string).collect()
     }
 
     #[test]

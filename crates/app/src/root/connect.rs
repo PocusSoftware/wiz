@@ -25,7 +25,7 @@ impl TrustPrompt for GuiPrompt {
 /// Run `work` until it finishes, the cancel sender is dropped, or `timeout_secs` (0 = never)
 /// pass. Time spent in the host key prompt does not count. `None` means cancelled.
 async fn race<T>(
-    work: impl std::future::Future<Output = ssh_core::Result<T>>,
+    work: impl Future<Output = ssh_core::Result<T>>,
     cancel: &mut oneshot::Receiver<()>,
     timeout_secs: u32,
     prompting: &AtomicBool,
@@ -153,7 +153,7 @@ impl Root {
                     Credentials::Password(p) => Some(p.clone()),
                     _ => None,
                 };
-                let keepalive = std::time::Duration::from_secs(keepalive_secs as u64);
+                let keepalive = Duration::from_secs(keepalive_secs as u64);
                 let conn = race(
                     Connection::connect_with(&h, &creds, verifier, keepalive),
                     &mut cancel_rx,
@@ -292,7 +292,7 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match what {
-            Open::Shell => self.open_shell(host.name.clone(), conn, password, None, window, cx),
+            Open::Shell => self.open_shell(host.name, conn, password, None, window, cx),
             Open::Docker => self.open_docker(host, conn, password, window, cx),
             Open::Sftp => self.open_sftp(host, conn, window, cx),
             Open::SftpSource(view, side) => self.attach_sftp(host, conn, view, side, window, cx),

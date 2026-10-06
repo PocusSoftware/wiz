@@ -449,7 +449,7 @@ impl TerminalView {
             return;
         }
         let app_cursor = self.term.term.mode().contains(TermMode::APP_CURSOR);
-        let Some(bytes) = key_bytes(&k.key, k.key_char.as_deref(), m, app_cursor) else {
+        let Some(bytes) = key_bytes(&k.key, k.key_char.as_deref(), *m, app_cursor) else {
             cx.propagate();
             return;
         };
@@ -464,7 +464,7 @@ impl TerminalView {
 fn key_bytes(
     key: &str,
     key_char: Option<&str>,
-    m: &gpui::Modifiers,
+    m: gpui::Modifiers,
     app_cursor: bool,
 ) -> Option<Vec<u8>> {
     let csi = |c: char| -> Vec<u8> {
@@ -583,9 +583,9 @@ fn resolve(color: Color, default: u32) -> u32 {
             match n {
                 NamedColor::Foreground
                 | NamedColor::BrightForeground
-                | NamedColor::DimForeground => TEXT,
+                | NamedColor::DimForeground
+                | NamedColor::Cursor => TEXT,
                 NamedColor::Background => BG,
-                NamedColor::Cursor => TEXT,
                 _ if i < 16 => ANSI[i],
                 _ if i >= NamedColor::DimBlack as usize => {
                     ANSI[(i - NamedColor::DimBlack as usize).min(7)]
@@ -729,7 +729,7 @@ impl Render for TerminalView {
                 }
                 cx.notify();
             }))
-            .when(self.hover_link.is_some(), |d| d.cursor_pointer())
+            .when(self.hover_link.is_some(), Styled::cursor_pointer)
             .size_full()
             .relative()
             .flex()
@@ -1016,23 +1016,23 @@ mod tests {
     #[test]
     fn option_composed_chars_have_no_esc_prefix() {
         // German layout: Option+7 is "|", Option+L is "@".
-        assert_eq!(key_bytes("7", Some("|"), &alt(), false).unwrap(), b"|");
-        assert_eq!(key_bytes("l", Some("@"), &alt(), false).unwrap(), b"@");
+        assert_eq!(key_bytes("7", Some("|"), alt(), false).unwrap(), b"|");
+        assert_eq!(key_bytes("l", Some("@"), alt(), false).unwrap(), b"@");
         // Plain Option+key where the OS gives the same char becomes Meta (ESC prefix).
-        assert_eq!(key_bytes("b", Some("b"), &alt(), false).unwrap(), b"\x1bb");
+        assert_eq!(key_bytes("b", Some("b"), alt(), false).unwrap(), b"\x1bb");
     }
 
     #[test]
     fn basic_keys() {
         let none = Modifiers::default();
-        assert_eq!(key_bytes("a", Some("a"), &none, false).unwrap(), b"a");
-        assert_eq!(key_bytes("enter", None, &none, false).unwrap(), b"\r");
-        assert_eq!(key_bytes("up", None, &none, false).unwrap(), b"\x1b[A");
-        assert_eq!(key_bytes("up", None, &none, true).unwrap(), b"\x1bOA");
+        assert_eq!(key_bytes("a", Some("a"), none, false).unwrap(), b"a");
+        assert_eq!(key_bytes("enter", None, none, false).unwrap(), b"\r");
+        assert_eq!(key_bytes("up", None, none, false).unwrap(), b"\x1b[A");
+        assert_eq!(key_bytes("up", None, none, true).unwrap(), b"\x1bOA");
         let ctrl = Modifiers {
             control: true,
             ..Default::default()
         };
-        assert_eq!(key_bytes("c", Some("c"), &ctrl, false).unwrap(), b"\x03");
+        assert_eq!(key_bytes("c", Some("c"), ctrl, false).unwrap(), b"\x03");
     }
 }

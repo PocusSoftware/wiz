@@ -7,12 +7,32 @@ edition = "2024"
 version = "0.1.0"
 license = "MIT"
 
+# The rules behind these are in AGENTS.md. Warnings count as failures.
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = { level = "deny" }
+unused_qualifications = "warn"
 
 [workspace.lints.clippy]
 undocumented_unsafe_blocks = "warn"
 uninlined_format_args = "warn"
+# Leftovers that must not ship.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+# Work that does nothing: copies, wrappers and conversions with no effect.
+redundant_clone = "warn"
+redundant_closure_for_method_calls = "warn"
+implicit_clone = "warn"
+cloned_instead_of_copied = "warn"
+needless_collect = "warn"
+unnecessary_wraps = "warn"
+match_same_arms = "warn"
+manual_let_else = "warn"
+# Arguments taken the way the function uses them.
+trivially_copy_pass_by_ref = "warn"
+# Silencing a lint needs `#[expect(..., reason = "...")]`, which fails once it is stale.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 
 [profile.release]
 lto = "thin"

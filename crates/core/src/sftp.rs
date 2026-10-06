@@ -284,7 +284,7 @@ impl Sftp {
         remote: &'a str,
         dest: &'a Path,
         progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             progress.check()?;
             let md = self.inner.metadata(remote).await.map_err(e)?;
@@ -343,7 +343,7 @@ impl Sftp {
         other: &'a Sftp,
         dest: &'a str,
         progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             progress.check()?;
             let md = self.inner.metadata(src).await.map_err(e)?;
@@ -401,7 +401,7 @@ impl Sftp {
         local: &'a Path,
         dest: &'a str,
         progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
             progress.check()?;
             let md = tokio::fs::metadata(local).await?;

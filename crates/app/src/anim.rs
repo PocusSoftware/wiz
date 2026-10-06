@@ -21,7 +21,7 @@ pub fn fade_in<E: Styled + IntoElement + 'static>(
     el.with_animation(
         id,
         Animation::new(ms(140)).with_easing(ease_out_quint()),
-        |el, t| el.opacity(t),
+        Styled::opacity,
     )
 }
 

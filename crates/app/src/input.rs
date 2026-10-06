@@ -422,7 +422,7 @@ impl Render for TextInput {
 
         let mut row = div().flex().items_center().whitespace_nowrap();
         if hidden {
-            row = row.child(shown.clone());
+            row = row.child(shown);
         } else if self.has_selection() {
             row = row.child(shown[..s].to_string());
             if caret_at == s && focused {

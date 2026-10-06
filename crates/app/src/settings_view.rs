@@ -127,7 +127,7 @@ impl SettingsView {
             s.terminal_font = (!term.is_empty()).then(|| term.clone());
             s.extra_mask = Some(extra.clone());
             s.secret_file_patterns = Some(pats.clone());
-            s.editor_app = Some(editor.clone());
+            s.editor_app = Some(editor);
         });
     }
 
@@ -193,7 +193,10 @@ impl SettingsView {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one setting row: label, text, value, range and setter"
+    )]
     fn stepper(
         &self,
         id: &'static str,
@@ -243,7 +246,10 @@ impl SettingsView {
 
     /// Like `stepper`, but steps through fixed `choices` (for ranges where linear steps are
     /// useless, like speeds from 128 KB/s to 100 MB/s).
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one setting row: label, text, value, range and setter"
+    )]
     fn choice(
         &self,
         id: &'static str,

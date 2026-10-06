@@ -91,7 +91,7 @@ fn main() {
             cx.on_action(|_: &Quit, cx| {
                 let root = cx.windows().into_iter().find_map(|w| w.downcast::<Root>());
                 match root {
-                    Some(r) if r.update(cx, |t, w, cx| t.request_quit(w, cx)).is_ok() => {}
+                    Some(r) if r.update(cx, Root::request_quit).is_ok() => {}
                     _ => cx.quit(),
                 }
             });

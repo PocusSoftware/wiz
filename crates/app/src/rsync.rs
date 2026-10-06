@@ -228,7 +228,6 @@ fn needs_quoting(version_text: &str) -> bool {
 
 /// Copy `names` from `src_dir` to `dst_dir` with rsync over `conn`. `upload` is local to
 /// remote. Progress counts the bytes that cross the connection.
-#[allow(clippy::too_many_arguments)]
 pub async fn run(
     conn: Arc<Connection>,
     local: Local,
@@ -274,7 +273,10 @@ pub async fn run(
     r
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each is a separate input, a struct would only be built to be taken apart"
+)]
 async fn run_rsync(
     sock: &std::path::Path,
     token: &str,

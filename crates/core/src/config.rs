@@ -35,6 +35,10 @@ fn default_port() -> u16 {
     22
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
 fn is_false(b: &bool) -> bool {
     !*b
 }
@@ -421,7 +425,7 @@ getters! {
     mask_secrets: bool = true;
     hide_secret_files: bool = true;
     extra_mask: Vec<String> = Vec::new();
-    secret_file_patterns: Vec<String> = DEFAULT_SECRET_FILES.iter().map(|s| s.to_string()).collect();
+    secret_file_patterns: Vec<String> = DEFAULT_SECRET_FILES.iter().map(ToString::to_string).collect();
     show_dotfiles: bool = false;
     rsync_hint_files: u32 = 500;
     rsync_hint_mb: u32 = 1024;

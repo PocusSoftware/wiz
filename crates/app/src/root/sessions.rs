@@ -16,7 +16,10 @@ impl Root {
     }
 
     /// Open a shell as a new tab, or as a new pane of tab `split_into` (a tab id).
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is a separate input, a struct would only be built to be taken apart"
+    )]
     pub(super) fn spawn_shell(
         &mut self,
         label: String,
@@ -148,7 +151,7 @@ impl Root {
                         this.on_sftp_event(view.downgrade(), ev, window, cx)
                     })
                     .detach();
-                    view.update(cx, |v, cx| v.load(cx));
+                    view.update(cx, SftpView::load);
                     this.push_tab(label, TabKind::Sftp(view), window, cx);
                 }
                 Err(e) => {
