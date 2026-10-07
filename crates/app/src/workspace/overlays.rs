@@ -1,12 +1,18 @@
 //! Modal dialogs over the window: host key trust, host form, quick connect, master password,
 //! and the close, delete and quit questions.
 
+use gpui::{MouseButton, MouseDownEvent};
+
 use super::*;
+
+/// What a click outside a dialog does.
+type Dismiss = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
 
 impl Workspace {
     /// The open dialogs, bottom to top.
     pub(super) fn overlays(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let overlay = |id: &'static str, child: AnyElement| {
+        // `dismiss` runs on a click outside the dialog, for dialogs that may close that way.
+        let overlay = |id: &'static str, child: AnyElement, dismiss: Option<Dismiss>| {
             fade_in(
                 div()
                     .absolute()
@@ -17,7 +23,24 @@ impl Workspace {
                     .bg(gpui::hsla(0., 0., 0., 0.6))
                     // Clicks, hovers and scrolls stop here, not on the window behind.
                     .occlude()
-                    .child(pop_in(div().child(child), (id, 1usize))),
+                    .when_some(dismiss, |d, f| d.on_mouse_down(MouseButton::Left, f))
+                    // The window still moves by its top edge (the buttons sit above this).
+                    .child(crate::platform::title_bar(
+                        div()
+                            .id("modal-drag")
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .h(px(TITLEBAR_H))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                    ))
+                    .child(pop_in(
+                        div()
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(child),
+                        (id, 1usize),
+                    )),
                 (id, 0usize),
             )
         };
@@ -92,20 +115,33 @@ impl Workspace {
                             )),
                     )
                     .into_any_element(),
+                None,
             )
         });
-        let form = self
-            .form
-            .clone()
-            .map(|f| overlay("form", f.into_any_element()));
-        let quick_form = self
-            .quick_form
-            .clone()
-            .map(|f| overlay("quick", f.into_any_element()));
+        let form = self.form.clone().map(|f| {
+            let cancel = f.clone();
+            overlay(
+                "form",
+                f.into_any_element(),
+                Some(Box::new(cx.listener(move |_, _, _, cx| {
+                    cancel.update(cx, |_, cx| cx.emit(FormEvent::Cancelled))
+                }))),
+            )
+        });
+        let quick_form = self.quick_form.clone().map(|f| {
+            let cancel = f.clone();
+            overlay(
+                "quick",
+                f.into_any_element(),
+                Some(Box::new(cx.listener(move |_, _, _, cx| {
+                    cancel.update(cx, |_, cx| cx.emit(QuickEvent::Cancelled))
+                }))),
+            )
+        });
         let unlock = self
             .unlock
             .clone()
-            .map(|f| overlay("unlock", f.into_any_element()));
+            .map(|f| overlay("unlock", f.into_any_element(), None));
         let delete_dialog = self.confirm_delete.and_then(|ix| {
             let h = self.cfg.hosts.get(ix)?;
             Some(overlay(
@@ -143,6 +179,7 @@ impl Workspace {
                             )),
                     )
                     .into_any_element(),
+                None,
             ))
         });
         let confirm_dialog =
@@ -187,6 +224,7 @@ impl Workspace {
                                 )),
                         )
                         .into_any_element(),
+                    None,
                 ))
             });
 
@@ -220,6 +258,7 @@ impl Workspace {
                         ),
                     )
                     .into_any_element(),
+                None,
             )
         });
         [

@@ -588,12 +588,23 @@ fn select_tab_by_number_and_pin(cx: &mut TestAppContext) {
 fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
-    cx.dispatch_action(OpenSettings);
+    logs_tab(&root, cx, "a");
     cx.dispatch_action(QuickConnect);
     cx.run_until_parked();
-    // The castle (hosts page) sits at the left of the tab bar, under the dialog's backdrop.
-    cx.simulate_click(gpui::point(px(19.), px(15.)), gpui::Modifiers::default());
-    assert!(root.read_with(cx, |r, _| r.page == Page::Settings));
+    // A right click on the tab under the backdrop does not open its menu.
+    cx.simulate_event(gpui::MouseDownEvent {
+        position: gpui::point(px(100.), px(15.)),
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Right,
+        click_count: 1,
+        first_mouse: false,
+    });
+    assert!(root.read_with(cx, |r, _| r.tab_menu.is_none()));
+    // A click inside quick connect keeps it, a click outside closes it.
+    cx.simulate_click(gpui::point(px(700.), px(450.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
+    cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
 }
 
 #[gpui::test]

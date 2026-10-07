@@ -612,6 +612,7 @@ impl Render for Workspace {
             )
             .children(overlays)
             .children(tab_menu)
+            .child(Self::window_controls())
     }
 }
 

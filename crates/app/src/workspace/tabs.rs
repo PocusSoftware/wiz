@@ -324,30 +324,13 @@ impl Workspace {
                     )
                 })
         });
-        // Window buttons at the end picked in settings. On the left they go close first,
-        // like macOS; on the right close last, like Windows.
+        // Room for the window buttons, which `window_controls` draws above everything.
         let left = crate::prefs::get().window_controls() == WindowControls::Left;
-        let min = win_button("win-min", "minus", ACTIVE, Min, |w, _| w.minimize_window());
-        let max = win_button("win-max", "maximize", ACTIVE, Max, |w, _| w.zoom_window());
-        // Closing the window quits, so it goes through the same check.
-        let close = win_button("win-close", "x", RED, Close, |w, cx| {
-            w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
-        });
-        let controls = div()
-            .flex()
-            .flex_none()
-            .h_full()
-            .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
-            .border_color(c(BORDER_VARIANT))
-            .children(if left {
-                [close, min, max]
-            } else {
-                [min, max, close]
-            });
+        let room = || div().flex_none().w(px(CONTROLS_W));
         let (lead, trail) = if left {
-            (Some(controls), None)
+            (Some(room()), None)
         } else {
-            (None, Some(controls))
+            (None, Some(room()))
         };
         div()
             .h(px(TITLEBAR_H))
@@ -480,6 +463,35 @@ impl Workspace {
             .children(trail)
     }
 
+    /// The window buttons, at the end of the tab bar picked in settings. They sit above the
+    /// dialogs, so the window can still be minimized or closed while one is open. On the
+    /// left they go close first, like macOS; on the right close last, like Windows.
+    pub(super) fn window_controls() -> impl IntoElement {
+        let left = crate::prefs::get().window_controls() == WindowControls::Left;
+        let min = win_button("win-min", "minus", ACTIVE, Min, |w, _| w.minimize_window());
+        let max = win_button("win-max", "maximize", ACTIVE, Max, |w, _| w.zoom_window());
+        // Closing the window quits, so it goes through the same check.
+        let close = win_button("win-close", "x", RED, Close, |w, cx| {
+            w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
+        });
+        div()
+            .absolute()
+            .top_0()
+            .map(|d| if left { d.left_0() } else { d.right_0() })
+            .w(px(CONTROLS_W))
+            // Above the tab bar's bottom border, not over it.
+            .h(px(TITLEBAR_H - 1.))
+            .flex()
+            .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
+            .border_color(c(BORDER_VARIANT))
+            .bg(c(BG))
+            .children(if left {
+                [close, min, max]
+            } else {
+                [min, max, close]
+            })
+    }
+
     pub(super) fn content(&self, cx: &mut Context<Self>) -> AnyElement {
         match (self.page, &self.settings) {
             (Page::Settings, Some(v)) => return v.clone().into_any_element(),
@@ -508,6 +520,9 @@ impl Workspace {
         }
     }
 }
+
+/// Three 40 px window buttons and their border.
+const CONTROLS_W: f32 = 3. * 40. + 1.;
 
 /// Square, full-height window control for the custom title bar.
 fn win_button(
