@@ -1,8 +1,31 @@
-//! The right-click menu of a tab: pin, duplicate, close.
+//! Rearranging tabs: the right-click menu (pin, duplicate, close) and dragging.
 
 use gpui::{MouseButton, Point};
 
 use super::*;
+
+/// A tab being dragged to a new place; also draws itself under the mouse.
+#[derive(Clone)]
+pub(super) struct DraggedTab {
+    pub(super) id: u64,
+    pub(super) label: SharedString,
+}
+
+impl Render for DraggedTab {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py(px(3.))
+            .rounded(px(2.))
+            .bg(c(ELEVATED))
+            .border_1()
+            .border_color(c(BORDER))
+            .text_color(c(TEXT))
+            .font_family(ui())
+            .text_size(px(12.))
+            .child(self.label.clone())
+    }
+}
 
 /// Width of the menu, also used to keep it inside the window.
 const MENU_W: f32 = 180.;
@@ -33,17 +56,44 @@ impl Workspace {
     /// Pin or unpin a tab. Pinned tabs stay together at the front: a pinned tab goes after
     /// the other pinned ones, an unpinned one right after them.
     pub(super) fn toggle_pin_tab(&mut self, id: u64, cx: &mut Context<Self>) {
+        self.reorder(id, cx, |tab, others| {
+            tab.pinned = !tab.pinned;
+            others.iter().take_while(|t| t.pinned).count()
+        });
+    }
+
+    /// Move a dragged tab to where tab `to` is, without crossing between pinned and
+    /// unpinned tabs.
+    pub(super) fn move_tab(&mut self, id: u64, to: usize, cx: &mut Context<Self>) {
+        self.reorder(id, cx, |tab, others| {
+            let pinned = others.iter().take_while(|t| t.pinned).count();
+            if tab.pinned {
+                to.min(pinned)
+            } else {
+                to.clamp(pinned, others.len())
+            }
+        });
+    }
+
+    /// Take tab `id` out, let `place` change it and pick its new index among the others,
+    /// and keep the selected tab selected.
+    fn reorder(
+        &mut self,
+        id: u64,
+        cx: &mut Context<Self>,
+        place: impl FnOnce(&mut Tab, &[Tab]) -> usize,
+    ) {
         let Some(ix) = self.tabs.iter().position(|t| t.id == id) else {
             return;
         };
         let active = self.tabs.get(self.active).map(|t| t.id);
         let mut tab = self.tabs.remove(ix);
-        tab.pinned = !tab.pinned;
-        let to = self.tabs.iter().take_while(|t| t.pinned).count();
+        let to = place(&mut tab, &self.tabs);
         self.tabs.insert(to, tab);
         if let Some(i) = active.and_then(|a| self.tabs.iter().position(|t| t.id == a)) {
             self.active = i;
         }
+        self.tab_scroll.scroll_to_item(self.active);
         cx.notify();
     }
 

@@ -15,6 +15,8 @@ impl Workspace {
                     .items_center()
                     .justify_center()
                     .bg(gpui::hsla(0., 0., 0., 0.6))
+                    // Clicks, hovers and scrolls stop here, not on the window behind.
+                    .occlude()
                     .child(pop_in(div().child(child), (id, 1usize))),
                 (id, 0usize),
             )

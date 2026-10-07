@@ -3,6 +3,7 @@
 use gpui::WindowControlArea::{self, Close, Max, Min};
 use gpui::{MouseButton, MouseDownEvent};
 
+use super::tab_menu::DraggedTab;
 use super::*;
 
 impl Workspace {
@@ -197,9 +198,8 @@ impl Workspace {
         // Share the space between the castle and the buttons on the right: tabs are 220 px
         // wide until they don't fit, then narrow down to 110 px and the strip scrolls.
         const RESERVED: f32 = 38. + 4. * 24. + 8. + 3. * 40. + 32.;
-        let pinned = self.tabs.iter().filter(|t| t.pinned).count();
-        let room = f32::from(window_w) - RESERVED - PINNED_W * pinned as f32;
-        let tab_w = (room / (self.tabs.len() - pinned).max(1) as f32).clamp(110., 220.);
+        let room = f32::from(window_w) - RESERVED;
+        let tab_w = (room / self.tabs.len().max(1) as f32).clamp(110., 220.);
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
@@ -231,11 +231,7 @@ impl Workspace {
                 .gap(px(6.))
                 .cursor_pointer()
                 .flex_shrink_0()
-                .w(px(if tab.pinned { PINNED_W } else { tab_w }))
-                .when(tab.pinned, |d| {
-                    d.justify_center()
-                        .tooltip(crate::widgets::tip(text.clone()))
-                })
+                .w(px(tab_w))
                 .border_r_1()
                 .border_color(c(BORDER_VARIANT))
                 .relative()
@@ -254,6 +250,15 @@ impl Workspace {
                 .text_color(c(if active { TEXT } else { MUTED }))
                 .hover(|s| s.text_color(c(TEXT)))
                 .on_click(cx.listener(move |t, _, w, cx| t.select_tab(ix, w, cx)))
+                .on_drag(
+                    DraggedTab {
+                        id,
+                        label: tab.label.clone(),
+                    },
+                    |d, _, _, cx| cx.new(|_| d.clone()),
+                )
+                .drag_over::<DraggedTab>(|s, _, _, _| s.bg(c(ACTIVE)))
+                .on_drop(cx.listener(move |t, d: &DraggedTab, _, cx| t.move_tab(d.id, ix, cx)))
                 .on_mouse_down(
                     MouseButton::Right,
                     cx.listener(move |t, ev: &MouseDownEvent, w, cx| {
@@ -265,17 +270,17 @@ impl Workspace {
                     13.,
                     if active { ACCENT_TEXT } else { MUTED },
                 ))
-                .when(!tab.pinned, |d| {
-                    d.child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .child(text),
-                    )
-                })
+                .child(
+                    // Fills the tab, so the close button sits at its right edge.
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .child(text),
+                )
                 // Pane count of a split tab, outside the text so truncation never hides it.
-                .when(panes > 1 && !tab.pinned, |d| {
+                .when(panes > 1, |d| {
                     d.child(
                         div()
                             .flex_none()
@@ -287,6 +292,8 @@ impl Workspace {
                             .child(panes.to_string()),
                     )
                 })
+                // A pinned tab closes only from its menu.
+                .when(tab.pinned, |d| d.child(icon("pin", 12., MUTED)))
                 .when(!tab.pinned, |d| {
                     d.child(
                         icon_button(
@@ -474,9 +481,6 @@ impl Workspace {
         }
     }
 }
-
-/// Width of a pinned tab, which shows only its icon.
-const PINNED_W: f32 = 36.;
 
 /// Square, full-height window control for the custom title bar.
 fn win_button(

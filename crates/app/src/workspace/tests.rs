@@ -533,10 +533,32 @@ fn select_tab_by_number_and_pin(cx: &mut TestAppContext) {
     assert_eq!(labels(&root, cx), ["a", "c", "b"]);
     assert_eq!(active(cx), "b");
 
+    // Dragging moves a tab, but never between pinned and unpinned ones.
+    let b = id(cx, "b");
+    root.update(cx, |r, cx| r.move_tab(b, 0, cx));
+    assert_eq!(labels(&root, cx), ["a", "b", "c"]);
+    root.update(cx, |r, cx| r.move_tab(b, 2, cx));
+    assert_eq!(labels(&root, cx), ["a", "c", "b"]);
+    root.update(cx, |r, cx| r.move_tab(a, 2, cx));
+    assert_eq!(labels(&root, cx), ["a", "c", "b"]);
+    assert_eq!(active(cx), "b");
+
     // The right-click menu closes with Escape.
     root.update_in(cx, |r, w, cx| {
         r.open_tab_menu(a, gpui::point(px(10.), px(10.)), w, cx)
     });
     cx.simulate_keystrokes("escape");
     assert!(root.read_with(cx, |r, _| r.tab_menu.is_none()));
+}
+
+#[gpui::test]
+fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.dispatch_action(OpenSettings);
+    cx.dispatch_action(QuickConnect);
+    cx.run_until_parked();
+    // The castle (hosts page) sits at the left of the tab bar, under the dialog's backdrop.
+    cx.simulate_click(gpui::point(px(19.), px(15.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.page == Page::Settings));
 }
