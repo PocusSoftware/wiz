@@ -67,6 +67,8 @@ impl client::Handler for Handler {
 
 pub struct Connection {
     handle: client::Handle<Handler>,
+    /// Address connected to, to look for FTP when the server has no SFTP.
+    host: String,
 }
 
 #[derive(Debug)]
@@ -112,7 +114,10 @@ impl Connection {
         };
         let mut handle = client::connect(config, (host.host.as_str(), host.port), handler).await?;
         authenticate(&mut handle, &host.user, creds).await?;
-        Ok(Self { handle })
+        Ok(Self {
+            handle,
+            host: host.host.clone(),
+        })
     }
 
     pub fn is_closed(&self) -> bool {
@@ -164,10 +169,28 @@ impl Connection {
             .is_ok_and(|o| o.status == Some(0))
     }
 
-    /// Open an SFTP session on this connection.
+    /// Open an SFTP session on this connection. A server without SFTP refuses it; then the
+    /// error says whether the server offers FTP instead.
     pub async fn open_sftp(&self) -> Result<crate::sftp::Sftp> {
-        let ch = self.handle.channel_open_session().await?;
+        let mut ch = self.handle.channel_open_session().await?;
         ch.request_subsystem(true, "sftp").await?;
+        let answer = async {
+            loop {
+                match ch.wait().await {
+                    Some(ChannelMsg::Success) => return true,
+                    Some(ChannelMsg::Failure) | None => return false,
+                    Some(_) => {}
+                }
+            }
+        };
+        // Servers must answer; one that never does counts as refusing.
+        if !tokio::time::timeout(Duration::from_secs(10), answer)
+            .await
+            .unwrap_or(false)
+        {
+            let ftp = crate::sftp::ftp_offered(&self.host).await;
+            return Err(Error::NoSftp { ftp });
+        }
         crate::sftp::Sftp::new(ch.into_stream()).await
     }
 

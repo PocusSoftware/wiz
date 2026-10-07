@@ -9,6 +9,8 @@ pub(super) fn key_bytes(
     m: gpui::Modifiers,
     app_cursor: bool,
 ) -> Option<Vec<u8>> {
+    let key_char = crate::widgets::typed(key, key_char);
+    let key = if key == "space" { " " } else { key };
     let csi = |c: char| -> Vec<u8> {
         let (intro, mods) = (
             if app_cursor && !m.modified() {
@@ -122,9 +124,7 @@ impl TerminalView {
                     cx.notify();
                 }
                 ("v", false) => {
-                    if let Some(t) = cx.read_from_clipboard().and_then(|c| c.text()) {
-                        self.paste(&t, cx);
-                    }
+                    self.paste_clipboard(cx);
                     cx.stop_propagation();
                 }
                 ("f", false) => {
@@ -144,6 +144,11 @@ impl TerminalView {
                 }
                 _ => cx.propagate(),
             }
+            return;
+        }
+        if crate::platform::terminal_paste(*m, &k.key) {
+            self.paste_clipboard(cx);
+            cx.stop_propagation();
             return;
         }
         if self.retry_ready && k.key == "enter" {

@@ -1,4 +1,5 @@
-//! Icons and brand images compiled into the binary, served to gpui by path.
+//! Icons, brand images and fonts compiled into the binary. Icons are served to gpui by
+//! path, fonts are added to the text system at startup.
 
 use std::borrow::Cow;
 
@@ -51,6 +52,18 @@ icons!(
     "search",
     "external-link"
 );
+
+/// Default UI and terminal fonts (SIL Open Font License, texts next to the files), so
+/// every platform looks the same without installing anything.
+pub const FONTS: &[&[u8]] = &[
+    include_bytes!("../assets/fonts/IBMPlexSans-Regular.ttf"),
+    include_bytes!("../assets/fonts/IBMPlexSans-Medium.ttf"),
+    include_bytes!("../assets/fonts/IBMPlexSans-SemiBold.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-Italic.ttf"),
+    include_bytes!("../assets/fonts/JetBrainsMono-BoldItalic.ttf"),
+];
 
 /// Icons are compiled into the binary (Lucide, ISC license).
 pub struct Assets;

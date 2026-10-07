@@ -8,6 +8,7 @@ mod overlays;
 mod reconnect;
 mod sessions;
 mod split;
+mod tab_menu;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -59,6 +60,11 @@ actions!(
         QuickConnect
     ]
 );
+
+/// Select the tab at this index: Cmd+1 to Cmd+9 (Ctrl on Windows).
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = app, no_json)]
+pub struct SelectTab(pub usize);
 
 struct TrustRequest {
     host: String,
@@ -155,6 +161,8 @@ struct Tab {
     id: u64,
     label: SharedString,
     kind: TabKind,
+    /// Pinned tabs come first, show only their icon and have no close button.
+    pinned: bool,
 }
 
 /// Runs once the secrets file is unlocked.
@@ -173,9 +181,13 @@ pub struct Workspace {
     conns: HashMap<String, Live>,
     tabs: Vec<Tab>,
     active: usize,
+    /// Right-click menu of a tab: its id, and where the mouse was.
+    tab_menu: Option<(u64, gpui::Point<Pixels>)>,
     page: Page,
     /// Created on first visit, then kept so the page keeps its scroll position.
     settings: Option<Entity<SettingsView>>,
+    /// The page Settings was opened from, shown again when it closes.
+    settings_from: Page,
     pending: Vec<Pending>,
     pane_drag: Option<PaneDrag>,
     /// Where the page content (below the tab bar) was drawn last frame.
@@ -259,8 +271,10 @@ impl Workspace {
             conns: HashMap::new(),
             tabs: vec![],
             active: 0,
+            tab_menu: None,
             page: Page::Home,
             settings: None,
+            settings_from: Page::Home,
             pending: Vec::new(),
             next_pending: 0,
             next_tab: 0,
@@ -344,6 +358,7 @@ impl Workspace {
             cx.subscribe_in(&view, window, |this, _, ev: &SettingsEvent, window, cx| {
                 match ev {
                     SettingsEvent::Changed => {}
+                    SettingsEvent::Close => this.close_settings(window, cx),
                     SettingsEvent::SwitchStore(to) => this.switch_store(*to, window, cx),
                     SettingsEvent::Unlock => this.show_unlock(UnlockMode::for_file(), window, cx),
                     SettingsEvent::Lock => {
@@ -357,7 +372,29 @@ impl Workspace {
             .detach();
             self.settings = Some(view);
         }
+        if self.page != Page::Settings {
+            self.settings_from = self.page;
+        }
         self.show_page(Page::Settings, window, cx);
+    }
+
+    /// Leave Settings for the page it was opened from.
+    fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.settings_from {
+            Page::Tab if !self.tabs.is_empty() => {
+                self.select_tab(self.active.min(self.tabs.len() - 1), window, cx)
+            }
+            _ => self.show_page(Page::Home, window, cx),
+        }
+    }
+
+    /// The settings button and shortcut: open Settings, or close it when it shows.
+    fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page == Page::Settings {
+            self.close_settings(window, cx);
+        } else {
+            self.open_settings(window, cx);
+        }
     }
 
     /// Settings changed somewhere: repaint every page (they read the live settings) and
@@ -415,12 +452,20 @@ impl Render for Workspace {
             crate::mark("first render");
         }
         let overlays = self.overlays(cx);
+        let tab_menu = self.tab_menu(window, cx);
 
         div()
             .id("root")
             .track_focus(&self.focus)
             .key_context("Workspace")
             .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                if t.tab_menu.is_some() {
+                    if ev.keystroke.key == "escape" {
+                        t.close_tab_menu(w, cx);
+                        cx.stop_propagation();
+                    }
+                    return;
+                }
                 if t.quit_notice.is_some() {
                     if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
                         t.dismiss_quit_notice(w, cx);
@@ -450,7 +495,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
                 Page::Tab => t.close_current(w, cx),
-                Page::Settings => t.show_page(Page::Home, w, cx),
+                Page::Settings => t.close_settings(w, cx),
                 Page::Home => {}
             }))
             .on_action(cx.listener(|t, _: &NextTab, w, cx| {
@@ -463,9 +508,10 @@ impl Render for Workspace {
                     t.select_tab((t.active + t.tabs.len() - 1) % t.tabs.len(), w, cx)
                 }
             }))
+            .on_action(cx.listener(|t, a: &SelectTab, w, cx| t.select_tab(a.0, w, cx)))
             .on_action(cx.listener(|t, _: &NewHost, w, cx| t.open_form(None, w, cx)))
             .on_action(cx.listener(|t, _: &QuickConnect, w, cx| t.open_quick(w, cx)))
-            .on_action(cx.listener(|t, _: &OpenSettings, w, cx| t.open_settings(w, cx)))
+            .on_action(cx.listener(|t, _: &OpenSettings, w, cx| t.toggle_settings(w, cx)))
             .size_full()
             .flex()
             .font_family(ui())
@@ -548,6 +594,7 @@ impl Render for Workspace {
                     }),
             )
             .children(overlays)
+            .children(tab_menu)
     }
 }
 

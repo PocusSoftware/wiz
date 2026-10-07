@@ -31,6 +31,21 @@ fn sort_entries(v: &mut [Entry]) {
     });
 }
 
+/// Whether `host` greets like an FTP server ("220 ...") on port 21 within 2 seconds.
+pub async fn ftp_offered(host: &str) -> bool {
+    let probe = async {
+        let mut stream = tokio::net::TcpStream::connect((host, 21)).await.ok()?;
+        let mut code = [0u8; 3];
+        stream.read_exact(&mut code).await.ok()?;
+        Some(&code == b"220")
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(2), probe)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(false)
+}
+
 /// Join POSIX paths without doubling slashes.
 pub fn join(dir: &str, name: &str) -> String {
     if dir.ends_with('/') {

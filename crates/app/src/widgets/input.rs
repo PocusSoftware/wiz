@@ -319,7 +319,7 @@ impl TextInput {
                 cx.propagate();
                 return;
             }
-            _ => match &k.key_char {
+            _ => match super::typed(&k.key, k.key_char.as_deref()) {
                 Some(ch)
                     if crate::platform::types_char(*m) && !ch.chars().any(char::is_control) =>
                 {

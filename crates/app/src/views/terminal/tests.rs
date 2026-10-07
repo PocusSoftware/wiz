@@ -33,3 +33,20 @@ fn basic_keys() {
     };
     assert_eq!(key_bytes("c", Some("c"), ctrl, false).unwrap(), b"\x03");
 }
+
+#[test]
+fn space_bar() {
+    // Windows reports the space bar with no text; macOS sends " ".
+    for key_char in [None, Some(" ")] {
+        assert_eq!(
+            key_bytes("space", key_char, Modifiers::default(), false).unwrap(),
+            b" "
+        );
+    }
+    let ctrl = Modifiers {
+        control: true,
+        ..Default::default()
+    };
+    assert_eq!(key_bytes("space", None, ctrl, false).unwrap(), b"\0");
+    assert_eq!(key_bytes("space", None, alt(), false).unwrap(), b"\x1b ");
+}

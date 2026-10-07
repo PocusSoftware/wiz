@@ -34,6 +34,11 @@ pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> A
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
 
+/// The text a key press types. gpui on Windows reports the space bar with none.
+pub fn typed<'a>(key: &str, key_char: Option<&'a str>) -> Option<&'a str> {
+    key_char.or((key == "space").then_some(" "))
+}
+
 pub fn icon(name: &str, size: f32, color: u32) -> gpui::Svg {
     svg()
         .path(format!("icons/{name}.svg"))

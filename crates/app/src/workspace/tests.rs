@@ -464,3 +464,79 @@ fn status_messages_hide_after_a_while(cx: &mut TestAppContext) {
         .advance_clock(Duration::from_secs(STATUS_ERROR_SECS - 5));
     assert_eq!(shown(&root, cx), None);
 }
+
+/// Open a tab that needs no server: container logs (fetching them fails quietly here).
+fn logs_tab(root: &Entity<Workspace>, cx: &mut VisualTestContext, name: &str) {
+    root.update_in(cx, |r, w, cx| {
+        let local = Arc::new(docker::Local::new().unwrap());
+        let view = cx.new(|cx| LogView::new(Backend::Local(local), name.into(), cx));
+        r.push_tab(name.into(), TabKind::Logs(view), w, cx);
+    });
+}
+
+fn labels(root: &Entity<Workspace>, cx: &mut VisualTestContext) -> Vec<String> {
+    root.read_with(cx, |r, _| {
+        r.tabs.iter().map(|t| t.label.to_string()).collect()
+    })
+}
+
+#[gpui::test]
+fn settings_close_back_to_where_they_opened(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    let page = |cx: &mut VisualTestContext| root.read_with(cx, |r, _| r.page);
+    // The settings shortcut and button toggle.
+    cx.dispatch_action(OpenSettings);
+    assert!(page(cx) == Page::Settings);
+    cx.dispatch_action(OpenSettings);
+    assert!(page(cx) == Page::Home);
+    // Escape closes, back to the tab it was opened from.
+    logs_tab(&root, cx, "a");
+    logs_tab(&root, cx, "b");
+    cx.dispatch_action(SelectTab(0));
+    cx.dispatch_action(OpenSettings);
+    cx.run_until_parked();
+    cx.simulate_keystrokes("escape");
+    assert!(page(cx) == Page::Tab);
+    assert_eq!(root.read_with(cx, |r, _| r.active), 0);
+}
+
+#[gpui::test]
+fn select_tab_by_number_and_pin(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    for name in ["a", "b", "c"] {
+        logs_tab(&root, cx, name);
+    }
+    let active =
+        |cx: &mut VisualTestContext| root.read_with(cx, |r, _| r.tabs[r.active].label.to_string());
+    cx.dispatch_action(SelectTab(1));
+    assert_eq!(active(cx), "b");
+    // Past the last tab: nothing changes.
+    cx.dispatch_action(SelectTab(8));
+    assert_eq!(active(cx), "b");
+
+    // Pinned tabs move to the front in pin order; the selected tab stays selected.
+    let id = |cx: &mut VisualTestContext, name: &str| {
+        root.read_with(cx, |r, _| {
+            r.tabs.iter().find(|t| t.label == name).unwrap().id
+        })
+    };
+    let (a, c) = (id(cx, "a"), id(cx, "c"));
+    root.update(cx, |r, cx| r.toggle_pin_tab(c, cx));
+    assert_eq!(labels(&root, cx), ["c", "a", "b"]);
+    root.update(cx, |r, cx| r.toggle_pin_tab(a, cx));
+    assert_eq!(labels(&root, cx), ["c", "a", "b"]);
+    assert_eq!(active(cx), "b");
+    // Unpinning puts it right after the pinned ones.
+    root.update(cx, |r, cx| r.toggle_pin_tab(c, cx));
+    assert_eq!(labels(&root, cx), ["a", "c", "b"]);
+    assert_eq!(active(cx), "b");
+
+    // The right-click menu closes with Escape.
+    root.update_in(cx, |r, w, cx| {
+        r.open_tab_menu(a, gpui::point(px(10.), px(10.)), w, cx)
+    });
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, _| r.tab_menu.is_none()));
+}

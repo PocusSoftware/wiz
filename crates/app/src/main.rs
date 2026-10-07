@@ -58,13 +58,16 @@ fn main() {
             let settings = ssh_core::config::Settings::load();
             prefs::init(settings.clone());
             let ts = cx.text_system().clone();
-            // An unknown family resolves to the fallback font, so a candidate exists
-            // exactly when it resolves to something else.
-            let fallback = ts.resolve_font(&gpui::font("\u{1}no-such-font"));
-            theme::init_fonts(
-                &|name| ts.resolve_font(&gpui::font(name.to_string())) != fallback,
-                &settings,
-            );
+            // Before any lookup: the text system caches what a family resolves to.
+            if let Err(e) = ts.add_fonts(
+                assets::FONTS
+                    .iter()
+                    .map(|f| std::borrow::Cow::Borrowed(*f))
+                    .collect(),
+            ) {
+                eprintln!("Could not load the bundled fonts: {e}");
+            }
+            theme::init_fonts(&platform::font_exists(&ts), &settings);
             mark("after fonts");
             // Quit goes through Workspace, which refuses while sessions are open (if set).
             cx.on_action(|_: &Quit, cx| {

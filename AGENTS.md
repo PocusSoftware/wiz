@@ -81,7 +81,7 @@ the checks at the end pass.
   OS-specific goes in `platform/macos.rs` and `platform/windows.rs`, with the same
   functions in both; the rest of the app calls `crate::platform::...` and never checks the
   OS itself. A feature that only makes sense on macOS is left out on Windows (Keychain,
-  rsync, editor picks) rather than faked. In core, gate with `cfg(target_os = "macos")`.
+  rsync) rather than faked. In core, gate with `cfg(target_os = "macos")`.
 - **New setting:** add an `Option` field to `Settings`, a default in the `getters!`
   macro, a row in `views/settings.rs`, and a line in the README settings table.
 - **Split modules** (`workspace`, `views/sftp`, `views/terminal`): shared types live in

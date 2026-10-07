@@ -39,6 +39,11 @@ pub enum Error {
     },
     #[error("sftp: {0}")]
     Sftp(String),
+    #[error(
+        "the server has no SFTP{}",
+        if *ftp { ", only FTP on port 21, which Wiz does not support" } else { "" }
+    )]
+    NoSftp { ftp: bool },
     #[error("transfer cancelled")]
     Cancelled,
     #[error("connection timed out after {0} s")]

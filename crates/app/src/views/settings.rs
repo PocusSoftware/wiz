@@ -2,7 +2,7 @@
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
-    Render, SharedString, Window, div, prelude::*, px,
+    KeyDownEvent, Render, SharedString, Window, div, prelude::*, px,
 };
 use ssh_core::config::Settings;
 use ssh_core::secrets::{self, Store};
@@ -20,6 +20,8 @@ pub enum SettingsEvent {
     Unlock,
     Lock,
     ChangeMaster,
+    /// Escape: back to the page Settings was opened from.
+    Close,
 }
 
 impl EventEmitter<SettingsEvent> for SettingsView {}
@@ -31,7 +33,7 @@ pub struct SettingsView {
     extra_mask: Entity<TextInput>,
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
-    /// Known editors found in the Applications folders.
+    /// Known editors that are installed (`platform::installed_editors`).
     editors: Vec<&'static str>,
     error: Option<SharedString>,
 }
@@ -372,6 +374,12 @@ impl Render for SettingsView {
         div()
             .id("settings-page")
             .track_focus(&self.focus)
+            .on_key_down(cx.listener(|_, ev: &KeyDownEvent, _, cx| {
+                if ev.keystroke.key == "escape" {
+                    cx.emit(SettingsEvent::Close);
+                    cx.stop_propagation();
+                }
+            }))
             .size_full()
             .overflow_y_scroll()
             .child(
@@ -418,7 +426,7 @@ impl Render for SettingsView {
                         v => format!("{} MB/s", v / 1024),
                     }, |s, v| s.transfer_limit_kbps = Some(v), cx))
                     .child(self.text("Editor for server files", crate::platform::EDITOR_HINT, &self.editor))
-                    .when(crate::platform::EDITOR_PICKS, |d| d.child(self.editor_picks(&s.editor_app(), cx)))
+                    .child(self.editor_picks(&s.editor_app(), cx))
                     .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
                     .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))
                     // rsync and its hint exist only where the rsync bridge does.

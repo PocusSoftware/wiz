@@ -1,11 +1,16 @@
-//! Windows: Ctrl+Shift shortcuts (plain Ctrl belongs to the shell), native title bar
-//! areas, Notepad or a named program for files. No Keychain, rsync or editor picks.
+//! Windows: Ctrl+Shift shortcuts (plain Ctrl belongs to the shell, except paste and tab
+//! switching), native title bar areas, installed editors, Notepad or a named program for
+//! files. No Keychain or rsync.
 
-use std::path::Path;
+#[cfg(test)]
+mod tests;
+
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use gpui::{
     App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
-    Stateful, StatefulInteractiveElement, TitlebarOptions, Window, WindowControlArea,
+    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowControlArea,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
@@ -15,12 +20,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::workspace::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, SplitPane, Workspace,
+    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, SelectTab, SplitPane,
+    Workspace,
 };
-
-/// Fallback fonts when none of the preferred ones is installed.
-pub const UI_FONT: &str = "Segoe UI";
-pub const MONO_FONT: &str = "Consolas";
 
 /// rsync transfers need the macOS bridge; Windows uses SFTP only.
 pub const RSYNC: bool = false;
@@ -28,12 +30,13 @@ pub const RSYNC: bool = false;
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
 
-pub const EDITOR_HINT: &str = "Program that opens files with Enter: the full path to its .exe (C:\\Program Files\\Notepad++\\notepad++.exe). Empty uses Notepad.";
+pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
 
 /// Plain Ctrl+D, Ctrl+W and Ctrl+K mean something to the shell, so app shortcuts add Shift,
-/// like Windows Terminal. Alt+F4 quits through the window's close request.
+/// like Windows Terminal. Ctrl+Tab and Ctrl+1 to Ctrl+9 switch tabs, so Ctrl+2 (NUL) and
+/// Ctrl+6 no longer reach the shell. Alt+F4 quits through the window's close request.
 pub fn key_bindings() -> Vec<KeyBinding> {
-    vec![
+    let mut keys = vec![
         KeyBinding::new("ctrl-shift-w", CloseTab, None),
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
@@ -41,7 +44,9 @@ pub fn key_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-,", OpenSettings, None),
         KeyBinding::new("ctrl-shift-d", SplitPane, None),
         KeyBinding::new("ctrl-shift-k", QuickConnect, None),
-    ]
+    ];
+    keys.extend((1..=9).map(|n| KeyBinding::new(&format!("ctrl-{n}"), SelectTab(n - 1), None)));
+    keys
 }
 
 /// Label of an app-wide shortcut (`key_bindings`), like "Ctrl+Shift+D".
@@ -59,10 +64,20 @@ pub fn view_shortcut(shift: bool, key: &str) -> String {
 }
 
 /// Terminal shortcuts (copy, paste, find, ...) are Ctrl+Shift+key, so plain Ctrl+key still
-/// reaches the shell. `Some(alt)` when the chord is held, Alt picking the variant
+/// reaches the shell (except paste, `terminal_paste`, and tab switching). `Some(alt)` when the chord is held, Alt picking the variant
 /// (previous match, type password).
 pub fn terminal_chord(m: Modifiers) -> Option<bool> {
     (m.control && m.shift).then_some(m.alt)
+}
+
+/// Ctrl+V and Shift+Insert paste in the terminal, like Windows Terminal, even though plain
+/// Ctrl otherwise belongs to the shell. AltGr arrives as Ctrl+Alt, so Alt rules it out.
+pub fn terminal_paste(m: Modifiers, key: &str) -> bool {
+    match key {
+        "v" => m.control && !m.shift && !m.alt,
+        "insert" => m.shift && !m.control && !m.alt,
+        _ => false,
+    }
 }
 
 /// Whether a key press with these modifiers types its character into a text field. AltGr
@@ -80,6 +95,18 @@ pub fn alt_gr(m: Modifiers, key: &str, key_char: Option<&str>) -> bool {
 /// Ctrl-click opens a link in the terminal.
 pub fn link_click(m: Modifiers) -> bool {
     m.control
+}
+
+/// Whether a font family is installed or bundled. DirectWrite gives every unknown family
+/// its own copy of the fallback font, so comparing resolved fonts can't tell; compare the
+/// names instead (case-insensitive, like DirectWrite).
+pub fn font_exists(ts: &TextSystem) -> impl Fn(&str) -> bool {
+    let names: HashSet<String> = ts
+        .all_font_names()
+        .into_iter()
+        .map(|n| n.to_lowercase())
+        .collect();
+    move |name| names.contains(&name.to_lowercase())
 }
 
 pub fn on_launch() {}
@@ -176,22 +203,66 @@ fn drag(window: &Window) {
     }
 }
 
-/// Open a local file in `app`, or in Notepad without one. Never the file association: a
-/// server file named like a program or script would run.
+/// Editors offered as quick picks when installed, with where their installers put them
+/// (an environment variable for the base folder, then the path below it).
+const KNOWN_EDITORS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Visual Studio Code",
+        &[
+            ("LOCALAPPDATA", r"Programs\Microsoft VS Code\Code.exe"),
+            ("ProgramFiles", r"Microsoft VS Code\Code.exe"),
+        ],
+    ),
+    ("Cursor", &[("LOCALAPPDATA", r"Programs\cursor\Cursor.exe")]),
+    ("Zed", &[("LOCALAPPDATA", r"Programs\Zed\Zed.exe")]),
+    (
+        "Sublime Text",
+        &[("ProgramFiles", r"Sublime Text\sublime_text.exe")],
+    ),
+    ("Notepad++", &[("ProgramFiles", r"Notepad++\notepad++.exe")]),
+    (
+        "Windsurf",
+        &[("LOCALAPPDATA", r"Programs\Windsurf\Windsurf.exe")],
+    ),
+    (
+        "VSCodium",
+        &[
+            ("LOCALAPPDATA", r"Programs\VSCodium\VSCodium.exe"),
+            ("ProgramFiles", r"VSCodium\VSCodium.exe"),
+        ],
+    ),
+];
+
+/// The .exe of a known editor, when installed. Never a .cmd or .bat launcher (like VS
+/// Code's `code.cmd`): those run through cmd.exe, which would interpret a server file name.
+fn editor_exe(name: &str) -> Option<PathBuf> {
+    let (_, places) = KNOWN_EDITORS.iter().find(|(n, _)| *n == name)?;
+    places
+        .iter()
+        .filter_map(|(var, rel)| Some(PathBuf::from(std::env::var_os(var)?).join(rel)))
+        .find(|p| p.exists())
+}
+
+/// Known editors that are installed.
+pub fn installed_editors() -> Vec<&'static str> {
+    KNOWN_EDITORS
+        .iter()
+        .map(|(n, _)| *n)
+        .filter(|n| editor_exe(n).is_some())
+        .collect()
+}
+
+/// Open a local file in `app` (a known editor's name or a program), or in Notepad without
+/// one. Never the file association: a server file named like a program or script would run.
 pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
-    let program = if app.is_empty() { "notepad.exe" } else { app };
+    let program = match app {
+        "" => PathBuf::from("notepad.exe"),
+        _ => editor_exe(app).unwrap_or_else(|| PathBuf::from(app)),
+    };
     std::process::Command::new(program)
         .arg(path)
         .spawn()
         .map(drop)
-}
-
-/// No quick picks on Windows; the setting takes a program.
-pub const EDITOR_PICKS: bool = false;
-
-/// No list of installed editors on Windows; the setting takes a program name.
-pub fn installed_editors() -> Vec<&'static str> {
-    Vec::new()
 }
 
 /// The logged-in user, masked by "hide sensitive information".

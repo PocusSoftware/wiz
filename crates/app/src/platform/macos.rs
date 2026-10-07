@@ -4,19 +4,17 @@ use std::path::Path;
 
 use gpui::{
     App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
-    Stateful, StatefulInteractiveElement, TitlebarOptions, Window, WindowControlArea, point, px,
+    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowControlArea,
+    point, px,
 };
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSView};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 use crate::workspace::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SplitPane, Workspace,
+    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SelectTab, SplitPane,
+    Workspace,
 };
-
-/// Fallback fonts when none of the preferred ones is installed.
-pub const UI_FONT: &str = ".SystemUIFont";
-pub const MONO_FONT: &str = "Menlo";
 
 /// Large transfers between this Mac and a server can run through rsync.
 pub const RSYNC: bool = true;
@@ -27,7 +25,7 @@ pub const QUIT_KEYS: &str = "⌘Q";
 pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
 
 pub fn key_bindings() -> Vec<KeyBinding> {
-    vec![
+    let mut keys = vec![
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("cmd-w", CloseTab, None),
         KeyBinding::new("cmd-shift-]", NextTab, None),
@@ -38,7 +36,9 @@ pub fn key_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-d", SplitPane, None),
         KeyBinding::new("cmd-k", QuickConnect, None),
-    ]
+    ];
+    keys.extend((1..=9).map(|n| KeyBinding::new(&format!("cmd-{n}"), SelectTab(n - 1), None)));
+    keys
 }
 
 /// Label of an app-wide shortcut (`key_bindings`), like "⌘D".
@@ -58,6 +58,11 @@ pub fn terminal_chord(m: Modifiers) -> Option<bool> {
     m.platform.then_some(m.shift)
 }
 
+/// Pasting is Cmd+V (`terminal_chord`); Ctrl+V and Shift+Insert go to the shell.
+pub fn terminal_paste(_: Modifiers, _: &str) -> bool {
+    false
+}
+
 /// Whether a key press with these modifiers types its character into a text field (no Cmd
 /// or Ctrl shortcut).
 pub fn types_char(m: Modifiers) -> bool {
@@ -72,6 +77,13 @@ pub fn alt_gr(_: Modifiers, _: &str, _: Option<&str>) -> bool {
 /// Cmd-click opens a link in the terminal.
 pub fn link_click(m: Modifiers) -> bool {
     m.platform
+}
+
+/// Whether a font family is installed or bundled. An unknown family resolves to the fallback
+/// font, so a candidate exists exactly when it resolves to something else.
+pub fn font_exists(ts: &TextSystem) -> impl Fn(&str) -> bool {
+    let fallback = ts.resolve_font(&gpui::font("\u{1}no-such-font"));
+    move |name| ts.resolve_font(&gpui::font(name.to_string())) != fallback
 }
 
 /// Show the castle in the Dock even when running unbundled (cargo run).
@@ -157,9 +169,6 @@ const KNOWN_EDITORS: &[&str] = &[
     "Xcode",
     "TextEdit",
 ];
-
-/// The editor setting offers quick picks (the system default plus `installed_editors`).
-pub const EDITOR_PICKS: bool = true;
 
 /// Known editors found in the Applications folders.
 pub fn installed_editors() -> Vec<&'static str> {

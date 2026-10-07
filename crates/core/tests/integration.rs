@@ -102,6 +102,24 @@ async fn password_auth_ok_and_wrong() {
 }
 
 #[tokio::test]
+async fn files_on_a_server_with_ftp_instead_of_sftp() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let c = Connection::connect(
+        &host(2224, AuthMethod::Password),
+        &Credentials::Password("hunter2".into()),
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let Err(e) = c.open_sftp().await else {
+        panic!("the FTP server opened SFTP");
+    };
+    assert!(matches!(e, Error::NoSftp { ftp: true }), "{e}");
+    assert!(e.to_string().contains("FTP on port 21"), "{e}");
+}
+
+#[tokio::test]
 async fn key_auth_ed25519_and_encrypted_rsa() {
     gate!();
     let d = tempfile::tempdir().unwrap();

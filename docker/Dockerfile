@@ -1,5 +1,5 @@
 FROM alpine:3.22
-RUN apk add --no-cache openssh sudo bash docker-cli shadow rsync \
+RUN apk add --no-cache openssh sudo bash docker-cli shadow rsync vsftpd \
  && ssh-keygen -A \
  && adduser -D -s /bin/bash tester \
  && echo 'tester:hunter2' | chpasswd \

@@ -13,3 +13,8 @@ services:
     volumes:
       - ./keys:/keys:ro
       - /var/run/docker.sock:/var/run/docker.sock
+  ssh-ftp:
+    build: .
+    container_name: sshc-ftp
+    environment: { MODE: ftp }
+    ports: ["2224:22", "21:21"]

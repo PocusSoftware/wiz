@@ -40,49 +40,37 @@ pub const TITLEBAR_H: f32 = 30.0;
 static MONO: OnceLock<SharedString> = OnceLock::new();
 static UI: OnceLock<SharedString> = OnceLock::new();
 
-fn pick(
-    want: Option<&str>,
-    defaults: &[&str],
-    exists: &dyn Fn(&str) -> bool,
-    fallback: &str,
-) -> SharedString {
-    want.into_iter()
-        .chain(defaults.iter().copied())
-        .find(|f| exists(f))
+/// Families of the bundled fonts (`assets::FONTS`), used unless settings.toml names another.
+const UI_FONT: &str = "IBM Plex Sans";
+const MONO_FONT: &str = "JetBrains Mono";
+
+fn pick(want: Option<&str>, exists: &dyn Fn(&str) -> bool, fallback: &str) -> SharedString {
+    want.filter(|f| exists(f))
         .unwrap_or(fallback)
         .to_string()
         .into()
 }
 
-/// UI font: settings.toml, else IBM Plex Sans / Noto Sans, else the system font.
-/// Terminal font: settings.toml, else the Zed buffer font when installed, else the system
-/// monospace font (`platform::MONO_FONT`).
-/// `exists` must be cheap: listing every installed font costs ~150 ms at startup.
+/// UI font: settings.toml, else the bundled IBM Plex Sans.
+/// Terminal font: settings.toml, else the Zed buffer font when installed (it has the Nerd
+/// Font icons), else the bundled JetBrains Mono.
+/// `exists` must be cheap: listing every installed font costs ~150 ms at startup on macOS.
 pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &ssh_core::config::Settings) {
-    let _ = UI.set(pick(
-        s.ui_font.as_deref(),
-        &["IBM Plex Sans", "Noto Sans", "Inter", "Input Sans"],
-        exists,
-        crate::platform::UI_FONT,
-    ));
+    let _ = UI.set(pick(s.ui_font.as_deref(), exists, UI_FONT));
+    let nerd = "JetBrainsMono Nerd Font";
     let _ = MONO.set(pick(
         s.terminal_font.as_deref(),
-        &["JetBrainsMono Nerd Font", "Input Mono"],
         exists,
-        crate::platform::MONO_FONT,
+        if exists(nerd) { nerd } else { MONO_FONT },
     ));
 }
 
 pub fn ui() -> SharedString {
-    UI.get()
-        .cloned()
-        .unwrap_or_else(|| crate::platform::UI_FONT.into())
+    UI.get().cloned().unwrap_or_else(|| UI_FONT.into())
 }
 
 pub fn mono() -> SharedString {
-    MONO.get()
-        .cloned()
-        .unwrap_or_else(|| crate::platform::MONO_FONT.into())
+    MONO.get().cloned().unwrap_or_else(|| MONO_FONT.into())
 }
 
 pub fn mono_size() -> f32 {

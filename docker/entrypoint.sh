@@ -1,5 +1,5 @@
 #!/bin/sh
-# MODE=password | key
+# MODE=password | key | ftp
 set -e
 if [ -f /keys/authorized_keys ]; then
   install -o tester -g tester -m 600 /keys/authorized_keys /home/tester/.ssh/authorized_keys
@@ -9,6 +9,11 @@ if [ -S /var/run/docker.sock ]; then
   gid=$(stat -c %g /var/run/docker.sock)
   getent group "$gid" >/dev/null || addgroup -g "$gid" dockersock
   adduser tester "$(getent group "$gid" | cut -d: -f1)"
+fi
+if [ "$MODE" = "ftp" ]; then
+  # A server with FTP instead of SFTP: no sftp subsystem, vsftpd on port 21.
+  sed -i '/^Subsystem/d' /etc/ssh/sshd_config
+  vsftpd -obackground=YES -oseccomp_sandbox=NO /etc/vsftpd/vsftpd.conf
 fi
 if [ "$MODE" = "key" ]; then
   # alpine locks accounts without password hash for sshd; set a random one
