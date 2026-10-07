@@ -208,7 +208,7 @@ impl SftpView {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(icon("external-link", 13., ACCENT_TEXT))
+                .child(icon("external-link", 13., accent_text()))
                 .child(
                     div()
                         .w(px(150.))
@@ -234,7 +234,7 @@ impl SftpView {
                 )
                 .when(can_upload, |d| {
                     d.child(
-                        icon_button(("e-up", id as usize), "upload", "Upload now", ACCENT_TEXT)
+                        icon_button(("e-up", id as usize), "upload", "Upload now", accent_text())
                             .on_click(cx.listener(move |t, _, _, cx| t.upload_edit(id, cx))),
                     )
                 })

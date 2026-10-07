@@ -45,6 +45,7 @@ use crate::views::settings::{SettingsEvent, SettingsView};
 use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::views::terminal::{TerminalEvent, TerminalView};
 use crate::widgets::anim::{fade_in, pop_in, stagger_in};
+use crate::widgets::input::TextInput;
 use crate::widgets::{button, icon, icon_button, primary_button};
 
 actions!(
@@ -161,8 +162,11 @@ struct Tab {
     id: u64,
     label: SharedString,
     kind: TabKind,
-    /// Pinned tabs come first, show only their icon and have no close button.
+    /// Pinned tabs come first and have no close button.
     pinned: bool,
+    /// Name given with Rename in the tab menu, shown instead of the label and the
+    /// terminal title. Kept only while the tab is open.
+    name: Option<SharedString>,
 }
 
 /// Runs once the secrets file is unlocked.
@@ -183,6 +187,9 @@ pub struct Workspace {
     active: usize,
     /// Right-click menu of a tab: its id, and where the mouse was.
     tab_menu: Option<(u64, gpui::Point<Pixels>)>,
+    /// A tab being renamed in place: its id, the name field, and the blur watch that
+    /// saves when focus leaves it.
+    renaming: Option<(u64, Entity<TextInput>, gpui::Subscription)>,
     page: Page,
     /// Created on first visit, then kept so the page keeps its scroll position.
     settings: Option<Entity<SettingsView>>,
@@ -272,6 +279,7 @@ impl Workspace {
             tabs: vec![],
             active: 0,
             tab_menu: None,
+            renaming: None,
             page: Page::Home,
             settings: None,
             settings_from: Page::Home,
@@ -459,6 +467,15 @@ impl Render for Workspace {
             .track_focus(&self.focus)
             .key_context("Workspace")
             .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                if t.renaming.is_some() {
+                    match ev.keystroke.key.as_str() {
+                        "enter" => t.finish_rename(true, w, cx),
+                        "escape" => t.finish_rename(false, w, cx),
+                        _ => return,
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
                 if t.tab_menu.is_some() {
                     if ev.keystroke.key == "escape" {
                         t.close_tab_menu(w, cx);

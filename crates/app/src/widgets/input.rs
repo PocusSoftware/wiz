@@ -95,6 +95,11 @@ impl TextInput {
         self.anchor = self.cursor;
     }
 
+    pub fn select_all(&mut self) {
+        self.anchor = 0;
+        self.cursor = self.text.len();
+    }
+
     fn selection(&self) -> Range<usize> {
         self.cursor.min(self.anchor)..self.cursor.max(self.anchor)
     }
@@ -240,10 +245,7 @@ impl TextInput {
         let m = &k.modifiers;
         let shift = m.shift;
         match k.key.as_str() {
-            "a" if m.secondary() => {
-                self.anchor = 0;
-                self.cursor = self.text.len();
-            }
+            "a" if m.secondary() => self.select_all(),
             "c" if m.secondary() => {
                 if self.has_selection() && !self.masked {
                     cx.write_to_clipboard(ClipboardItem::new_string(
@@ -415,11 +417,11 @@ impl Render for TextInput {
             )
         };
         let caret = || {
-            div()
-                .w(px(1.))
-                .h(px(13.))
-                .flex_none()
-                .bg(c(if focused { ACCENT_TEXT } else { ACTIVE }))
+            div().w(px(1.)).h(px(13.)).flex_none().bg(c(if focused {
+                accent_text()
+            } else {
+                ACTIVE
+            }))
         };
 
         let mut row = div().flex().items_center().whitespace_nowrap();
@@ -430,7 +432,7 @@ impl Render for TextInput {
             if caret_at == s && focused {
                 row = row.child(caret());
             }
-            row = row.child(div().bg(c(SELECTION_TEXT)).child(shown[s..e].to_string()));
+            row = row.child(div().bg(accent_alpha(0.4)).child(shown[s..e].to_string()));
             if caret_at == e && focused {
                 row = row.child(caret());
             }
@@ -484,7 +486,11 @@ impl Render for TextInput {
             .rounded(px(2.))
             .bg(c(ELEMENT))
             .border_2()
-            .border_color(c(if focused { BORDER_FOCUSED } else { BORDER }))
+            .border_color(if focused {
+                accent_alpha(0.4)
+            } else {
+                c(BORDER)
+            })
             .text_color(c(TEXT))
             .child(div().relative().child(recorder).child(row))
     }

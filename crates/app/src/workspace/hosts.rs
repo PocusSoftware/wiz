@@ -150,7 +150,7 @@ impl Workspace {
             .border_color(c(BORDER))
             .bg(c(PANEL))
             .cursor_pointer()
-            .hover(|s| s.bg(c(ACTIVE)).border_color(c(BORDER_FOCUSED)))
+            .hover(|s| s.bg(c(ACTIVE)).border_color(accent_alpha(0.4)))
             .on_click(
                 cx.listener(move |t, _: &ClickEvent, w, cx| t.open_host(ix, Open::Shell, w, cx)),
             )
@@ -159,7 +159,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(icon(kind_icon, 16., ACCENT_TEXT))
+                    .child(icon(kind_icon, 16., accent_text()))
                     .child(
                         div()
                             .flex_1()
@@ -183,7 +183,7 @@ impl Workspace {
                     .flex()
                     .gap_1()
                     .child(
-                        icon_button(("h-shell", ix), "terminal", "Open shell", ACCENT_TEXT)
+                        icon_button(("h-shell", ix), "terminal", "Open shell", accent_text())
                             .on_click(cx.listener(move |t, _, w, cx| {
                                 cx.stop_propagation();
                                 t.open_host(ix, Open::Shell, w, cx)
@@ -210,7 +210,7 @@ impl Workspace {
                             ("h-pin", ix),
                             "pin",
                             if h.pinned { "Unpin" } else { "Pin to top" },
-                            if h.pinned { ACCENT_TEXT } else { MUTED },
+                            if h.pinned { accent_text() } else { MUTED },
                         )
                         .on_click(cx.listener(move |t, _, _, cx| {
                             cx.stop_propagation();

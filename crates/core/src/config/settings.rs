@@ -22,6 +22,14 @@ pub const DEFAULT_SECRET_FILES: &[&str] = &[
     ".pgpass",
 ];
 
+/// Which end of the tab bar has the minimize, maximize and close buttons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowControls {
+    Left,
+    Right,
+}
+
 /// Optional `settings.toml` next to `hosts.toml`. Every field is optional; the getters
 /// below give the defaults.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -31,6 +39,9 @@ pub struct Settings {
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
     pub animations: Option<bool>,
+    /// Color of buttons, the active tab, the cursor and focus, as "#RRGGBB".
+    pub accent_color: Option<String>,
+    pub window_controls: Option<WindowControls>,
     // Privacy
     pub hide_sensitive: Option<bool>,
     pub mask_hosts: Option<bool>,
@@ -93,6 +104,8 @@ macro_rules! getters {
 getters! {
     terminal_font_size: f32 = 13.0;
     animations: bool = true;
+    accent_color: String = "#f05a29".into();
+    window_controls: WindowControls = WindowControls::Right;
     hide_sensitive: bool = false;
     mask_hosts: bool = true;
     mask_users: bool = true;

@@ -114,10 +114,10 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
         let selected = selection.is_some_and(|s| s.contains(cell.point));
         let at_cursor = focused && cursor_visible && cell.point == cursor_pt;
         if selected {
-            bg = SELECTION;
+            bg = crate::theme::selection();
         }
         if at_cursor {
-            bg = ACCENT;
+            bg = accent();
             fg = BG;
         }
         let ch_ = if f.contains(Flags::HIDDEN) {
@@ -145,7 +145,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
             if row >= 0 && (row as usize) < rows && col < cols {
                 let st = &mut lines[row as usize][col].1;
                 st.underline = true;
-                st.fg = ACCENT_TEXT;
+                st.fg = accent_text();
             }
         }
     }
@@ -157,7 +157,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
                 continue;
             }
             let (bg, fg) = if i == s.cur {
-                (ACCENT, BG)
+                (accent(), BG)
             } else {
                 (MATCH_BG, TEXT)
             };
@@ -296,6 +296,6 @@ pub(super) fn paint_grid(
             ),
             size(cw, ch),
         );
-        window.paint_quad(outline(b, c(ACCENT), BorderStyle::Solid));
+        window.paint_quad(outline(b, c(accent()), BorderStyle::Solid));
     }
 }

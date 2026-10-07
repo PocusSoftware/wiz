@@ -290,7 +290,7 @@ impl Render for HostForm {
         let key_mode = self.key_mode;
         let tab = |id: &'static str, text: &str, active: bool, mode: bool| {
             button(id, text)
-                .when(active, |b| b.bg(c(ACCENT)).text_color(c(0xffffff)))
+                .when(active, |b| b.bg(c(accent())).text_color(c(0xffffff)))
                 .on_click(cx.listener(move |t, _: &ClickEvent, _, cx| {
                     t.key_mode = mode;
                     cx.notify();

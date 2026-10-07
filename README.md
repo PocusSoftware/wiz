@@ -26,7 +26,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 | Area | Keys |
 |---|---|
 | Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_ipv4`, `mask_ipv6`, `mask_ports`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
-| Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `animations` |
+| Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `accent_color` ("#RRGGBB"), `window_controls` ("left" or "right"), `animations` |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
 | Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |
 | Credentials | `secret_store` (`keychain` or `file`) |

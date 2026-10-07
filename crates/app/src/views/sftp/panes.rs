@@ -17,7 +17,7 @@ impl Render for DragLabel {
             .px_2()
             .py(px(3.))
             .rounded(px(2.))
-            .bg(c(ACCENT))
+            .bg(c(accent()))
             .text_color(c(0xffffff))
             .child(self.0.clone())
     }
@@ -64,9 +64,9 @@ impl SftpView {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .when(selected, |d| d.bg(c(SELECTED_ROW)))
+                    .when(selected, |d| d.bg(accent_alpha(0.4)))
                     .border_l_2()
-                    .border_color(c(if is_cursor { ACCENT } else { 0x00000000 }))
+                    .border_color(c(if is_cursor { accent() } else { 0x00000000 }))
                     .hover(|s| s.bg(c(HOVER)))
                     .on_mouse_down(
                         MouseButton::Left,
@@ -107,7 +107,7 @@ impl SftpView {
                     .child(icon(
                         if e.is_dir { "folder" } else { "file" },
                         14.,
-                        if e.is_dir { ACCENT_TEXT } else { MUTED },
+                        if e.is_dir { accent_text() } else { MUTED },
                     ))
                     .child(
                         div()
@@ -335,7 +335,7 @@ impl SftpView {
             .border_color(c(if active { BORDER_VARIANT } else { 0x00000000 }))
             .drag_over::<DragEntries>(move |s, d, _, _| {
                 if d.from != side {
-                    s.border_color(c(ACCENT)).bg(c(0xf05a2914))
+                    s.border_color(c(accent())).bg(accent_alpha(0.08))
                 } else {
                     s
                 }
@@ -378,7 +378,7 @@ impl SftpView {
                                     "server"
                                 },
                                 13.,
-                                if active { ACCENT_TEXT } else { MUTED },
+                                if active { accent_text() } else { MUTED },
                             ))
                             .child(
                                 div()
@@ -450,7 +450,7 @@ impl SftpView {
                 }))
                 .child(icon(if is_local { "folder" } else { "server" }, 13., MUTED))
                 .child(div().flex_1().child(name))
-                .when(is_cur, |d| d.child(icon("check", 12., ACCENT_TEXT)))
+                .when(is_cur, |d| d.child(icon("check", 12., accent_text())))
         });
         Some(
             pop_in(

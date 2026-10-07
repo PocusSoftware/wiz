@@ -562,3 +562,40 @@ fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
     cx.simulate_click(gpui::point(px(19.), px(15.)), gpui::Modifiers::default());
     assert!(root.read_with(cx, |r, _| r.page == Page::Settings));
 }
+
+#[gpui::test]
+fn rename_tab_for_the_session(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    // Focus changes are only reported for the active window.
+    cx.update(|w, _| w.activate_window());
+    logs_tab(&root, cx, "a");
+    let id = root.read_with(cx, |r, _| r.tabs[0].id);
+    let name = |cx: &mut VisualTestContext| {
+        root.read_with(cx, |r, _| r.tabs[0].name.as_ref().map(ToString::to_string))
+    };
+    let rename = |cx: &mut VisualTestContext| {
+        root.update_in(cx, |r, w, cx| r.start_rename(id, w, cx));
+        cx.run_until_parked();
+    };
+    // The old name is selected, so typing replaces it; Enter keeps it.
+    rename(cx);
+    type_text(cx, "web");
+    cx.simulate_keystrokes("enter");
+    assert_eq!(name(cx).as_deref(), Some("web"));
+    assert!(root.read_with(cx, |r, _| r.renaming.is_none()));
+    // Escape throws the edit away.
+    rename(cx);
+    type_text(cx, "db");
+    cx.simulate_keystrokes("escape");
+    assert_eq!(name(cx).as_deref(), Some("web"));
+    // Clicking away (here the castle, for the hosts page) keeps it.
+    rename(cx);
+    type_text(cx, "db");
+    cx.simulate_click(gpui::point(px(19.), px(15.)), gpui::Modifiers::default());
+    assert_eq!(name(cx).as_deref(), Some("db"));
+    // An empty name goes back to the default title.
+    rename(cx);
+    cx.simulate_keystrokes("backspace enter");
+    assert_eq!(name(cx), None);
+}

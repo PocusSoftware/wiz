@@ -1,4 +1,4 @@
-//! Rearranging tabs: the right-click menu (pin, duplicate, close) and dragging.
+//! Rearranging tabs: the right-click menu (pin, rename, duplicate, close) and dragging.
 
 use gpui::{MouseButton, Point};
 
@@ -97,6 +97,61 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Show a name field in place of the tab's title, with the current name selected.
+    pub(super) fn start_rename(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tab) = self.tabs.iter().find(|t| t.id == id) else {
+            return;
+        };
+        let current = tab.name.clone().unwrap_or_else(|| tab.label.clone());
+        let input = cx.new(|cx| {
+            let mut i = TextInput::new("Tab name", false, cx);
+            i.set_value(&current);
+            i.select_all();
+            i
+        });
+        let focus = input.read(cx).focus_handle(cx);
+        window.focus(&focus);
+        // Clicking anywhere else keeps the name, like Enter.
+        let blur = cx.on_blur(&focus, window, |t, w, cx| t.finish_rename(true, w, cx));
+        self.renaming = Some((id, input, blur));
+        cx.notify();
+    }
+
+    /// Close the name field, keeping what was typed when `save`. An empty name goes back
+    /// to the default title.
+    pub(super) fn finish_rename(
+        &mut self,
+        save: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((id, input, _blur)) = self.renaming.take() else {
+            return;
+        };
+        if save && let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+            let name = input.read(cx).value().trim();
+            tab.name = (!name.is_empty()).then(|| name.to_string().into());
+        }
+        if self.page == Page::Tab {
+            self.select_tab(self.active, window, cx);
+        } else {
+            cx.notify();
+        }
+    }
+
+    /// The name field of the tab being renamed, if it is `id`. Clicks stay in the field
+    /// instead of selecting or dragging the tab.
+    pub(super) fn rename_field(&self, id: u64) -> Option<impl IntoElement> {
+        let (_, input, _) = self.renaming.as_ref().filter(|(r, _, _)| *r == id)?;
+        Some(
+            div()
+                .flex_1()
+                .min_w_0()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .child(input.clone()),
+        )
+    }
+
     /// Open another shell on the same connection as a terminal tab, running the same command
     /// (`docker exec`) as its focused pane.
     fn duplicate_tab(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
@@ -152,6 +207,12 @@ impl Workspace {
                         t.close_tab_menu(w, cx);
                     }),
                 ),
+            )
+            .child(
+                item("tm-rename", "Rename").on_click(cx.listener(move |t, _, w, cx| {
+                    t.tab_menu = None;
+                    t.start_rename(id, w, cx);
+                })),
             )
             .when(matches!(tab.kind, TabKind::Terminal(_)), |d| {
                 d.child(

@@ -1,6 +1,10 @@
-//! Colors from the Zed "Hearth Dark" theme.
+//! Colors from the Zed "Hearth Dark" theme, with an accent the user can pick.
+
+#[cfg(test)]
+mod tests;
 
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use gpui::{Hsla, SharedString, rgb, rgba};
 
@@ -21,21 +25,76 @@ pub const ACTIVE: u32 = 0x262628;
 pub const HOVER: u32 = 0xffffff0a;
 pub const BORDER: u32 = 0xffffff1a;
 pub const BORDER_VARIANT: u32 = 0xffffff12;
-pub const BORDER_FOCUSED: u32 = 0xf05a2966;
 pub const TEXT: u32 = 0xd7d7db;
 pub const MUTED: u32 = 0xa4a4a9;
 pub const PLACEHOLDER: u32 = 0x808085;
-pub const ACCENT: u32 = 0xf05a29;
-pub const ACCENT_TEXT: u32 = 0xf87c49;
-pub const SELECTION: u32 = 0x4a2a1e;
-pub const SELECTED_ROW: u32 = 0xf05a2966;
-/// Highlight behind selected text in inputs and logs.
-pub const SELECTION_TEXT: u32 = 0xf05a2f66;
 pub const GREEN: u32 = 0x8fbf8a;
 pub const RED: u32 = 0xe5534b;
 pub const YELLOW: u32 = 0xe3b341;
 
 pub const TITLEBAR_H: f32 = 30.0;
+
+/// Orange, the accent unless settings.toml picks another (`accent_color`).
+pub const DEFAULT_ACCENT: u32 = 0xf05a29;
+/// The default's hand-picked shades: for text and icons, and for the terminal selection.
+const DEFAULT_ACCENT_TEXT: u32 = 0xf87c49;
+const DEFAULT_SELECTION: u32 = 0x4a2a1e;
+
+static ACCENT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT);
+static ACCENT_TEXT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT_TEXT);
+static SELECTION: AtomicU32 = AtomicU32::new(DEFAULT_SELECTION);
+
+/// Use `rgb` (0xRRGGBB) as the accent. Other colors than the default get their shades
+/// mixed: lighter for text, dark for the terminal selection.
+pub fn set_accent(rgb: u32) {
+    let (text, selection) = if rgb == DEFAULT_ACCENT {
+        (DEFAULT_ACCENT_TEXT, DEFAULT_SELECTION)
+    } else {
+        (mix(rgb, 0xffffff, 0.2), mix(rgb, BG, 0.72))
+    };
+    ACCENT.store(rgb, Ordering::Relaxed);
+    ACCENT_TEXT.store(text, Ordering::Relaxed);
+    SELECTION.store(selection, Ordering::Relaxed);
+}
+
+/// Buttons, the active tab, the cursor, focus.
+pub fn accent() -> u32 {
+    ACCENT.load(Ordering::Relaxed)
+}
+
+/// Accent text and icons, a little lighter so they read on the dark background.
+pub fn accent_text() -> u32 {
+    ACCENT_TEXT.load(Ordering::Relaxed)
+}
+
+/// Selected text in the terminal.
+pub fn selection() -> u32 {
+    SELECTION.load(Ordering::Relaxed)
+}
+
+/// The accent see-through: focus borders, selected rows and text, drop targets.
+pub fn accent_alpha(alpha: f32) -> Hsla {
+    let mut color = c(accent());
+    color.a = alpha;
+    color
+}
+
+/// "#RRGGBB" (the # is optional) as 0xRRGGBB.
+pub fn parse_hex(s: &str) -> Option<u32> {
+    let hex = s.trim().trim_start_matches('#');
+    (hex.len() == 6 && hex.chars().all(|ch| ch.is_ascii_hexdigit()))
+        .then(|| u32::from_str_radix(hex, 16).ok())
+        .flatten()
+}
+
+/// `a` moved toward `b` by `t` (0 to 1), per channel.
+fn mix(a: u32, b: u32, t: f32) -> u32 {
+    [16, 8, 0].iter().fold(0, |out, shift| {
+        let (x, y) = ((a >> shift) & 0xff, (b >> shift) & 0xff);
+        let v = (x as f32 + (y as f32 - x as f32) * t).round() as u32;
+        out | (v << shift)
+    })
+}
 
 static MONO: OnceLock<SharedString> = OnceLock::new();
 static UI: OnceLock<SharedString> = OnceLock::new();

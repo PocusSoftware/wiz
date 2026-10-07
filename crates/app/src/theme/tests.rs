@@ -1,0 +1,29 @@
+//! Tests for `theme`.
+
+use super::*;
+
+#[test]
+fn parse_hex_colors() {
+    assert_eq!(parse_hex("#f05a29"), Some(0xf05a29));
+    assert_eq!(parse_hex(" 3E63DD "), Some(0x3e63dd));
+    for bad in ["", "#fff", "#f05a2", "#f05a29aa", "#+12345", "orange"] {
+        assert_eq!(parse_hex(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn accent_shades() {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // The default keeps its hand-picked shades.
+    set_accent(DEFAULT_ACCENT);
+    assert_eq!(accent_text(), 0xf87c49);
+    assert_eq!(selection(), 0x4a2a1e);
+    // Others are mixed: lighter toward white, darker toward the background.
+    set_accent(0x3e63dd);
+    assert_eq!(accent(), 0x3e63dd);
+    assert_eq!(accent_text(), 0x6582e4);
+    assert_eq!(selection(), 0x192346);
+    set_accent(DEFAULT_ACCENT);
+}

@@ -1,16 +1,18 @@
 //! Settings page: every behavior that can be configured, saved as you change it.
 
+mod accent;
+
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
     KeyDownEvent, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::Settings;
+use ssh_core::config::{Settings, WindowControls};
 use ssh_core::secrets::{self, Store};
 
 use crate::prefs;
 use crate::theme::*;
 use crate::widgets::input::{InputEvent, TextInput};
-use crate::widgets::{button, checkbox, icon_button, primary_button};
+use crate::widgets::{button, checkbox, icon_button, primary_button, tip};
 
 /// Emitted after any change so the rest of the app can refresh. The secret store actions
 /// need the master password dialog and the host list, so the root view handles them.
@@ -33,6 +35,8 @@ pub struct SettingsView {
     extra_mask: Entity<TextInput>,
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
+    /// The accent color as #RRGGBB.
+    accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
     editors: Vec<&'static str>,
     error: Option<SharedString>,
@@ -57,6 +61,7 @@ impl SettingsView {
             extra_mask: make("project-name, client-name", cx),
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
+            accent: make("#f05a29", cx),
             editors: crate::platform::installed_editors(),
             error: None,
         };
@@ -67,6 +72,7 @@ impl SettingsView {
             &this.extra_mask,
             &this.patterns,
             &this.editor,
+            &this.accent,
         ] {
             cx.subscribe(input, |t, _, _: &InputEvent, cx| t.sync_inputs(cx))
                 .detach();
@@ -87,6 +93,8 @@ impl SettingsView {
         self.patterns.update(cx, |i, _| i.set_value(&pats));
         let editor = s.editor_app();
         self.editor.update(cx, |i, _| i.set_value(&editor));
+        let accent = s.accent_color();
+        self.accent.update(cx, |i, _| i.set_value(&accent));
     }
 
     fn sync_inputs(&mut self, cx: &mut Context<Self>) {
@@ -95,12 +103,17 @@ impl SettingsView {
         let extra = split_list(self.extra_mask.read(cx).value());
         let pats = split_list(self.patterns.read(cx).value());
         let editor = self.editor.read(cx).value().trim().to_string();
+        // Half-typed colors wait until they are complete.
+        let accent = parse_hex(self.accent.read(cx).value());
         self.apply(cx, move |s| {
             s.ui_font = (!ui.is_empty()).then(|| ui.clone());
             s.terminal_font = (!term.is_empty()).then(|| term.clone());
             s.extra_mask = Some(extra.clone());
             s.secret_file_patterns = Some(pats.clone());
             s.editor_app = Some(editor);
+            if let Some(rgb) = accent {
+                s.accent_color = Some(format!("#{rgb:06x}"));
+            }
         });
     }
 
@@ -144,7 +157,7 @@ impl SettingsView {
             .border_color(c(BORDER))
             .text_xs()
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(c(ACCENT_TEXT))
+            .text_color(c(accent_text()))
             .child(title.to_uppercase())
     }
 
@@ -413,6 +426,11 @@ impl Render for SettingsView {
                     .child(self.credentials(cx))
                     // ---------- Appearance ----------
                     .child(Self::section("Appearance"))
+                    .child(self.accent_row(cx))
+                    .child(Self::row("Window buttons", "Which end of the tab bar has minimize, maximize and close.", div().flex().gap_1().children([("Left", WindowControls::Left), ("Right", WindowControls::Right)].map(|(name, side)| {
+                        if s.window_controls() == side { primary_button(name, name) } else { button(name, name) }
+                            .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.window_controls = Some(side))))
+                    }))))
                     .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
                     .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                     .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))

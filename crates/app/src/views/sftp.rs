@@ -518,7 +518,7 @@ impl Render for SftpView {
                     "xfer-up",
                     "arrow-right",
                     "Copy selected to the right pane (F5)",
-                    ACCENT_TEXT,
+                    accent_text(),
                 )
                 .on_click(cx.listener(|t, _, _, cx| t.begin_transfer(Side::Left, cx))),
             )
@@ -527,7 +527,7 @@ impl Render for SftpView {
                     "xfer-down",
                     "arrow-left",
                     "Copy selected to the left pane (F5)",
-                    ACCENT_TEXT,
+                    accent_text(),
                 )
                 .on_click(cx.listener(|t, _, _, cx| t.begin_transfer(Side::Right, cx))),
             );

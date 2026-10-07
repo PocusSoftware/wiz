@@ -290,7 +290,7 @@ impl LogView {
                         row.child(chars[..s].iter().collect::<String>())
                             .child(
                                 div()
-                                    .bg(c(SELECTION_TEXT))
+                                    .bg(accent_alpha(0.4))
                                     // A selected line break shows as a trailing space.
                                     .child(format!(
                                         "{}{}",

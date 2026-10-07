@@ -317,7 +317,7 @@ impl SftpView {
                 TState::Failed(_) => RED,
                 TState::Done => GREEN,
                 TState::Running if paused => YELLOW,
-                _ => ACCENT,
+                _ => accent(),
             };
             let row = div()
                 .h(px(24.))
@@ -325,7 +325,7 @@ impl SftpView {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(icon("arrow-right", 13., ACCENT_TEXT))
+                .child(icon("arrow-right", 13., accent_text()))
                 .child(
                     div()
                         .w(px(150.))

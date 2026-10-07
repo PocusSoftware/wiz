@@ -1,6 +1,6 @@
 //! Saved hosts, settings and quick connect targets.
 
-use ssh_core::config::{AuthMethod, Config, Host, Settings, parse_target};
+use ssh_core::config::{AuthMethod, Config, Host, Settings, WindowControls, parse_target};
 
 #[test]
 fn settings_defaults_and_roundtrip() {
@@ -15,6 +15,8 @@ fn settings_defaults_and_roundtrip() {
         (2, 30, 500)
     );
     assert!(d.secret_file_patterns().contains(&".env".to_string()));
+    assert_eq!(d.window_controls(), WindowControls::Right);
+    assert_eq!(d.accent_color(), "#f05a29");
 
     let s = Settings {
         hide_sensitive: Some(true),
@@ -28,6 +30,9 @@ fn settings_defaults_and_roundtrip() {
     assert!(back.hide_sensitive() && !back.mask_ipv6());
     assert_eq!(back.extra_mask(), vec!["falcon".to_string()]);
     assert_eq!(back.terminal_font_size(), 15.0);
+    // Window buttons are written as a plain word.
+    let left: Settings = toml::from_str("window_controls = \"left\"").unwrap();
+    assert_eq!(left.window_controls(), WindowControls::Left);
     // Unset fields keep their defaults.
     assert!(back.mask_ipv4() && back.mask_ports() && back.log_tail_lines() == 2000);
 }

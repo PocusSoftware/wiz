@@ -204,7 +204,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let dragging = self.pane_drag.as_ref().is_some_and(|d| d.divider == which);
-        let line = c(if dragging { ACCENT } else { BORDER });
+        let line = c(if dragging { accent() } else { BORDER });
         let id = match which {
             Divider::Col(n) => ("divider", n),
             Divider::Row { col, n } => ("row-divider", col * 8 + n),
@@ -280,7 +280,7 @@ impl Workspace {
                         cx.notify();
                     }))
                     .child(div().w(px(6.)).h(px(6.)).flex_none().bg(c(if focused {
-                        ACCENT
+                        accent()
                     } else {
                         ACTIVE
                     })))

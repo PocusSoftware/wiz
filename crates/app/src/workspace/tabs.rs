@@ -2,6 +2,7 @@
 
 use gpui::WindowControlArea::{self, Close, Max, Min};
 use gpui::{MouseButton, MouseDownEvent};
+use ssh_core::config::WindowControls;
 
 use super::tab_menu::DraggedTab;
 use super::*;
@@ -21,6 +22,7 @@ impl Workspace {
             label: label.into(),
             kind,
             pinned: false,
+            name: None,
         });
         self.select_tab(self.tabs.len() - 1, window, cx);
     }
@@ -203,7 +205,9 @@ impl Workspace {
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
-            if let TabKind::Terminal(t) = &tab.kind
+            if let Some(name) = &tab.name {
+                text = privacy::redact(name).into_owned();
+            } else if let TabKind::Terminal(t) = &tab.kind
                 && let Some(p) = t.panes.get(t.focused)
                 && let Some(title) = p.read(cx).title()
                 && !title.is_empty()
@@ -243,7 +247,7 @@ impl Workspace {
                             .left_0()
                             .right_0()
                             .h(px(2.))
-                            .bg(c(ACCENT)),
+                            .bg(c(accent())),
                     )
                 })
                 .bg(c(BG))
@@ -268,17 +272,20 @@ impl Workspace {
                 .child(icon(
                     tab_icon,
                     13.,
-                    if active { ACCENT_TEXT } else { MUTED },
+                    if active { accent_text() } else { MUTED },
                 ))
-                .child(
+                .map(|d| match self.rename_field(id) {
+                    Some(field) => d.child(field),
                     // Fills the tab, so the close button sits at its right edge.
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .child(text),
-                )
+                    None => d.child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .child(text),
+                    ),
+                })
                 // Pane count of a split tab, outside the text so truncation never hides it.
                 .when(panes > 1, |d| {
                     d.child(
@@ -310,6 +317,31 @@ impl Workspace {
                     )
                 })
         });
+        // Window buttons at the end picked in settings. On the left they go close first,
+        // like macOS; on the right close last, like Windows.
+        let left = crate::prefs::get().window_controls() == WindowControls::Left;
+        let min = win_button("win-min", "minus", ACTIVE, Min, |w, _| w.minimize_window());
+        let max = win_button("win-max", "maximize", ACTIVE, Max, |w, _| w.zoom_window());
+        // Closing the window quits, so it goes through the same check.
+        let close = win_button("win-close", "x", RED, Close, |w, cx| {
+            w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
+        });
+        let controls = div()
+            .flex()
+            .flex_none()
+            .h_full()
+            .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
+            .border_color(c(BORDER_VARIANT))
+            .children(if left {
+                [close, min, max]
+            } else {
+                [min, max, close]
+            });
+        let (lead, trail) = if left {
+            (Some(controls), None)
+        } else {
+            (None, Some(controls))
+        };
         div()
             .h(px(TITLEBAR_H))
             .flex_none()
@@ -317,6 +349,7 @@ impl Workspace {
             .bg(c(BG))
             .border_b_1()
             .border_color(c(BORDER_VARIANT))
+            .children(lead)
             .child(
                 div()
                     .id("home-tab")
@@ -337,7 +370,7 @@ impl Workspace {
                                 .left_0()
                                 .right_0()
                                 .h(px(2.))
-                                .bg(c(ACCENT)),
+                                .bg(c(accent())),
                         )
                     })
                     .hover(|s| s.bg(c(PANEL)))
@@ -347,7 +380,7 @@ impl Workspace {
                         "castle",
                         16.,
                         if self.page == Page::Home {
-                            ACCENT_TEXT
+                            accent_text()
                         } else {
                             MUTED
                         },
@@ -411,7 +444,11 @@ impl Workspace {
                             "hide-btn",
                             if privacy::hide() { "eye-off" } else { "eye" },
                             "Hide sensitive information",
-                            if privacy::hide() { ACCENT_TEXT } else { MUTED },
+                            if privacy::hide() {
+                                accent_text()
+                            } else {
+                                MUTED
+                            },
                         )
                         .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
                     )
@@ -425,7 +462,7 @@ impl Workspace {
                                 format!("Settings ({})", crate::platform::app_shortcut(","))
                             },
                             if self.page == Page::Settings {
-                                ACCENT_TEXT
+                                accent_text()
                             } else {
                                 MUTED
                             },
@@ -433,24 +470,7 @@ impl Workspace {
                         .on_click(cx.listener(|t, _, w, cx| t.toggle_settings(w, cx))),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .h_full()
-                    .border_l_1()
-                    .border_color(c(BORDER_VARIANT))
-                    .child(win_button("win-min", "minus", ACTIVE, Min, |w, _| {
-                        w.minimize_window()
-                    }))
-                    .child(win_button("win-max", "maximize", ACTIVE, Max, |w, _| {
-                        w.zoom_window()
-                    }))
-                    // Closing the window quits, so it goes through the same check.
-                    .child(win_button("win-close", "x", RED, Close, |w, cx| {
-                        w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
-                    })),
-            )
+            .children(trail)
     }
 
     pub(super) fn content(&self, cx: &mut Context<Self>) -> AnyElement {
