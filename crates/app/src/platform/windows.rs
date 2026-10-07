@@ -13,10 +13,11 @@ use gpui::{
     Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowControlArea,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
 use windows::Win32::UI::WindowsAndMessaging::{
-    HTCAPTION, IsZoomed, PostMessageW, SW_MAXIMIZE, SW_RESTORE, ShowWindowAsync, WM_NCLBUTTONDOWN,
+    GetCursorPos, HTCAPTION, IsZoomed, PostMessageW, SC_MOVE, SW_MAXIMIZE, SW_RESTORE,
+    ShowWindowAsync, WM_SYSCOMMAND,
 };
 
 use crate::workspace::{
@@ -131,11 +132,13 @@ pub fn on_window_open(window: &mut Window, workspace: &Entity<Workspace>, cx: &m
     });
 }
 
-/// Windows moves, snaps and maximizes the window itself when told where the title bar is.
-/// Where that hit test misses, the mouse-down starts the same move by hand.
+/// The title bar area lets Windows offer its window menu and snapping. Presses are handled
+/// here only: gpui passes title bar presses on to the app too, and Windows acting on the
+/// same double-click would maximize and restore at once.
 pub fn title_bar<E: InteractiveElement>(el: E) -> E {
     el.window_control_area(WindowControlArea::Drag)
-        .on_mouse_down(MouseButton::Left, |ev: &MouseDownEvent, window, _| {
+        .on_mouse_down(MouseButton::Left, |ev: &MouseDownEvent, window, cx| {
+            cx.stop_propagation();
             if ev.click_count >= 2 {
                 toggle_maximize(window);
             } else {
@@ -186,19 +189,25 @@ fn hwnd(window: &Window) -> Option<HWND> {
     Some(HWND(h.hwnd.get() as *mut std::ffi::c_void))
 }
 
-/// Hand the press to Windows as a title bar press, which starts its move loop.
+/// Start Windows' move loop at the cursor. It restores a maximized window only once the
+/// mouse actually moves. Posted, so it runs after gpui finishes this event.
 fn drag(window: &Window) {
     let Some(hwnd) = hwnd(window) else {
         return;
     };
-    // SAFETY: the handle comes from the live window, and both calls only take it by value.
+    let mut at = POINT::default();
+    // SAFETY: the handle comes from the live window, `at` outlives the call, and the calls
+    // only take their arguments by value.
     unsafe {
+        if GetCursorPos(&mut at).is_err() {
+            return;
+        }
         let _ = ReleaseCapture();
         let _ = PostMessageW(
             Some(hwnd),
-            WM_NCLBUTTONDOWN,
-            WPARAM(HTCAPTION as usize),
-            LPARAM(0),
+            WM_SYSCOMMAND,
+            WPARAM((SC_MOVE | HTCAPTION) as usize),
+            LPARAM(((at.y as u16 as isize) << 16) | at.x as u16 as isize),
         );
     }
 }

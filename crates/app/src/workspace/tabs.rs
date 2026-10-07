@@ -199,7 +199,7 @@ impl Workspace {
     pub(super) fn tab_bar(&self, window_w: Pixels, cx: &mut Context<Self>) -> impl IntoElement {
         // Share the space between the castle and the buttons on the right: tabs are 220 px
         // wide until they don't fit, then narrow down to 110 px and the strip scrolls.
-        const RESERVED: f32 = 38. + 4. * 24. + 8. + 3. * 40. + 32.;
+        const RESERVED: f32 = 38. + 4. * 24. + 3. + 8. + 3. * 40. + 32.;
         let room = f32::from(window_w) - RESERVED;
         let tab_w = (room / self.tabs.len().max(1) as f32).clamp(110., 220.);
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
@@ -399,6 +399,8 @@ impl Workspace {
                     .px(px(4.))
                     .flex()
                     .items_center()
+                    // Touching buttons share their edge pixel, and a click there hit both.
+                    .gap(px(1.))
                     .when(
                         self.page == Page::Tab
                             && matches!(
@@ -540,6 +542,8 @@ fn win_button(
         .justify_center()
         .cursor_pointer()
         .hover(move |s| s.bg(c(hover)))
+        // The buttons touch: on their shared edge pixel only the top one takes the click.
+        .occlude()
         .child(icon(name, 14., TEXT));
     crate::platform::window_button(el, area, action)
 }

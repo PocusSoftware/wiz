@@ -667,3 +667,14 @@ fn rename_tab_for_the_session(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("backspace enter");
     assert_eq!(name(cx), None);
 }
+
+#[gpui::test]
+fn one_click_presses_one_button(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    // The settings button ends 4 px before the window buttons (1400 - 121); this is the
+    // edge it would share with the eye button without the gap.
+    cx.simulate_click(gpui::point(px(1251.), px(15.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.page == Page::Settings));
+    assert!(!crate::prefs::get().hide_sensitive());
+}
