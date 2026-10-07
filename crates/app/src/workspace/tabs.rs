@@ -263,6 +263,13 @@ impl Workspace {
                 )
                 .drag_over::<DraggedTab>(|s, _, _, _| s.bg(c(ACTIVE)))
                 .on_drop(cx.listener(move |t, d: &DraggedTab, _, cx| t.move_tab(d.id, ix, cx)))
+                // Middle click closes, like browsers; pinned tabs close only from the menu.
+                .when(!tab.pinned, |d| {
+                    d.on_mouse_down(
+                        MouseButton::Middle,
+                        cx.listener(move |t, _, w, cx| t.request_close(ix, None, w, cx)),
+                    )
+                })
                 .on_mouse_down(
                     MouseButton::Right,
                     cx.listener(move |t, ev: &MouseDownEvent, w, cx| {

@@ -17,6 +17,20 @@ impl TermTab {
     }
 }
 
+/// A split pane being dragged by its header onto another pane of the same tab.
+#[derive(Clone)]
+struct DraggedPane {
+    tab: u64,
+    from: usize,
+    title: SharedString,
+}
+
+impl Render for DraggedPane {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        crate::widgets::drag_chip(self.title.clone())
+    }
+}
+
 /// Most terminals in one tab.
 const MAX_PANES: usize = 4;
 
@@ -145,6 +159,30 @@ impl Workspace {
         self.select_tab(ix, window, cx);
     }
 
+    /// Swap two panes of a split tab. The dragged pane keeps the keyboard.
+    pub(super) fn swap_panes(
+        &mut self,
+        ix: usize,
+        from: usize,
+        to: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get_mut(ix)
+        else {
+            return;
+        };
+        if from == to || from.max(to) >= t.panes.len() {
+            return;
+        }
+        t.panes.swap(from, to);
+        t.focused = to;
+        self.select_tab(ix, window, cx);
+    }
+
     /// Size of the content area below the tab bar, from the last frame.
     fn area(&self, window: &Window) -> (f32, f32) {
         let b = self.content_bounds.get();
@@ -256,10 +294,20 @@ impl Workspace {
             .map(|t| privacy::redact(&t).into_owned())
             .unwrap_or_else(|| "shell".into());
         let pane = p.clone();
+        let tab = self.tabs[tab_ix].id;
         div()
             .min_w_0()
             .flex()
             .flex_col()
+            // Transparent until another pane is dragged over it.
+            .border_1()
+            .border_color(gpui::transparent_black())
+            .drag_over::<DraggedPane>(|s, _, _, _| s.border_color(c(accent())))
+            .on_drop(cx.listener(move |this, d: &DraggedPane, w, cx| {
+                if d.tab == tab {
+                    this.swap_panes(tab_ix, d.from, i, w, cx);
+                }
+            }))
             .child(
                 div()
                     .id(("pane-head", i))
@@ -279,6 +327,15 @@ impl Workspace {
                         w.focus(&pane.focus_handle(cx));
                         cx.notify();
                     }))
+                    // Drag the header onto another pane to swap the two.
+                    .on_drag(
+                        DraggedPane {
+                            tab,
+                            from: i,
+                            title: title.clone().into(),
+                        },
+                        |d, _, _, cx| cx.new(|_| d.clone()),
+                    )
                     .child(div().w(px(6.)).h(px(6.)).flex_none().bg(c(if focused {
                         accent()
                     } else {

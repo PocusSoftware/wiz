@@ -13,17 +13,7 @@ pub(super) struct DraggedTab {
 
 impl Render for DraggedTab {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .px_2()
-            .py(px(3.))
-            .rounded(px(2.))
-            .bg(c(ELEVATED))
-            .border_1()
-            .border_color(c(BORDER))
-            .text_color(c(TEXT))
-            .font_family(ui())
-            .text_size(px(12.))
-            .child(self.label.clone())
+        crate::widgets::drag_chip(self.label.clone())
     }
 }
 

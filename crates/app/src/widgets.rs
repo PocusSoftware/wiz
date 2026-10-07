@@ -34,6 +34,21 @@ pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> A
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
 
+/// What follows the mouse while a tab or split pane is dragged.
+pub fn drag_chip(label: SharedString) -> Div {
+    div()
+        .px_2()
+        .py(px(3.))
+        .rounded(px(2.))
+        .bg(c(ELEVATED))
+        .border_1()
+        .border_color(c(BORDER))
+        .text_color(c(TEXT))
+        .font_family(ui())
+        .text_size(px(12.))
+        .child(label)
+}
+
 /// The text a key press types. gpui on Windows reports the space bar with none.
 pub fn typed<'a>(key: &str, key_char: Option<&'a str>) -> Option<&'a str> {
     key_char.or((key == "space").then_some(" "))

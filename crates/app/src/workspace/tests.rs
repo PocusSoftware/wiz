@@ -176,6 +176,23 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
         assert_eq!(t.layout, vec![vec![0, 2], vec![1, 3]]);
         assert_eq!(t.cols.len(), 2);
     });
+    // Dragging a pane's header onto another swaps the two; the dragged one keeps focus.
+    let ids = |cx: &mut VisualTestContext| {
+        root.read_with(cx, |r, _| {
+            term(r)
+                .unwrap()
+                .panes
+                .iter()
+                .map(Entity::entity_id)
+                .collect::<Vec<_>>()
+        })
+    };
+    let before = ids(cx);
+    root.update_in(cx, |r, w, cx| r.swap_panes(r.active, 0, 3, w, cx));
+    let after = ids(cx);
+    assert_eq!((after[0], after[3]), (before[3], before[0]));
+    assert_eq!(root.read_with(cx, |r, _| term(r).unwrap().focused), 3);
+
     // A fifth is refused.
     cx.dispatch_action(SplitPane);
     cx.run_until_parked();
@@ -542,6 +559,22 @@ fn select_tab_by_number_and_pin(cx: &mut TestAppContext) {
     root.update(cx, |r, cx| r.move_tab(a, 2, cx));
     assert_eq!(labels(&root, cx), ["a", "c", "b"]);
     assert_eq!(active(cx), "b");
+
+    // Middle click closes a tab, but not a pinned one.
+    let middle = |cx: &mut VisualTestContext, x: f32| {
+        cx.simulate_event(gpui::MouseDownEvent {
+            position: gpui::point(px(x), px(15.)),
+            modifiers: gpui::Modifiers::default(),
+            button: gpui::MouseButton::Middle,
+            click_count: 1,
+            first_mouse: false,
+        });
+    };
+    // Tabs start after the castle and are 220 px wide here: "a" is first, then "c".
+    middle(cx, 100.);
+    assert_eq!(labels(&root, cx), ["a", "c", "b"]);
+    middle(cx, 320.);
+    assert_eq!(labels(&root, cx), ["a", "b"]);
 
     // The right-click menu closes with Escape.
     root.update_in(cx, |r, w, cx| {
