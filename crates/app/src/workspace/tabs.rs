@@ -521,9 +521,6 @@ impl Workspace {
     }
 }
 
-/// Three 40 px window buttons and their border.
-const CONTROLS_W: f32 = 3. * 40. + 1.;
-
 /// Square, full-height window control for the custom title bar.
 fn win_button(
     id: &'static str,

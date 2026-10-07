@@ -225,6 +225,9 @@ pub struct Workspace {
     focus: FocusHandle,
 }
 
+/// Width of the window buttons: three 40 px buttons and their border.
+const CONTROLS_W: f32 = 3. * 40. + 1.;
+
 /// How long a status line message stays up. Errors stay longer so there is time to read them.
 const STATUS_SECS: u64 = 5;
 const STATUS_ERROR_SECS: u64 = 10;

@@ -605,6 +605,11 @@ fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
     assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
     cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
     assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    // The master password dialog cancels the same way.
+    root.update_in(cx, |r, w, cx| r.show_unlock(UnlockMode::for_file(), w, cx));
+    cx.run_until_parked();
+    cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.unlock.is_none()));
 }
 
 #[gpui::test]

@@ -2,6 +2,7 @@
 //! and the close, delete and quit questions.
 
 use gpui::{MouseButton, MouseDownEvent};
+use ssh_core::config::WindowControls;
 
 use super::*;
 
@@ -11,6 +12,7 @@ type Dismiss = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
 impl Workspace {
     /// The open dialogs, bottom to top.
     pub(super) fn overlays(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let controls_left = crate::prefs::get().window_controls() == WindowControls::Left;
         // `dismiss` runs on a click outside the dialog, for dialogs that may close that way.
         let overlay = |id: &'static str, child: AnyElement, dismiss: Option<Dismiss>| {
             fade_in(
@@ -24,14 +26,15 @@ impl Workspace {
                     // Clicks, hovers and scrolls stop here, not on the window behind.
                     .occlude()
                     .when_some(dismiss, |d, f| d.on_mouse_down(MouseButton::Left, f))
-                    // The window still moves by its top edge (the buttons sit above this).
+                    // The window still moves by its top edge. The strip leaves out the window
+                    // buttons: Windows' hit test would take them for title bar otherwise.
                     .child(crate::platform::title_bar(
                         div()
                             .id("modal-drag")
                             .absolute()
                             .top_0()
-                            .left_0()
-                            .right_0()
+                            .left(px(if controls_left { CONTROLS_W } else { 0. }))
+                            .right(px(if controls_left { 0. } else { CONTROLS_W }))
                             .h(px(TITLEBAR_H))
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
                     ))
@@ -138,10 +141,16 @@ impl Workspace {
                 }))),
             )
         });
-        let unlock = self
-            .unlock
-            .clone()
-            .map(|f| overlay("unlock", f.into_any_element(), None));
+        let unlock = self.unlock.clone().map(|f| {
+            let cancel = f.clone();
+            overlay(
+                "unlock",
+                f.into_any_element(),
+                Some(Box::new(cx.listener(move |_, _, _, cx| {
+                    cancel.update(cx, |_, cx| cx.emit(UnlockEvent::Cancelled))
+                }))),
+            )
+        });
         let delete_dialog = self.confirm_delete.and_then(|ix| {
             let h = self.cfg.hosts.get(ix)?;
             Some(overlay(
