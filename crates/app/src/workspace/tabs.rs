@@ -485,6 +485,8 @@ impl Workspace {
             .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
             .border_color(c(BORDER_VARIANT))
             .bg(c(BG))
+            // A click here is not a click outside an open dialog.
+            .occlude()
             .children(if left {
                 [close, min, max]
             } else {

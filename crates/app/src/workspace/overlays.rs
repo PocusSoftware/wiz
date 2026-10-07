@@ -1,5 +1,6 @@
 //! Modal dialogs over the window: host key trust, host form, quick connect, master password,
-//! and the close, delete and quit questions.
+//! and the close, delete and quit questions. A click outside closes all but host key trust,
+//! which needs an answer.
 
 use gpui::{MouseButton, MouseDownEvent};
 use ssh_core::config::WindowControls;
@@ -188,7 +189,9 @@ impl Workspace {
                             )),
                     )
                     .into_any_element(),
-                None,
+                Some(Box::new(
+                    cx.listener(|t, _, w, cx| t.answer_delete_host(false, w, cx)),
+                )),
             ))
         });
         let confirm_dialog =
@@ -233,7 +236,9 @@ impl Workspace {
                                 )),
                         )
                         .into_any_element(),
-                    None,
+                    Some(Box::new(
+                        cx.listener(|t, _, w, cx| t.answer_close(false, w, cx)),
+                    )),
                 ))
             });
 
@@ -267,7 +272,9 @@ impl Workspace {
                         ),
                     )
                     .into_any_element(),
-                None,
+                Some(Box::new(
+                    cx.listener(|t, _, w, cx| t.dismiss_quit_notice(w, cx)),
+                )),
             )
         });
         [

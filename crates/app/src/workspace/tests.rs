@@ -605,6 +605,25 @@ fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
     assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
     cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
     assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    // So does the delete question, but not for a press on the window buttons above it
+    // (only pressed here: the test window can't really zoom).
+    root.update(cx, |r, cx| {
+        r.cfg.hosts.push(test_host("deluser"));
+        r.confirm_delete = Some(0);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.simulate_event(gpui::MouseDownEvent {
+        position: gpui::point(px(1339.), px(15.)),
+        modifiers: gpui::Modifiers::default(),
+        button: gpui::MouseButton::Left,
+        click_count: 1,
+        first_mouse: false,
+    });
+    assert!(root.read_with(cx, |r, _| r.confirm_delete.is_some()));
+    cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
+    assert!(root.read_with(cx, |r, _| r.confirm_delete.is_none()
+        && r.cfg.hosts.len() == 1));
     // The master password dialog cancels the same way.
     root.update_in(cx, |r, w, cx| r.show_unlock(UnlockMode::for_file(), w, cx));
     cx.run_until_parked();
