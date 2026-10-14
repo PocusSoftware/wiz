@@ -4,12 +4,23 @@
 
 #[cfg(target_os = "macos")]
 pub mod keychain;
+mod sealed;
 pub mod vault;
 
 use std::sync::{Mutex, RwLock};
 
 use crate::{Error, Result};
+pub use sealed::Secret;
 use vault::Vault;
+
+/// AES-GCM nonce length, for the secrets file and for secrets sealed in memory.
+const NONCE_LEN: usize = 12;
+
+fn random<const N: usize>() -> Result<[u8; N]> {
+    let mut b = [0u8; N];
+    getrandom::fill(&mut b).map_err(|e| Error::Vault(format!("random: {e}")))?;
+    Ok(b)
+}
 
 /// Which secret of a host.
 #[derive(Debug, Clone, Copy)]
@@ -129,7 +140,7 @@ fn with_vault<T>(f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T> {
     }
 }
 
-fn get_in(store: Store, kind: Kind, account: &str) -> Result<Option<String>> {
+fn get_in(store: Store, kind: Kind, account: &str) -> Result<Option<Secret>> {
     match store {
         #[cfg(target_os = "macos")]
         Store::Keychain => keychain::get(kind, account),
@@ -153,7 +164,7 @@ fn delete_in(store: Store, kind: Kind, account: &str) -> Result<()> {
     }
 }
 
-pub fn get(kind: Kind, account: &str) -> Result<Option<String>> {
+pub fn get(kind: Kind, account: &str) -> Result<Option<Secret>> {
     get_in(store(), kind, account)
 }
 
@@ -173,7 +184,7 @@ pub fn migrate(accounts: &[String], from: Store, to: Store) -> Result<usize> {
     for account in accounts {
         for kind in [Kind::Password, Kind::KeyPassphrase] {
             if let Some(s) = get_in(from, kind, account)? {
-                set_in(to, kind, account, &s)?;
+                set_in(to, kind, account, &s.reveal())?;
                 delete_in(from, kind, account)?;
                 moved += 1;
             }

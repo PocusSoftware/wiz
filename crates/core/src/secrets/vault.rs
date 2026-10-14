@@ -16,12 +16,11 @@ use base64::engine::general_purpose::STANDARD as B64;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use super::Kind;
+use super::{Kind, NONCE_LEN, Secret, random};
 use crate::{Error, Result};
 
 /// Format version: Argon2id key, AES-256-GCM entries.
 const VERSION: u32 = 1;
-const NONCE_LEN: usize = 12;
 const SALT_LEN: usize = 32;
 /// Encrypted at creation and checked on unlock, so a wrong master password is caught even
 /// when the file holds no secrets yet.
@@ -59,12 +58,6 @@ fn kind_name(kind: Kind) -> &'static str {
         Kind::Password => "password",
         Kind::KeyPassphrase => "passphrase",
     }
-}
-
-fn random<const N: usize>() -> Result<[u8; N]> {
-    let mut b = [0u8; N];
-    getrandom::fill(&mut b).map_err(|e| Error::Vault(format!("random: {e}")))?;
-    Ok(b)
 }
 
 fn derive(master: &str, salt: &[u8], m: u32, t: u32, p: u32) -> Result<Zeroizing<[u8; 32]>> {
@@ -178,7 +171,7 @@ impl Vault {
         format!("{}\n{account}", kind_name(kind)).into_bytes()
     }
 
-    pub fn get(&self, kind: Kind, account: &str) -> Result<Option<String>> {
+    pub fn get(&self, kind: Kind, account: &str) -> Result<Option<Secret>> {
         let Some(e) = self
             .file
             .secrets
@@ -188,9 +181,9 @@ impl Vault {
             return Ok(None);
         };
         let plain = self.open(&e.value, &Self::aad(kind, account))?;
-        String::from_utf8(plain.to_vec())
-            .map(Some)
-            .map_err(|_| Error::Vault("secret is not text".into()))
+        let text =
+            std::str::from_utf8(&plain).map_err(|_| Error::Vault("secret is not text".into()))?;
+        Secret::new(text).map(Some)
     }
 
     pub fn set(&mut self, kind: Kind, account: &str, secret: &str) -> Result<()> {

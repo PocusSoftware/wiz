@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, size};
 use ssh_core::config::{AuthMethod, Host};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
+use ssh_core::secrets::Secret;
 use ssh_core::session::{Connection, Credentials, ShellEvent, ShellInput};
 
 struct Tofu;
@@ -33,11 +34,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut creds = None;
     while let Some(a) = args.next() {
         match a.as_str() {
-            "--password" => creds = Some(Credentials::Password(args.next().ok_or("value")?)),
+            "--password" => {
+                let pw = args.next().ok_or("value")?;
+                creds = Some(Credentials::Password(Secret::new(&pw)?));
+            }
             "--key" => {
                 creds = Some(Credentials::Key {
                     path: args.next().ok_or("value")?.into(),
-                    passphrase: std::env::var("KEY_PASSPHRASE").ok(),
+                    passphrase: std::env::var("KEY_PASSPHRASE")
+                        .ok()
+                        .map(|p| Secret::new(&p))
+                        .transpose()?,
                 })
             }
             _ => return Err(format!("unknown arg {a}").into()),

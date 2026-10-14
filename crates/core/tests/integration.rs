@@ -8,6 +8,7 @@ use std::time::Duration;
 use ssh_core::config::{AuthMethod, Host};
 use ssh_core::docker;
 use ssh_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
+use ssh_core::secrets::Secret;
 #[cfg(target_os = "macos")]
 use ssh_core::secrets::{Kind, keychain};
 use ssh_core::session::{Connection, Credentials, Shell, ShellEvent};
@@ -84,7 +85,7 @@ async fn password_auth_ok_and_wrong() {
     let h = host(2222, AuthMethod::Password);
     let c = Connection::connect(
         &h,
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await
@@ -94,7 +95,7 @@ async fn password_auth_ok_and_wrong() {
 
     let bad = Connection::connect(
         &h,
-        &Credentials::Password("nope".into()),
+        &Credentials::Password(Secret::new("nope").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await;
@@ -107,7 +108,7 @@ async fn files_on_a_server_with_ftp_instead_of_sftp() {
     let d = tempfile::tempdir().unwrap();
     let c = Connection::connect(
         &host(2224, AuthMethod::Password),
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await
@@ -138,7 +139,7 @@ async fn key_auth_ed25519_and_encrypted_rsa() {
 
     let rsa = Credentials::Key {
         path: keys().join("rsa_enc"),
-        passphrase: Some("testpass".into()),
+        passphrase: Some(Secret::new("testpass").unwrap()),
     };
     let c = Connection::connect(&h, &rsa, v.clone()).await.unwrap();
     assert_eq!(c.exec("echo ok").await.unwrap().stdout_str().trim(), "ok");
@@ -151,7 +152,12 @@ async fn key_auth_ed25519_and_encrypted_rsa() {
     assert!(matches!(r, Err(Error::PassphraseRequired)), "{:?}", r.err());
 
     // Password must not work on the key-only server.
-    let r = Connection::connect(&h, &Credentials::Password("hunter2".into()), v).await;
+    let r = Connection::connect(
+        &h,
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
+        v,
+    )
+    .await;
     assert!(matches!(r, Err(Error::AuthFailed)));
 }
 
@@ -160,7 +166,7 @@ async fn host_key_policy() {
     gate!();
     let d = tempfile::tempdir().unwrap();
     let h = host(2222, AuthMethod::Password);
-    let creds = Credentials::Password("hunter2".into());
+    let creds = Credentials::Password(Secret::new("hunter2").unwrap());
 
     // Unknown + reject.
     let r = Connection::connect(&h, &creds, verifier(&d, Arc::new(RejectUnknown))).await;
@@ -203,7 +209,7 @@ async fn sudo_password_prompt_in_pty() {
     let h = host(2222, AuthMethod::Password);
     let c = Connection::connect(
         &h,
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await
@@ -265,19 +271,25 @@ async fn local_docker_list() {
 fn keychain_roundtrip() {
     gate!();
     let acct = format!("test-{}@localhost:1", std::process::id());
-    assert_eq!(keychain::get(Kind::Password, &acct).unwrap(), None);
+    assert!(keychain::get(Kind::Password, &acct).unwrap().is_none());
     keychain::set(Kind::Password, &acct, "s3cret").unwrap();
     assert_eq!(
-        keychain::get(Kind::Password, &acct).unwrap().as_deref(),
+        keychain::get(Kind::Password, &acct)
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("s3cret")
     );
     keychain::set(Kind::Password, &acct, "changed").unwrap();
     assert_eq!(
-        keychain::get(Kind::Password, &acct).unwrap().as_deref(),
+        keychain::get(Kind::Password, &acct)
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("changed")
     );
     keychain::delete(Kind::Password, &acct).unwrap();
-    assert_eq!(keychain::get(Kind::Password, &acct).unwrap(), None);
+    assert!(keychain::get(Kind::Password, &acct).unwrap().is_none());
 }
 
 #[tokio::test]
@@ -402,7 +414,7 @@ async fn sftp_server_to_server_and_local_copy() {
     .unwrap();
     let b = Connection::connect(
         &host(2222, AuthMethod::Password),
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         v,
     )
     .await
@@ -547,7 +559,7 @@ async fn server_restart_ends_shell_and_closes_connection() {
     let h = host(2222, AuthMethod::Password);
     let c = Connection::connect(
         &h,
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await
@@ -592,7 +604,7 @@ async fn exit_ends_shell_with_status_and_keeps_connection() {
     let h = host(2222, AuthMethod::Password);
     let c = Connection::connect(
         &h,
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(&d, Arc::new(TrustAll)),
     )
     .await

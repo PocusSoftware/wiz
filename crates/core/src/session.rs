@@ -10,15 +10,15 @@ use tokio::sync::mpsc;
 
 use crate::config::{AuthMethod, Host};
 use crate::hostkey::HostKeyVerifier;
-use crate::secrets::{self, Kind};
+use crate::secrets::{self, Kind, Secret};
 use crate::{Error, Result};
 
 #[derive(Clone)]
 pub enum Credentials {
-    Password(String),
+    Password(Secret),
     Key {
         path: std::path::PathBuf,
-        passphrase: Option<String>,
+        passphrase: Option<Secret>,
     },
 }
 
@@ -307,8 +307,10 @@ async fn authenticate(
 ) -> Result<()> {
     match creds {
         Credentials::Password(pw) => {
+            // russh takes owned strings and doesn't wipe them; keep our copy short-lived.
+            let pw = pw.reveal();
             if handle
-                .authenticate_password(user, pw.clone())
+                .authenticate_password(user, pw.to_string())
                 .await?
                 .success()
             {
@@ -324,7 +326,7 @@ async fn authenticate(
                 KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
                     let mut resp = handle
                         .authenticate_keyboard_interactive_respond(
-                            prompts.iter().map(|_| pw.clone()).collect(),
+                            prompts.iter().map(|_| pw.to_string()).collect(),
                         )
                         .await?;
                     // Allow one extra empty round (some PAM stacks send a trailing request).
@@ -343,13 +345,15 @@ async fn authenticate(
             }
         }
         Credentials::Key { path, passphrase } => {
-            let key = load_secret_key(path, passphrase.as_deref()).map_err(|e| {
-                if passphrase.is_none() && e.to_string().to_lowercase().contains("encrypted") {
-                    Error::PassphraseRequired
-                } else {
-                    Error::Key(e)
-                }
-            })?;
+            let passphrase = passphrase.as_ref().map(Secret::reveal);
+            let key =
+                load_secret_key(path, passphrase.as_deref().map(String::as_str)).map_err(|e| {
+                    if passphrase.is_none() && e.to_string().to_lowercase().contains("encrypted") {
+                        Error::PassphraseRequired
+                    } else {
+                        Error::Key(e)
+                    }
+                })?;
             let hash = handle.best_supported_rsa_hash().await?.flatten();
             let ok = handle
                 .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash))

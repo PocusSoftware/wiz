@@ -7,7 +7,7 @@ use std::sync::Arc;
 use ssh_core::Error;
 use ssh_core::config::{AuthMethod, Host, parse_target};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::{self, Kind, Store};
+use ssh_core::secrets::{self, Kind, Secret, Store};
 use ssh_core::session::{Connection, Credentials};
 
 struct TrustAll;
@@ -64,7 +64,7 @@ async fn secret_store_flow() {
     assert!(!text.contains("hunter2"));
     assert!(matches!(
         Credentials::from_store(&host),
-        Ok(Credentials::Password(p)) if p == "hunter2"
+        Ok(Credentials::Password(p)) if *p.reveal() == "hunter2"
     ));
 
     // Lock, wrong password, right password.
@@ -89,14 +89,21 @@ async fn secret_store_flow() {
     ));
     secrets::unlock("second-master").unwrap();
     assert_eq!(
-        secrets::get(Kind::Password, &acct).unwrap().as_deref(),
+        secrets::get(Kind::Password, &acct)
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("hunter2")
     );
 
     // Delete.
     secrets::set(Kind::KeyPassphrase, "x@y:22", "pp").unwrap();
     secrets::delete(Kind::KeyPassphrase, "x@y:22").unwrap();
-    assert_eq!(secrets::get(Kind::KeyPassphrase, "x@y:22").unwrap(), None);
+    assert!(
+        secrets::get(Kind::KeyPassphrase, "x@y:22")
+            .unwrap()
+            .is_none()
+    );
 
     if !docker {
         eprintln!("Keychain and SSH steps skipped (set SSHC_DOCKER_TESTS=1)");
@@ -116,7 +123,7 @@ async fn secret_store_flow() {
     // Quick connect: credentials typed, nothing stored.
     let conn = Connection::connect(
         &host,
-        &Credentials::Password("hunter2".into()),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
         verifier(dir.path()),
     )
     .await
@@ -136,20 +143,26 @@ async fn secret_store_flow() {
             secrets::migrate(&accounts, Store::File, Store::Keychain).unwrap(),
             1
         );
-        assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
+        assert!(secrets::get(Kind::Password, &temp).unwrap().is_none());
         secrets::set_store(Store::Keychain);
         assert_eq!(
-            secrets::get(Kind::Password, &temp).unwrap().as_deref(),
+            secrets::get(Kind::Password, &temp)
+                .unwrap()
+                .map(|s| s.reveal().to_string())
+                .as_deref(),
             Some("moved")
         );
         assert_eq!(
             secrets::migrate(&accounts, Store::Keychain, Store::File).unwrap(),
             1
         );
-        assert_eq!(secrets::get(Kind::Password, &temp).unwrap(), None);
+        assert!(secrets::get(Kind::Password, &temp).unwrap().is_none());
         secrets::set_store(Store::File);
         assert_eq!(
-            secrets::get(Kind::Password, &temp).unwrap().as_deref(),
+            secrets::get(Kind::Password, &temp)
+                .unwrap()
+                .map(|s| s.reveal().to_string())
+                .as_deref(),
             Some("moved")
         );
     }

@@ -18,6 +18,7 @@ use gpui::{
     Point, Render, ScrollWheelEvent, SharedString, StrikethroughStyle, TextRun, UnderlineStyle,
     Window, canvas, div, fill, font, outline, point, prelude::*, px, size,
 };
+use ssh_core::secrets::Secret;
 use ssh_core::session::{Shell, ShellEvent, ShellInput};
 use ssh_core::terminal::{Link, Match, Terminal};
 use tokio::sync::mpsc;
@@ -58,7 +59,7 @@ pub struct TerminalView {
     /// Command this terminal runs instead of a login shell (`docker exec`), re-run on reconnect.
     pub command: Option<String>,
     title: Option<SharedString>,
-    saved_password: Option<String>,
+    saved_password: Option<Secret>,
     selecting: bool,
 }
 
@@ -74,7 +75,7 @@ pub enum TerminalEvent {
 impl EventEmitter<TerminalEvent> for TerminalView {}
 
 impl TerminalView {
-    pub fn new(shell: Shell, saved_password: Option<String>, cx: &mut Context<Self>) -> Self {
+    pub fn new(shell: Shell, saved_password: Option<Secret>, cx: &mut Context<Self>) -> Self {
         let Shell { input, events } = shell;
         let (cols, rows) = (100, 30);
         let this = Self {
@@ -143,7 +144,7 @@ impl TerminalView {
     }
 
     /// Continue on a fresh shell after a reconnect, keeping the scrollback.
-    pub fn attach(&mut self, shell: Shell, password: Option<String>, cx: &mut Context<Self>) {
+    pub fn attach(&mut self, shell: Shell, password: Option<Secret>, cx: &mut Context<Self>) {
         self.saved_password = password;
         let Shell { input, events } = shell;
         self.input = input;

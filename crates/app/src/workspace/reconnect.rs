@@ -138,7 +138,7 @@ impl Workspace {
         view: gpui::WeakEntity<TerminalView>,
         attempt: u32,
         conn: Arc<Connection>,
-        password: Option<String>,
+        password: Option<Secret>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {

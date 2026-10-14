@@ -137,8 +137,8 @@ impl TerminalView {
                 }
                 // Type the saved password (for sudo and friends).
                 ("p", true) => {
-                    if let Some(pw) = self.saved_password.clone() {
-                        self.write(format!("{pw}\r").into_bytes(), cx);
+                    if let Some(pw) = &self.saved_password {
+                        self.write(format!("{}\r", *pw.reveal()).into_bytes(), cx);
                     }
                     cx.stop_propagation();
                 }

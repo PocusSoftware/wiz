@@ -10,6 +10,8 @@ use gpui::{
     SharedString, TextRun, Window, canvas, div, point, prelude::*, px, size,
 };
 
+use zeroize::Zeroizing;
+
 use crate::privacy;
 use crate::theme::*;
 
@@ -34,7 +36,8 @@ pub enum InputEvent {
 impl EventEmitter<InputEvent> for TextInput {}
 
 pub struct TextInput {
-    text: String,
+    /// Wiped when replaced or dropped, since masked inputs hold passwords.
+    text: Zeroizing<String>,
     /// Byte indices, always on char boundaries. The selection is `anchor..cursor` (either order).
     cursor: usize,
     anchor: usize,
@@ -56,7 +59,7 @@ fn is_word(c: char) -> bool {
 impl TextInput {
     pub fn new(placeholder: &str, masked: bool, cx: &mut Context<Self>) -> Self {
         Self {
-            text: String::new(),
+            text: Zeroizing::default(),
             cursor: 0,
             anchor: 0,
             masked,
@@ -90,7 +93,7 @@ impl TextInput {
     }
 
     pub fn set_value(&mut self, v: &str) {
-        self.text = v.to_string();
+        self.text = Zeroizing::new(v.to_string());
         self.cursor = self.text.len();
         self.anchor = self.cursor;
     }
@@ -204,7 +207,7 @@ impl TextInput {
                 _ => privacy::redact(&self.text).into_owned(),
             };
         }
-        self.text.clone()
+        self.text.to_string()
     }
 
     /// Byte index in `text` for a window x coordinate.

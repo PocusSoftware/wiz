@@ -10,6 +10,7 @@ async fn rsync_over_connection() {
     }
     use ssh_core::config::{AuthMethod, Host};
     use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
+    use ssh_core::secrets::Secret;
     use ssh_core::session::Credentials;
     struct TrustAll;
     impl TrustPrompt for TrustAll {
@@ -41,9 +42,13 @@ async fn rsync_over_connection() {
         prompt: Arc::new(TrustAll),
     };
     let conn = Arc::new(
-        Connection::connect(&host, &Credentials::Password("hunter2".into()), verifier)
-            .await
-            .unwrap(),
+        Connection::connect(
+            &host,
+            &Credentials::Password(Secret::new("hunter2").unwrap()),
+            verifier,
+        )
+        .await
+        .unwrap(),
     );
     let local = local().await.expect("local rsync");
     assert!(conn.has_command("rsync").await);

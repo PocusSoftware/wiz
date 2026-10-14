@@ -45,7 +45,7 @@ fn key_auth_finds_default_key_or_reports_missing(cx: &mut TestAppContext) {
             path: ssh.join("id_ecdsa")
         }
     );
-    assert!(matches!(creds, Credentials::Key { passphrase: Some(p), .. } if p == "pp"));
+    assert!(matches!(creds, Credentials::Key { passphrase: Some(p), .. } if *p.reveal() == "pp"));
 
     // A typed path, with ~ expanded, must exist.
     let err = dialog.update(cx, |d, cx| {

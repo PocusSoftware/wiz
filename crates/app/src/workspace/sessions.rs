@@ -7,7 +7,7 @@ impl Workspace {
         &mut self,
         label: String,
         conn: Arc<Connection>,
-        password: Option<String>,
+        password: Option<Secret>,
         command: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -24,7 +24,7 @@ impl Workspace {
         &mut self,
         label: String,
         conn: Arc<Connection>,
-        password: Option<String>,
+        password: Option<Secret>,
         command: Option<String>,
         split_into: Option<u64>,
         window: &mut Window,
@@ -98,7 +98,7 @@ impl Workspace {
         &mut self,
         host: Host,
         conn: Arc<Connection>,
-        password: Option<String>,
+        password: Option<Secret>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -231,7 +231,7 @@ impl Workspace {
     fn on_docker_event(
         &mut self,
         ev: &DockerEvent,
-        remote: Option<(String, Arc<Connection>, Option<String>)>,
+        remote: Option<(String, Arc<Connection>, Option<Secret>)>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {

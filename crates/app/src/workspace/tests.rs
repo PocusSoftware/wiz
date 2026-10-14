@@ -347,7 +347,10 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     ));
     secrets::unlock("masterpass2").unwrap();
     assert_eq!(
-        secrets::get(Kind::Password, &acct).unwrap().as_deref(),
+        secrets::get(Kind::Password, &acct)
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("hunter2")
     );
 
@@ -356,7 +359,7 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
         r.confirm_delete = Some(0);
         r.answer_delete_host(true, w, cx);
     });
-    assert_eq!(secrets::get(Kind::Password, &acct).unwrap(), None);
+    assert!(secrets::get(Kind::Password, &acct).unwrap().is_none());
     root.read_with(cx, |r, _| assert!(r.cfg.hosts.is_empty()));
 
     // Store switching touches the real Keychain (macOS only), like the core Keychain test.
@@ -381,6 +384,7 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
         assert_eq!(
             secrets::keychain::get(Kind::Password, &tacct)
                 .unwrap()
+                .map(|s| s.reveal().to_string())
                 .as_deref(),
             Some("moveme")
         );
@@ -394,12 +398,16 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
         cx.simulate_keystrokes("enter");
         wait(cx, &root, "the switch", |r, _| r.unlock.is_none());
         assert_eq!(secrets::store(), Store::File);
-        assert_eq!(
-            secrets::keychain::get(Kind::Password, &tacct).unwrap(),
-            None
+        assert!(
+            secrets::keychain::get(Kind::Password, &tacct)
+                .unwrap()
+                .is_none()
         );
         assert_eq!(
-            secrets::get(Kind::Password, &tacct).unwrap().as_deref(),
+            secrets::get(Kind::Password, &tacct)
+                .unwrap()
+                .map(|s| s.reveal().to_string())
+                .as_deref(),
             Some("moveme")
         );
     }
@@ -412,7 +420,7 @@ fn quick_connect_save_as_host_stores_secret(cx: &mut TestAppContext) {
     secrets::unlock("masterpass1").unwrap();
     let (root, cx) = open_root(cx);
     let host = test_host("tester");
-    let creds = Credentials::Password("hunter2".into());
+    let creds = Credentials::Password(Secret::new("hunter2").unwrap());
     root.update_in(cx, |r, w, cx| {
         r.quick_connect(host.clone(), creds, true, w, cx)
     });
@@ -424,6 +432,7 @@ fn quick_connect_save_as_host_stores_secret(cx: &mut TestAppContext) {
     assert_eq!(
         secrets::get(Kind::Password, &host.account())
             .unwrap()
+            .map(|s| s.reveal().to_string())
             .as_deref(),
         Some("hunter2")
     );
@@ -435,7 +444,7 @@ fn quick_connect_save_as_host_stores_secret(cx: &mut TestAppContext) {
         });
     }
     // Same target again with "save": not duplicated.
-    let creds = Credentials::Password("hunter2".into());
+    let creds = Credentials::Password(Secret::new("hunter2").unwrap());
     root.update_in(cx, |r, w, cx| {
         r.quick_connect(host.clone(), creds, true, w, cx)
     });

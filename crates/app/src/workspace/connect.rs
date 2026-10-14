@@ -286,7 +286,7 @@ impl Workspace {
         &mut self,
         host: Host,
         conn: Arc<Connection>,
-        password: Option<String>,
+        password: Option<Secret>,
         what: Open,
         window: &mut Window,
         cx: &mut Context<Self>,

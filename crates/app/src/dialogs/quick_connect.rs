@@ -8,6 +8,7 @@ use gpui::{
     Render, SharedString, Window, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Host, parse_target};
+use ssh_core::secrets::Secret;
 use ssh_core::session::Credentials;
 
 use crate::theme::*;
@@ -125,19 +126,22 @@ impl QuickConnect {
             if !path.is_file() {
                 return Err("Private key file not found.".into());
             }
-            let pass = self.passphrase.read(cx).value().to_string();
+            let pass = self.passphrase.read(cx).value();
+            let passphrase = if pass.is_empty() {
+                None
+            } else {
+                Some(Secret::new(pass).map_err(|e| e.to_string())?)
+            };
             (
                 AuthMethod::Key { path: path.clone() },
-                Credentials::Key {
-                    path,
-                    passphrase: (!pass.is_empty()).then_some(pass),
-                },
+                Credentials::Key { path, passphrase },
             )
         } else {
-            let pw = self.password.read(cx).value().to_string();
+            let pw = self.password.read(cx).value();
             if pw.is_empty() {
                 return Err("Enter a password, or switch to SSH key.".into());
             }
+            let pw = Secret::new(pw).map_err(|e| e.to_string())?;
             (AuthMethod::Password, Credentials::Password(pw))
         };
         let host = Host {

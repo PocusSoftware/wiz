@@ -24,14 +24,20 @@ fn roundtrip_wrong_password_and_tamper() {
 
     let v = Vault::unlock(&path, "correct horse").unwrap();
     assert_eq!(
-        v.get(Kind::Password, "u@h:22").unwrap().as_deref(),
+        v.get(Kind::Password, "u@h:22")
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("s3cret")
     );
     assert_eq!(
-        v.get(Kind::KeyPassphrase, "u@h:22").unwrap().as_deref(),
+        v.get(Kind::KeyPassphrase, "u@h:22")
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("pp")
     );
-    assert_eq!(v.get(Kind::Password, "other@h:22").unwrap(), None);
+    assert!(v.get(Kind::Password, "other@h:22").unwrap().is_none());
     assert!(matches!(
         Vault::unlock(&path, "wrong"),
         Err(Error::WrongMasterPassword)
@@ -61,8 +67,11 @@ fn delete_and_change_master() {
     ));
     let v = Vault::unlock(&path, "two").unwrap();
     assert_eq!(
-        v.get(Kind::Password, "a@h:22").unwrap().as_deref(),
+        v.get(Kind::Password, "a@h:22")
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
         Some("pa2")
     );
-    assert_eq!(v.get(Kind::Password, "b@h:22").unwrap(), None);
+    assert!(v.get(Kind::Password, "b@h:22").unwrap().is_none());
 }

@@ -217,7 +217,7 @@ impl HostForm {
             if oa != acct {
                 for kind in [Kind::Password, Kind::KeyPassphrase] {
                     if let Some(s) = secrets::get(kind, &oa).map_err(|e| e.to_string())? {
-                        secrets::set(kind, &acct, &s).map_err(|e| e.to_string())?;
+                        secrets::set(kind, &acct, &s.reveal()).map_err(|e| e.to_string())?;
                     }
                     secrets::delete(kind, &oa).map_err(|e| e.to_string())?;
                 }

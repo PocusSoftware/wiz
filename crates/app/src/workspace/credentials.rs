@@ -125,11 +125,13 @@ impl Workspace {
             self.with_secrets(
                 move |this, window, cx| {
                     let r = match &creds {
-                        Credentials::Password(p) => secrets::set(Kind::Password, &account, p),
+                        Credentials::Password(p) => {
+                            secrets::set(Kind::Password, &account, &p.reveal())
+                        }
                         Credentials::Key {
                             passphrase: Some(p),
                             ..
-                        } => secrets::set(Kind::KeyPassphrase, &account, p),
+                        } => secrets::set(Kind::KeyPassphrase, &account, &p.reveal()),
                         Credentials::Key { .. } => Ok(()),
                     };
                     match r {

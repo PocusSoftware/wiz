@@ -28,7 +28,7 @@ use gpui::{
 use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::{self, Kind, Store};
+use ssh_core::secrets::{self, Kind, Secret, Store};
 use ssh_core::session::{Connection, Credentials};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
@@ -102,7 +102,7 @@ struct TermTab {
     conn: Arc<Connection>,
     /// Which host `conn` belongs to, so a lost terminal can reconnect.
     account: String,
-    password: Option<String>,
+    password: Option<Secret>,
     /// Pane indices per column, left to right, each column top to bottom. Picked from the
     /// space available on every render (see `layout`).
     layout: Vec<Vec<usize>>,
@@ -137,7 +137,7 @@ enum Page {
 
 struct Live {
     conn: Arc<Connection>,
-    password: Option<String>,
+    password: Option<Secret>,
 }
 
 enum Open {
