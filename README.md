@@ -34,7 +34,10 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 The eye button in the title bar flips `hide_sensitive`.
 
 ## Split terminals
-⌘D opens another shell on the same server in the current tab, up to 4. Two sit side by side, a third and fourth go below them as a 2x2 grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged.
+⌘D opens another shell on the same server in the current tab, up to 4. Two sit side by side, a third and fourth go below them as a 2x2 grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged. ⌘] and ⌘[ move between the panes.
+
+## Keyboard
+Everything works without a mouse. Tab and Shift+Tab move between controls, Enter or Space presses the focused one. A dialog keeps Tab inside it, fields first, then its buttons. The terminal keeps Tab for the shell, so ⌘L jumps to the tab bar. There Left and Right move between tabs, Home and End go to the ends, Enter selects, Shift+Left and Shift+Right move a tab, Delete closes it, and Shift+F10 opens its menu (Up and Down to pick). In the file panes Left and Right switch between the two lists.
 
 ## Quick connect
 ⌘K, the arrow button in the title bar, or the card on the hosts page. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.
@@ -53,7 +56,7 @@ The file is unlocked on first use (connecting, adding or editing a host) and sta
 
 ## macOS and Windows
 macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
-- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
+- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
 - Missing on purpose: the Keychain (passwords always live in the encrypted secrets file), rsync transfers and the rsync hint (files go over SFTP), and the installed-editor picks (the editor setting takes a program name or path; empty opens Notepad, never the file's default app).
 - Build on Windows with `cargo build --release -p ssh-app` (gives `target\release\wiz.exe`), or run the "Windows build" workflow (`gh workflow run windows.yml`), which tests on Windows and uploads `Wiz.exe` as an artifact. Release builds compile GPUI's shaders with `fxc.exe` from the Windows SDK. From a Mac, `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu` checks the Windows side (needs `brew install mingw-w64` and `rustup target add x86_64-pc-windows-gnu`).
 

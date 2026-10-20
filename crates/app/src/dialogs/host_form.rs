@@ -104,34 +104,6 @@ impl HostForm {
         window.focus(&self.name.focus_handle(cx));
     }
 
-    fn fields(&self) -> Vec<Entity<TextInput>> {
-        let mut v = vec![
-            self.name.clone(),
-            self.group.clone(),
-            self.host.clone(),
-            self.port.clone(),
-            self.user.clone(),
-        ];
-        if self.key_mode {
-            v.push(self.key_path.clone());
-            v.push(self.passphrase.clone());
-        } else {
-            v.push(self.password.clone());
-        }
-        v
-    }
-
-    fn cycle_focus(&self, back: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let f = self.fields();
-        let cur = f.iter().position(|e| e.focus_handle(cx).is_focused(window));
-        let next = match (cur, back) {
-            (None, _) => 0,
-            (Some(i), false) => (i + 1) % f.len(),
-            (Some(i), true) => (i + f.len() - 1) % f.len(),
-        };
-        window.focus(&f[next].focus_handle(cx));
-    }
-
     fn submit(&mut self, cx: &mut Context<Self>) {
         match self.try_save(cx) {
             Ok(host) => cx.emit(FormEvent::Saved {
@@ -290,6 +262,7 @@ impl Render for HostForm {
         let key_mode = self.key_mode;
         let tab = |id: &'static str, text: &str, active: bool, mode: bool| {
             button(id, text)
+                .tab_index(1)
                 .when(active, |b| b.bg(c(accent())).text_color(c(0xffffff)))
                 .on_click(cx.listener(move |t, _: &ClickEvent, _, cx| {
                     t.key_mode = mode;
@@ -299,11 +272,12 @@ impl Render for HostForm {
         div()
             .id("host-form")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, window, cx| {
+            // Tab visits the fields first, then the buttons (tab index 1).
+            .tab_group()
+            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" => t.submit(cx),
                     "escape" => cx.emit(FormEvent::Cancelled),
-                    "tab" => t.cycle_focus(ev.keystroke.modifiers.shift, window, cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -330,6 +304,7 @@ impl Render for HostForm {
                     }))
                     .child(
                         icon_button("form-close", "x", "Close (Esc)", MUTED)
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
                     ),
             )
@@ -370,6 +345,7 @@ impl Render for HostForm {
                         .child(field("Private key", &self.key_path).flex_1())
                         .child(
                             button("browse", "Browse")
+                                .tab_index(1)
                                 .on_click(cx.listener(|t, _, _, cx| t.browse(cx))),
                         ),
                 )
@@ -391,10 +367,12 @@ impl Render for HostForm {
                     .gap_2()
                     .child(
                         button("cancel", "Cancel")
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
                     )
                     .child(
                         primary_button("save", "Save")
+                            .tab_index(1)
                             .on_click(cx.listener(|t, _, _, cx| t.submit(cx))),
                     ),
             )

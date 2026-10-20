@@ -12,7 +12,7 @@ use ssh_core::secrets::{self, Store};
 use crate::prefs;
 use crate::theme::*;
 use crate::widgets::input::{InputEvent, TextInput};
-use crate::widgets::{button, checkbox, icon_button, primary_button, tip};
+use crate::widgets::{button, checkbox, icon_button, keyboard, primary_button, tip};
 
 /// Emitted after any change so the rest of the app can refresh. The secret store actions
 /// need the master password dialog and the host list, so the root view handles them.

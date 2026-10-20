@@ -145,8 +145,8 @@ impl SftpView {
         let p = self.pane(side);
         let cell = |id: &'static str, text: &'static str, key: SortKey| {
             let active = p.sort == key;
-            div()
-                .id((id, side as usize))
+            keyboard(div().id((id, side as usize)))
+                .focus(|s| s.bg(c(HOVER)))
                 .flex()
                 .items_center()
                 .gap(px(2.))
@@ -325,6 +325,12 @@ impl SftpView {
             .id((side.tag(), 3000usize))
             .track_focus(&p.focus)
             .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, w, cx| t.on_key(side, ev, w, cx)))
+            // Buttons keep focus from moving on a click; a click anywhere in the pane still
+            // makes it the one the keys go to.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |t, _, w, _| w.focus(&t.pane(side).focus)),
+            )
             .relative()
             .flex_1()
             .min_w_0()
@@ -354,8 +360,8 @@ impl SftpView {
                     .gap(px(6.))
                     .bg(c(PANEL))
                     .child(
-                        div()
-                            .id((side.tag(), 4000usize))
+                        keyboard(div().id((side.tag(), 4000usize)))
+                            .focus(|s| s.bg(c(HOVER)))
                             .h_full()
                             .flex()
                             .items_center()
@@ -431,8 +437,8 @@ impl SftpView {
         let rows = items.into_iter().enumerate().map(|(n, (account, name))| {
             let is_cur = name == current;
             let is_local = account.is_none();
-            div()
-                .id((side.tag(), 5000 + n))
+            keyboard(div().id((side.tag(), 5000 + n)))
+                .focus(|s| s.bg(c(ACTIVE)))
                 .h(px(26.))
                 .px_2()
                 .flex()

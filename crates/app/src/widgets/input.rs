@@ -65,7 +65,8 @@ impl TextInput {
             masked,
             hide_mode: Hide::Never,
             placeholder: placeholder.to_string().into(),
-            focus: cx.focus_handle(),
+            // Reachable with Tab.
+            focus: cx.focus_handle().tab_stop(true),
             text_bounds: Rc::new(Cell::new(Bounds::default())),
             font: gpui::font(ui()),
             font_size: px(12.),

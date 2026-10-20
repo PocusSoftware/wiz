@@ -155,6 +155,11 @@ impl SftpView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Keys from the pane's buttons and fields are not for the file list.
+        if !self.pane(side).focus.is_focused(window) {
+            cx.propagate();
+            return;
+        }
         let k = &ev.keystroke;
         let m = &k.modifiers;
         self.active = side;
@@ -173,10 +178,15 @@ impl SftpView {
             "backspace" => self.up(side, cx),
             "delete" => self.ask_delete(side, window, cx),
             "left" if m.secondary() => self.back(side, cx),
-            "tab" => {
-                let o = side.other();
-                self.active = o;
-                window.focus(&self.pane(o).focus);
+            // Tab goes on to the buttons, so the arrows switch panes.
+            dir @ ("left" | "right") if !m.modified() => {
+                let to = if dir == "left" {
+                    Side::Left
+                } else {
+                    Side::Right
+                };
+                self.active = to;
+                window.focus(&self.pane(to).focus);
             }
             "escape" => {
                 self.pane_mut(side).selected.clear();

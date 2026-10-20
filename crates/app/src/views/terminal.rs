@@ -87,7 +87,8 @@ impl TerminalView {
                 crate::prefs::get().terminal_scrollback() as usize,
             ),
             input,
-            focus: cx.focus_handle(),
+            // Reachable with Tab.
+            focus: cx.focus_handle().tab_stop(true),
             cols,
             rows,
             cell_w: px(8.),

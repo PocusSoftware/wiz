@@ -12,8 +12,8 @@ use objc2_app_kit::{NSApplication, NSView};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 use crate::workspace::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, Quit, SelectTab, SplitPane,
-    Workspace,
+    CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
+    Quit, SelectTab, SplitPane, Workspace,
 };
 
 /// Large transfers between this Mac and a server can run through rsync.
@@ -36,6 +36,9 @@ pub fn key_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-d", SplitPane, None),
         KeyBinding::new("cmd-k", QuickConnect, None),
+        KeyBinding::new("cmd-l", FocusTabs, None),
+        KeyBinding::new("cmd-]", NextPane, None),
+        KeyBinding::new("cmd-[", PrevPane, None),
     ];
     keys.extend((1..=9).map(|n| KeyBinding::new(&format!("cmd-{n}"), SelectTab(n - 1), None)));
     keys

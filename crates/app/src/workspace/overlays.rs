@@ -11,6 +11,20 @@ use super::*;
 type Dismiss = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
 
 impl Workspace {
+    /// Answer the host key question in front, then give focus back once none is left.
+    pub(super) fn answer_trust(&mut self, yes: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(r) = self.trust.pop_front() {
+            let _ = r.reply.send(yes);
+        }
+        if self.modal_open() {
+            cx.notify();
+        } else if self.page == Page::Tab {
+            self.select_tab(self.active, window, cx);
+        } else {
+            self.show_page(self.page, window, cx);
+        }
+    }
+
     /// The open dialogs, bottom to top.
     pub(super) fn overlays(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let controls_left = crate::prefs::get().window_controls() == WindowControls::Left;
@@ -48,80 +62,71 @@ impl Workspace {
                 (id, 0usize),
             )
         };
-        let trust_dialog = self.trust.front().map(|req| {
-            overlay(
-                "trust",
-                div()
-                    .w(px(380.))
-                    .p_3()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .rounded(px(3.))
-                    .bg(c(ELEVATED))
-                    .border_1()
-                    .border_color(c(BORDER))
-                    .child(
-                        div().text_sm().child(
-                            // Name the saved host: with hiding on, addresses alone all look alike.
-                            match self
-                                .pending
-                                .iter()
-                                .find(|p| p.host == req.host && p.port == req.port)
-                            {
-                                Some(p) => format!("Trust {}?", privacy::redact(&p.name)),
-                                None => "Trust this host?".to_string(),
-                            },
-                        ),
-                    )
-                    .child(
-                        div().child(
-                            privacy::redact(&format!(
-                                "{}:{} has not been seen before.",
-                                req.host,
-                                privacy::port(req.port)
-                            ))
-                            .into_owned(),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(c(MUTED))
-                            .child("Fingerprint (SHA256)"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_family(mono())
-                            .child(req.fingerprint.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .child(button("trust-no", "Cancel").on_click(cx.listener(
-                                |t, _, _, cx| {
-                                    if let Some(r) = t.trust.pop_front() {
-                                        let _ = r.reply.send(false);
-                                    }
-                                    cx.notify();
+        let trust_dialog =
+            self.trust.front().map(|req| {
+                overlay(
+                    "trust",
+                    div()
+                        .w(px(380.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded(px(3.))
+                        .bg(c(ELEVATED))
+                        .border_1()
+                        .border_color(c(BORDER))
+                        .child(
+                            div().text_sm().child(
+                                // Name the saved host: with hiding on, addresses alone all look alike.
+                                match self
+                                    .pending
+                                    .iter()
+                                    .find(|p| p.host == req.host && p.port == req.port)
+                                {
+                                    Some(p) => format!("Trust {}?", privacy::redact(&p.name)),
+                                    None => "Trust this host?".to_string(),
                                 },
-                            )))
-                            .child(primary_button("trust-yes", "Trust and connect").on_click(
-                                cx.listener(|t, _, _, cx| {
-                                    if let Some(r) = t.trust.pop_front() {
-                                        let _ = r.reply.send(true);
-                                    }
-                                    cx.notify();
-                                }),
-                            )),
-                    )
-                    .into_any_element(),
-                None,
-            )
-        });
+                            ),
+                        )
+                        .child(
+                            div().child(
+                                privacy::redact(&format!(
+                                    "{}:{} has not been seen before.",
+                                    req.host,
+                                    privacy::port(req.port)
+                                ))
+                                .into_owned(),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(c(MUTED))
+                                .child("Fingerprint (SHA256)"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(mono())
+                                .child(req.fingerprint.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_2()
+                                .child(button("trust-no", "Cancel").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_trust(false, w, cx)),
+                                ))
+                                .child(primary_button("trust-yes", "Trust and connect").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_trust(true, w, cx)),
+                                )),
+                        )
+                        .into_any_element(),
+                    None,
+                )
+            });
         let form = self.form.clone().map(|f| {
             let cancel = f.clone();
             overlay(
@@ -277,7 +282,7 @@ impl Workspace {
                 )),
             )
         });
-        [
+        let mut open: Vec<AnyElement> = [
             trust_dialog.map(IntoElement::into_any_element),
             form.map(IntoElement::into_any_element),
             quick_form.map(IntoElement::into_any_element),
@@ -288,6 +293,21 @@ impl Workspace {
         ]
         .into_iter()
         .flatten()
-        .collect()
+        .collect();
+        // Tab stays inside the top one (`move_focus`). An open tab menu is above them all
+        // and takes the handle instead.
+        if self.tab_menu.is_none()
+            && let Some(top) = open.pop()
+        {
+            open.push(
+                div()
+                    .absolute()
+                    .size_full()
+                    .track_focus(&self.modal_focus)
+                    .child(top)
+                    .into_any_element(),
+            );
+        }
+        open
     }
 }

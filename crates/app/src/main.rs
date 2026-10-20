@@ -108,7 +108,7 @@ fn main() {
                     ..Default::default()
                 },
                 |window, cx| {
-                    let workspace = cx.new(Workspace::new);
+                    let workspace = cx.new(|cx| Workspace::new(window, cx));
                     platform::on_window_open(window, &workspace, cx);
                     workspace
                 },

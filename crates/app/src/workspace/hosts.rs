@@ -138,8 +138,7 @@ impl Workspace {
         } else {
             ACTIVE
         };
-        div()
-            .id(("host", ix))
+        keyboard(div().id(("host", ix)))
             .w(px(210.))
             .p_2()
             .flex()
@@ -320,8 +319,8 @@ impl Workspace {
                     .flex_col()
                     .gap_2()
                     .child(
-                        header(String::new())
-                            .id(("group", gi))
+                        keyboard(header(String::new()).id(("group", gi)))
+                            .focus(|s| s.text_color(c(TEXT)).bg(c(PANEL)))
                             .cursor_pointer()
                             .hover(|s| s.text_color(c(TEXT)))
                             .on_click(cx.listener(move |t, _, _, cx| {
@@ -353,8 +352,7 @@ impl Workspace {
         }
 
         let small_card = |id: &'static str, ic: &'static str, text: &'static str| {
-            div()
-                .id(id)
+            keyboard(div().id(id))
                 .w(px(210.))
                 .p_2()
                 .flex()

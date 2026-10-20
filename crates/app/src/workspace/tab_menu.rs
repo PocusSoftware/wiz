@@ -166,8 +166,8 @@ impl Workspace {
         let (id, at) = self.tab_menu?;
         let tab = self.tabs.iter().find(|t| t.id == id)?;
         let item = |name: &'static str, text: &'static str| {
-            div()
-                .id(name)
+            keyboard(div().id(name))
+                .focus(|s| s.bg(c(HOVER)))
                 .h(px(26.))
                 .px_2()
                 .flex()
@@ -223,6 +223,7 @@ impl Workspace {
         Some(
             div()
                 .id("tab-menu")
+                .track_focus(&self.modal_focus)
                 .absolute()
                 .size_full()
                 .occlude()

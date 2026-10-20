@@ -71,29 +71,6 @@ impl QuickConnect {
         window.focus(&self.target.focus_handle(cx));
     }
 
-    fn fields(&self) -> Vec<Entity<TextInput>> {
-        if self.key_mode {
-            vec![
-                self.target.clone(),
-                self.key_path.clone(),
-                self.passphrase.clone(),
-            ]
-        } else {
-            vec![self.target.clone(), self.password.clone()]
-        }
-    }
-
-    fn cycle_focus(&self, back: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let f = self.fields();
-        let cur = f.iter().position(|e| e.focus_handle(cx).is_focused(window));
-        let next = match (cur, back) {
-            (None, _) => 0,
-            (Some(i), false) => (i + 1) % f.len(),
-            (Some(i), true) => (i + f.len() - 1) % f.len(),
-        };
-        window.focus(&f[next].focus_handle(cx));
-    }
-
     fn submit(&mut self, cx: &mut Context<Self>) {
         match self.build(cx) {
             Ok((host, creds)) => cx.emit(QuickEvent::Connect {
@@ -178,6 +155,7 @@ impl Render for QuickConnect {
         let key_mode = self.key_mode;
         let tab = |id: &'static str, text: &str, active: bool, mode: bool| {
             button(id, text)
+                .tab_index(1)
                 .when(active, |b| b.bg(c(accent())).text_color(c(0xffffff)))
                 .on_click(cx.listener(move |t, _: &ClickEvent, _, cx| {
                     t.key_mode = mode;
@@ -188,11 +166,12 @@ impl Render for QuickConnect {
         div()
             .id("quick-connect")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, window, cx| {
+            // Tab visits the fields first, then the buttons (tab index 1).
+            .tab_group()
+            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" => t.submit(cx),
                     "escape" => cx.emit(QuickEvent::Cancelled),
-                    "tab" => t.cycle_focus(ev.keystroke.modifiers.shift, window, cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -215,6 +194,7 @@ impl Render for QuickConnect {
                     .child(div().text_sm().child("Quick connect"))
                     .child(
                         icon_button("qc-close", "x", "Close (Esc)", MUTED)
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(QuickEvent::Cancelled))),
                     ),
             )
@@ -237,6 +217,7 @@ impl Render for QuickConnect {
                     self.save,
                     &format!("Save as host (secret goes to the {store})"),
                 )
+                .tab_index(1)
                 .on_click(cx.listener(|t, _, _, cx| {
                     t.save = !t.save;
                     cx.notify();
@@ -252,10 +233,12 @@ impl Render for QuickConnect {
                     .gap_2()
                     .child(
                         button("qc-cancel", "Cancel")
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(QuickEvent::Cancelled))),
                     )
                     .child(
                         primary_button("qc-go", "Connect")
+                            .tab_index(1)
                             .on_click(cx.listener(|t, _, _, cx| t.submit(cx))),
                     ),
             )

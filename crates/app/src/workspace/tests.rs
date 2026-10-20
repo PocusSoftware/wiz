@@ -56,7 +56,7 @@ fn docker() -> bool {
 
 fn open_root(cx: &mut TestAppContext) -> (Entity<Workspace>, &mut VisualTestContext) {
     cx.executor().allow_parking();
-    let (root, cx) = cx.add_window_view(|_, cx| Workspace::new(cx));
+    let (root, cx) = cx.add_window_view(Workspace::new);
     cx.simulate_resize(size(px(1400.), px(900.)));
     cx.update(|w, cx| w.focus(&root.focus_handle(cx)));
     cx.run_until_parked();
@@ -191,6 +191,11 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     root.update_in(cx, |r, w, cx| r.swap_panes(r.active, 0, 3, w, cx));
     let after = ids(cx);
     assert_eq!((after[0], after[3]), (before[3], before[0]));
+    assert_eq!(root.read_with(cx, |r, _| term(r).unwrap().focused), 3);
+    // The pane shortcuts go round in pane order.
+    cx.dispatch_action(NextPane);
+    assert_eq!(root.read_with(cx, |r, _| term(r).unwrap().focused), 0);
+    cx.dispatch_action(PrevPane);
     assert_eq!(root.read_with(cx, |r, _| term(r).unwrap().focused), 3);
 
     // A fifth is refused.
@@ -686,4 +691,148 @@ fn one_click_presses_one_button(cx: &mut TestAppContext) {
     cx.simulate_click(gpui::point(px(1251.), px(15.)), gpui::Modifiers::default());
     assert!(root.read_with(cx, |r, _| r.page == Page::Settings));
     assert!(!crate::prefs::get().hide_sensitive());
+}
+
+/// Press and release a key: gpui clicks a focused control on the release.
+fn press(cx: &mut VisualTestContext, key: &str) {
+    cx.simulate_keystrokes(key);
+    cx.simulate_event(gpui::KeyUpEvent {
+        keystroke: gpui::Keystroke::parse(key).unwrap(),
+    });
+}
+
+fn focused(cx: &mut VisualTestContext, handle: &FocusHandle) -> bool {
+    cx.update(|w, _| handle.is_focused(w))
+}
+
+#[gpui::test]
+fn tab_strip_by_keyboard(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.update(|w, _| w.activate_window());
+    for name in ["a", "b", "c"] {
+        logs_tab(&root, cx, name);
+    }
+    cx.dispatch_action(SelectTab(0));
+    let tab =
+        |cx: &mut VisualTestContext, ix: usize| root.read_with(cx, |r, _| r.tabs[ix].focus.clone());
+    let home = root.read_with(cx, |r, _| r.home_focus.clone());
+
+    // The shortcut lands on the selected tab; the arrows move focus without selecting.
+    cx.dispatch_action(FocusTabs);
+    let a = tab(cx, 0);
+    assert!(focused(cx, &a));
+    cx.simulate_keystrokes("right");
+    let b = tab(cx, 1);
+    assert!(focused(cx, &b));
+    assert_eq!(root.read_with(cx, |r, _| r.active), 0);
+    // Enter selects, and focus goes to the tab's content.
+    press(cx, "enter");
+    assert_eq!(root.read_with(cx, |r, _| r.active), 1);
+    assert!(!focused(cx, &b));
+
+    cx.dispatch_action(FocusTabs);
+    cx.simulate_keystrokes("home");
+    assert!(focused(cx, &home));
+    cx.simulate_keystrokes("end");
+    let c = tab(cx, 2);
+    assert!(focused(cx, &c));
+    // Shift and an arrow move the tab, which keeps focus.
+    cx.simulate_keystrokes("shift-left shift-left");
+    assert_eq!(labels(&root, cx), ["c", "a", "b"]);
+    assert!(focused(cx, &c));
+    // Delete closes it.
+    cx.simulate_keystrokes("delete");
+    assert_eq!(labels(&root, cx), ["a", "b"]);
+
+    // Shift+F10 opens the tab menu, Down enters it, Enter picks "Pin tab" (for "b", which
+    // moves to the front).
+    cx.dispatch_action(FocusTabs);
+    cx.simulate_keystrokes("shift-f10");
+    assert!(root.read_with(cx, |r, _| r.tab_menu.is_some()));
+    cx.simulate_keystrokes("down");
+    press(cx, "enter");
+    assert!(root.read_with(cx, |r, _| r.tab_menu.is_none() && r.tabs[0].pinned));
+    assert_eq!(labels(&root, cx), ["b", "a"]);
+
+    // Keys the rename field inside a tab leaves alone are not for the tab either.
+    let a = root.read_with(cx, |r, _| r.tabs[1].id);
+    root.update_in(cx, |r, w, cx| r.start_rename(a, w, cx));
+    cx.simulate_keystrokes("shift-f10");
+    assert!(root.read_with(cx, |r, _| r.tab_menu.is_none() && r.renaming.is_some()));
+}
+
+#[gpui::test]
+fn tab_moves_between_controls_and_stays_in_dialogs(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.update(|w, _| w.activate_window());
+    logs_tab(&root, cx, "a");
+    let view = root.read_with(cx, |r, cx| match &r.tabs[0].kind {
+        TabKind::Logs(v) => v.read(cx).focus_handle(cx),
+        _ => unreachable!(),
+    });
+    // From the tab strip, Tab reaches the page content.
+    cx.dispatch_action(FocusTabs);
+    let mut steps = 0;
+    while !focused(cx, &view) {
+        cx.simulate_keystrokes("tab");
+        steps += 1;
+        assert!(steps < 10, "Tab never reached the page");
+    }
+    // A mouse click on a title bar button leaves focus there.
+    cx.simulate_click(gpui::point(px(1238.), px(15.)), gpui::Modifiers::default());
+    assert!(crate::prefs::get().hide_sensitive());
+    assert!(focused(cx, &view));
+    root.update(cx, Workspace::toggle_hide);
+
+    // In quick connect, Tab goes field to field, then over the buttons, and never leaves.
+    cx.dispatch_action(QuickConnect);
+    cx.run_until_parked();
+    let dialog = root.read_with(cx, |r, cx| r.quick_form.as_ref().unwrap().focus_handle(cx));
+    // It opens on the target field.
+    let target = cx.update(|w, cx| w.focused(cx)).unwrap();
+    type_text(cx, "tester@127.0.0.1:2222");
+    cx.simulate_keystrokes("tab");
+    type_text(cx, "hunter2");
+    // Then close, the two auth buttons, save as host, cancel, connect, and the target again.
+    for _ in 0..7 {
+        cx.simulate_keystrokes("tab");
+        assert!(cx.update(|w, cx| dialog.contains_focused(w, cx)));
+    }
+    assert!(focused(cx, &target));
+    // The tab bar shortcut does not reach behind the dialog.
+    cx.dispatch_action(FocusTabs);
+    assert!(focused(cx, &target));
+    // Enter on Cancel cancels: the form's Enter (connect) does not run as well.
+    cx.simulate_keystrokes("shift-tab shift-tab");
+    press(cx, "enter");
+    assert!(root.read_with(cx, |r, _| r.quick_form.is_none() && r.pending.is_empty()));
+}
+
+#[gpui::test]
+fn host_key_question_takes_focus(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.update(|w, _| w.activate_window());
+    let modal = root.read_with(cx, |r, _| r.modal_focus.clone());
+    let (reply, answer) = std::sync::mpsc::sync_channel(1);
+    root.read_with(cx, |r, _| {
+        r.trust_tx
+            .send(TrustRequest {
+                host: "127.0.0.1".into(),
+                port: 2222,
+                fingerprint: "SHA256:x".into(),
+                reply,
+            })
+            .ok()
+    });
+    cx.run_until_parked();
+    assert!(cx.update(|w, cx| modal.contains_focused(w, cx)));
+    // Tab reaches its buttons and stays there; Escape says no.
+    cx.simulate_keystrokes("tab");
+    assert!(cx.update(|w, cx| modal.contains_focused(w, cx) && !modal.is_focused(w)));
+    cx.simulate_keystrokes("escape");
+    assert_eq!(answer.try_recv(), Ok(false));
+    assert!(root.read_with(cx, |r, _| r.trust.is_empty()));
 }

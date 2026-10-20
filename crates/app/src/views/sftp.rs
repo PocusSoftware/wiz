@@ -27,7 +27,7 @@ use crate::runtime;
 use crate::theme::*;
 use crate::widgets::anim::{fade_in, pop_in};
 use crate::widgets::input::{Hide, TextInput};
-use crate::widgets::{button, icon, icon_button, primary_button};
+use crate::widgets::{button, icon, icon_button, keyboard, primary_button};
 
 /// Which pane. Each pane can browse the local disk or any connected server.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -181,7 +181,8 @@ impl Pane {
             history: vec![],
             loading: false,
             error: None,
-            focus: cx.focus_handle(),
+            // Reachable with Tab.
+            focus: cx.focus_handle().tab_stop(true),
             scroll: UniformListScrollHandle::new(),
             sort: SortKey::Name,
             asc: true,

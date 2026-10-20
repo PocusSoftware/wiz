@@ -3,6 +3,7 @@
 
 mod connect;
 mod credentials;
+mod focus;
 mod hosts;
 mod overlays;
 mod reconnect;
@@ -46,7 +47,7 @@ use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Sourc
 use crate::views::terminal::{TerminalEvent, TerminalView};
 use crate::widgets::anim::{fade_in, pop_in, stagger_in};
 use crate::widgets::input::TextInput;
-use crate::widgets::{button, icon, icon_button, primary_button};
+use crate::widgets::{button, icon, icon_button, keyboard, primary_button};
 
 actions!(
     app,
@@ -58,7 +59,10 @@ actions!(
         NewHost,
         OpenSettings,
         SplitPane,
-        QuickConnect
+        QuickConnect,
+        FocusTabs,
+        NextPane,
+        PrevPane
     ]
 );
 
@@ -167,6 +171,8 @@ struct Tab {
     /// Name given with Rename in the tab menu, shown instead of the label and the
     /// terminal title. Kept only while the tab is open.
     name: Option<SharedString>,
+    /// Keyboard focus on the tab strip, moved with the arrow keys.
+    focus: FocusHandle,
 }
 
 /// Runs once the secrets file is unlocked.
@@ -223,6 +229,10 @@ pub struct Workspace {
     /// The `status_seq` whose hide timer is running.
     status_timer: u64,
     focus: FocusHandle,
+    /// The hosts tab on the tab strip.
+    home_focus: FocusHandle,
+    /// Around the dialog or menu on top, to keep Tab inside it.
+    modal_focus: FocusHandle,
 }
 
 /// Width of the window buttons: three 40 px buttons and their border.
@@ -233,7 +243,7 @@ const STATUS_SECS: u64 = 5;
 const STATUS_ERROR_SECS: u64 = 10;
 
 impl Workspace {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let cfg_path = Config::default_path().unwrap_or_else(|_| PathBuf::from("hosts.toml"));
         let mut status = None;
         let cfg = match Config::load(&cfg_path) {
@@ -260,9 +270,14 @@ impl Workspace {
         };
         refresh_privacy_tokens(cfg.hosts.iter());
         let (trust_tx, mut trust_rx) = unbounded_channel::<TrustRequest>();
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             while let Some(req) = trust_rx.recv().await {
-                this.update(cx, |t, cx| {
+                this.update_in(cx, |t, window, cx| {
+                    // It comes from the network, not from a key or click: take focus so
+                    // Tab and Escape reach it, unless another dialog is in front.
+                    if !t.modal_open() {
+                        window.focus(&t.modal_focus);
+                    }
                     t.trust.push_back(req);
                     cx.notify();
                 })
@@ -304,6 +319,8 @@ impl Workspace {
             status_seq: 0,
             status_timer: 0,
             focus: cx.focus_handle(),
+            home_focus: cx.focus_handle().tab_stop(true),
+            modal_focus: cx.focus_handle(),
         }
     }
 
@@ -470,6 +487,14 @@ impl Render for Workspace {
             .track_focus(&self.focus)
             .key_context("Workspace")
             .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
+                // Reaches here only when nothing focused took it: the shell and the file
+                // panes keep Tab.
+                let m = &ev.keystroke.modifiers;
+                if ev.keystroke.key == "tab" && !(m.control || m.platform || m.alt) {
+                    t.move_focus(m.shift, w, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if t.renaming.is_some() {
                     match ev.keystroke.key.as_str() {
                         "enter" => t.finish_rename(true, w, cx),
@@ -480,10 +505,13 @@ impl Render for Workspace {
                     return;
                 }
                 if t.tab_menu.is_some() {
-                    if ev.keystroke.key == "escape" {
-                        t.close_tab_menu(w, cx);
-                        cx.stop_propagation();
+                    match ev.keystroke.key.as_str() {
+                        "escape" => t.close_tab_menu(w, cx),
+                        "up" => t.move_focus(true, w, cx),
+                        "down" => t.move_focus(false, w, cx),
+                        _ => return,
                     }
+                    cx.stop_propagation();
                     return;
                 }
                 if t.quit_notice.is_some() {
@@ -502,15 +530,20 @@ impl Render for Workspace {
                     cx.stop_propagation();
                     return;
                 }
-                if t.confirm.is_none() {
+                if t.confirm.is_some() {
+                    match ev.keystroke.key.as_str() {
+                        "enter" => t.answer_close(true, w, cx),
+                        "escape" => t.answer_close(false, w, cx),
+                        _ => return,
+                    }
+                    cx.stop_propagation();
                     return;
                 }
-                match ev.keystroke.key.as_str() {
-                    "enter" => t.answer_close(true, w, cx),
-                    "escape" => t.answer_close(false, w, cx),
-                    _ => return,
+                // No Enter here: trusting a new key takes a deliberate press of the button.
+                if !t.trust.is_empty() && ev.keystroke.key == "escape" {
+                    t.answer_trust(false, w, cx);
+                    cx.stop_propagation();
                 }
-                cx.stop_propagation();
             }))
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
@@ -532,6 +565,9 @@ impl Render for Workspace {
             .on_action(cx.listener(|t, _: &NewHost, w, cx| t.open_form(None, w, cx)))
             .on_action(cx.listener(|t, _: &QuickConnect, w, cx| t.open_quick(w, cx)))
             .on_action(cx.listener(|t, _: &OpenSettings, w, cx| t.toggle_settings(w, cx)))
+            .on_action(cx.listener(|t, _: &FocusTabs, w, cx| t.focus_tabs(w, cx)))
+            .on_action(cx.listener(|t, _: &NextPane, w, cx| t.cycle_pane(false, w, cx)))
+            .on_action(cx.listener(|t, _: &PrevPane, w, cx| t.cycle_pane(true, w, cx)))
             .size_full()
             .flex()
             .font_family(ui())
@@ -596,13 +632,13 @@ impl Render for Workspace {
                     }))
                     .when_some(self.status.clone(), |d, (msg, err)| {
                         d.child(
-                            div()
-                                .id("status")
+                            keyboard(div().id("status"))
                                 .px_2()
                                 .py(px(3.))
                                 .border_t_1()
                                 .border_color(c(BORDER_VARIANT))
                                 .text_color(c(if err { RED } else { MUTED }))
+                                .focus(|s| s.bg(c(HOVER)))
                                 .cursor_pointer()
                                 .tooltip(crate::widgets::tip("Click to dismiss"))
                                 .on_click(cx.listener(|t, _, _, cx| {

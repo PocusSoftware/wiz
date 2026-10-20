@@ -25,8 +25,9 @@ impl SettingsView {
                 .items_center()
                 .gap_1()
                 .children(SWATCHES.iter().enumerate().map(|(i, &(name, rgb))| {
-                    div()
-                        .id(("accent", i))
+                    keyboard(div().id(("accent", i)))
+                        // The picked swatch already has the light border.
+                        .focus(|s| s.border_color(c(MUTED)))
                         .size(px(20.))
                         .rounded(px(2.))
                         .bg(c(rgb))

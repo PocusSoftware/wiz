@@ -76,7 +76,8 @@ impl LogView {
             auto: true,
             error: None,
             scroll: UniformListScrollHandle::new(),
-            focus: cx.focus_handle(),
+            // Reachable with Tab.
+            focus: cx.focus_handle().tab_stop(true),
             anchor: None,
             head: None,
             dragging: false,

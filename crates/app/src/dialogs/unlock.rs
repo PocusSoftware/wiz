@@ -142,18 +142,12 @@ impl Render for UnlockDialog {
         div()
             .id("unlock")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, window, cx| {
+            // Tab visits the fields first, then the buttons (tab index 1).
+            .tab_group()
+            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" => t.submit(cx),
                     "escape" => cx.emit(UnlockEvent::Cancelled),
-                    "tab" if t.mode != UnlockMode::Unlock => {
-                        let next = if t.password.focus_handle(cx).is_focused(window) {
-                            &t.confirm
-                        } else {
-                            &t.password
-                        };
-                        window.focus(&next.focus_handle(cx));
-                    }
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -176,6 +170,7 @@ impl Render for UnlockDialog {
                     .child(div().text_sm().child(title))
                     .child(
                         icon_button("unlock-close", "x", "Close (Esc)", MUTED)
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(UnlockEvent::Cancelled))),
                     ),
             )
@@ -212,10 +207,12 @@ impl Render for UnlockDialog {
                     .gap_2()
                     .child(
                         button("unlock-cancel", "Cancel")
+                            .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(UnlockEvent::Cancelled))),
                     )
                     .child(
                         primary_button("unlock-ok", if self.busy { "Working..." } else { action })
+                            .tab_index(1)
                             .on_click(cx.listener(|t, _, _, cx| t.submit(cx))),
                     ),
             )

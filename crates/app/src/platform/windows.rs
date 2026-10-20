@@ -21,8 +21,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::workspace::{
-    CloseTab, NewHost, NextTab, OpenSettings, PrevTab, QuickConnect, SelectTab, SplitPane,
-    Workspace,
+    CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
+    SelectTab, SplitPane, Workspace,
 };
 
 /// rsync transfers need the macOS bridge; Windows uses SFTP only.
@@ -45,6 +45,10 @@ pub fn key_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-,", OpenSettings, None),
         KeyBinding::new("ctrl-shift-d", SplitPane, None),
         KeyBinding::new("ctrl-shift-k", QuickConnect, None),
+        KeyBinding::new("ctrl-shift-l", FocusTabs, None),
+        // Like Windows Terminal.
+        KeyBinding::new("alt-right", NextPane, None),
+        KeyBinding::new("alt-left", PrevPane, None),
     ];
     keys.extend((1..=9).map(|n| KeyBinding::new(&format!("ctrl-{n}"), SelectTab(n - 1), None)));
     keys

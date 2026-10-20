@@ -94,6 +94,25 @@ impl Workspace {
             .unwrap_or(t.focused.min(t.panes.len().saturating_sub(1)))
     }
 
+    /// Focus the next or previous pane of a split terminal, in the order they were opened.
+    pub(super) fn cycle_pane(&mut self, back: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab || self.modal_open() {
+            return;
+        }
+        let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get(self.active)
+        else {
+            return;
+        };
+        let n = t.panes.len();
+        let cur = Self::focused_pane(t, window, cx);
+        let next = (if back { cur + n - 1 } else { cur + 1 }) % n;
+        t.panes[next].read(cx).focus(window);
+        cx.notify();
+    }
+
     /// Open another shell on the same server, beside the current one.
     pub(super) fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.page != Page::Tab {

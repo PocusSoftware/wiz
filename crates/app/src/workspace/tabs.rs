@@ -1,11 +1,14 @@
 //! The tab strip (also the title bar), opening, selecting and closing tabs, and quitting.
 
 use gpui::WindowControlArea::{self, Close, Max, Min};
-use gpui::{MouseButton, MouseDownEvent};
+use gpui::{KeyDownEvent, MouseButton, MouseDownEvent, point};
 use ssh_core::config::WindowControls;
 
 use super::tab_menu::DraggedTab;
 use super::*;
+
+/// Width of the hosts tab at the start of the strip.
+const HOME_W: f32 = 38.;
 
 impl Workspace {
     pub(super) fn push_tab(
@@ -23,6 +26,7 @@ impl Workspace {
             kind,
             pinned: false,
             name: None,
+            focus: cx.focus_handle(),
         });
         self.select_tab(self.tabs.len() - 1, window, cx);
     }
@@ -199,9 +203,13 @@ impl Workspace {
     pub(super) fn tab_bar(&self, window_w: Pixels, cx: &mut Context<Self>) -> impl IntoElement {
         // Share the space between the castle and the buttons on the right: tabs are 220 px
         // wide until they don't fit, then narrow down to 110 px and the strip scrolls.
-        const RESERVED: f32 = 38. + 4. * 24. + 3. + 8. + 3. * 40. + 32.;
+        const RESERVED: f32 = HOME_W + 4. * 24. + 3. + 8. + 3. * 40. + 32.;
         let room = f32::from(window_w) - RESERVED;
         let tab_w = (room / self.tabs.len().max(1) as f32).clamp(110., 220.);
+        let left = crate::prefs::get().window_controls() == WindowControls::Left;
+        // Where a tab starts, for the tab menu opened from the keyboard.
+        let strip_x = if left { CONTROLS_W } else { 0. } + HOME_W;
+        let scroll_x = self.tab_scroll.offset().x;
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
             let mut text = tab.label.to_string();
@@ -225,9 +233,16 @@ impl Workspace {
                 TabKind::Logs(_) => "logs",
             };
             let id = tab.id;
+            let menu_at = point(px(strip_x + ix as f32 * tab_w) + scroll_x, px(TITLEBAR_H));
             div()
                 .id(("tab", ix))
                 .group(format!("tab-{ix}"))
+                // Only the selected tab is a Tab stop; the arrow keys move along the strip.
+                .track_focus(&tab.focus.clone().tab_stop(ix == self.active))
+                .focus(|s| s.bg(c(ACTIVE)))
+                .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, w, cx| {
+                    t.strip_key(ix + 1, menu_at, ev, w, cx)
+                }))
                 .h_full()
                 .px(px(8.))
                 .flex()
@@ -253,6 +268,8 @@ impl Workspace {
                 .bg(c(BG))
                 .text_color(c(if active { TEXT } else { MUTED }))
                 .hover(|s| s.text_color(c(TEXT)))
+                // Selecting moves focus to the tab's content; no flash of the focus look.
+                .on_mouse_down(MouseButton::Left, |_, w, _| w.prevent_default())
                 .on_click(cx.listener(move |t, _, w, cx| t.select_tab(ix, w, cx)))
                 .on_drag(
                     DraggedTab {
@@ -317,6 +334,8 @@ impl Workspace {
                             MUTED,
                         )
                         .size(px(16.))
+                        // Delete on the focused tab does the same.
+                        .tab_stop(false)
                         .on_click(cx.listener(move |t, _, w, cx| {
                             cx.stop_propagation();
                             t.request_close(ix, None, w, cx)
@@ -325,7 +344,6 @@ impl Workspace {
                 })
         });
         // Room for the window buttons, which `window_controls` draws above everything.
-        let left = crate::prefs::get().window_controls() == WindowControls::Left;
         let room = || div().flex_none().w(px(CONTROLS_W));
         let (lead, trail) = if left {
             (Some(room()), None)
@@ -343,6 +361,12 @@ impl Workspace {
             .child(
                 div()
                     .id("home-tab")
+                    .track_focus(&self.home_focus)
+                    .focus(|s| s.bg(c(ACTIVE)))
+                    .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, w, cx| {
+                        t.strip_key(0, point(px(0.), px(0.)), ev, w, cx)
+                    }))
+                    .on_mouse_down(MouseButton::Left, |_, w, _| w.prevent_default())
                     .flex_none()
                     .h_full()
                     .px(px(10.))
@@ -533,8 +557,8 @@ fn win_button(
     area: WindowControlArea,
     action: impl Fn(&mut Window, &mut App) + 'static,
 ) -> gpui::Stateful<gpui::Div> {
-    let el = div()
-        .id(id)
+    let el = keyboard(div().id(id))
+        .focus(move |s| s.bg(c(hover)))
         .w(px(40.))
         .h_full()
         .flex()
