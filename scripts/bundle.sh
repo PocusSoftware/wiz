@@ -32,7 +32,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
-codesign --force --deep -s - "$APP"
+# Sign with the first code signing certificate when there is one. An ad-hoc signature
+# names the exact build, so the Keychain would forget "Always Allow" on every reinstall.
+IDENTITY=$(security find-identity -v -p codesigning | awk '/\)/ {print $2; exit}')
+codesign --force --deep -s "${IDENTITY:--}" "$APP"
 echo "built $APP ($VERSION, build $BUILD)"
 rm -rf /Applications/Wiz.app
 ditto "$APP" /Applications/Wiz.app
