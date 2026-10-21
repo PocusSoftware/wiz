@@ -801,6 +801,15 @@ fn tab_moves_between_controls_and_stays_in_dialogs(cx: &mut TestAppContext) {
         assert!(cx.update(|w, cx| dialog.contains_focused(w, cx)));
     }
     assert!(focused(cx, &target));
+    // The arrow keys on a button move like Tab: from the close button to the auth buttons.
+    cx.simulate_keystrokes("tab tab");
+    let close = cx.update(|w, cx| w.focused(cx)).unwrap();
+    cx.simulate_keystrokes("right");
+    assert!(!focused(cx, &close) && cx.update(|w, cx| dialog.contains_focused(w, cx)));
+    cx.simulate_keystrokes("up");
+    assert!(focused(cx, &close));
+    cx.simulate_keystrokes("shift-tab shift-tab");
+    assert!(focused(cx, &target));
     // The tab bar shortcut does not reach behind the dialog.
     cx.dispatch_action(FocusTabs);
     assert!(focused(cx, &target));

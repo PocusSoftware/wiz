@@ -47,7 +47,7 @@ use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Sourc
 use crate::views::terminal::{TerminalEvent, TerminalView};
 use crate::widgets::anim::{fade_in, pop_in, stagger_in};
 use crate::widgets::input::TextInput;
-use crate::widgets::{button, icon, icon_button, keyboard, primary_button};
+use crate::widgets::{FocusNext, FocusPrev, button, icon, icon_button, keyboard, primary_button};
 
 actions!(
     app,
@@ -566,6 +566,8 @@ impl Render for Workspace {
             .on_action(cx.listener(|t, _: &QuickConnect, w, cx| t.open_quick(w, cx)))
             .on_action(cx.listener(|t, _: &OpenSettings, w, cx| t.toggle_settings(w, cx)))
             .on_action(cx.listener(|t, _: &FocusTabs, w, cx| t.focus_tabs(w, cx)))
+            .on_action(cx.listener(|t, _: &FocusNext, w, cx| t.move_focus(false, w, cx)))
+            .on_action(cx.listener(|t, _: &FocusPrev, w, cx| t.move_focus(true, w, cx)))
             .on_action(cx.listener(|t, _: &NextPane, w, cx| t.cycle_pane(false, w, cx)))
             .on_action(cx.listener(|t, _: &PrevPane, w, cx| t.cycle_pane(true, w, cx)))
             .size_full()

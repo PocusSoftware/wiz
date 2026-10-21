@@ -5,11 +5,15 @@ pub mod anim;
 pub mod input;
 
 use gpui::{
-    AnyView, App, Context, Div, ElementId, IntoElement, KeyDownEvent, MouseButton, Render,
-    SharedString, Stateful, Window, div, prelude::*, px, svg,
+    Action, AnyView, App, Context, Div, ElementId, IntoElement, KeyDownEvent, MouseButton, Render,
+    SharedString, Stateful, Window, actions, div, prelude::*, px, svg,
 };
 
 use crate::theme::*;
+
+// The arrow keys on a focused control, handled by the window (which keeps focus inside an
+// open dialog).
+actions!(widgets, [FocusNext, FocusPrev]);
 
 struct Tip(SharedString);
 
@@ -54,9 +58,9 @@ pub fn typed<'a>(key: &str, key_char: Option<&'a str>) -> Option<&'a str> {
     key_char.or((key == "space").then_some(" "))
 }
 
-/// Make a clickable element reachable with Tab and pressable with Enter or Space, with a
-/// ring while it has keyboard focus. Callers without a border override `focus` with a
-/// background instead.
+/// Make a clickable element reachable with Tab and the arrow keys and pressable with Enter
+/// or Space, with a ring while it has keyboard focus. Callers without a border override
+/// `focus` with a background instead.
 pub fn keyboard(el: Stateful<Div>) -> Stateful<Div> {
     el.tab_index(0)
         .focus(|s| s.border_color(c(TEXT)))
@@ -65,11 +69,18 @@ pub fn keyboard(el: Stateful<Div>) -> Stateful<Div> {
         .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
         // gpui clicks on key up; stop the key down from also reaching the dialog's
         // Enter (submit) while Cancel has focus.
-        .on_key_down(|ev: &KeyDownEvent, _, cx| {
+        .on_key_down(|ev: &KeyDownEvent, window, cx| {
             let k = &ev.keystroke;
-            if matches!(k.key.as_str(), "enter" | "space") && !k.modifiers.modified() {
-                cx.stop_propagation();
+            if k.modifiers.modified() {
+                return;
             }
+            match k.key.as_str() {
+                "enter" | "space" => {}
+                "left" | "up" => window.dispatch_action(FocusPrev.boxed_clone(), cx),
+                "right" | "down" => window.dispatch_action(FocusNext.boxed_clone(), cx),
+                _ => return,
+            }
+            cx.stop_propagation();
         })
 }
 
