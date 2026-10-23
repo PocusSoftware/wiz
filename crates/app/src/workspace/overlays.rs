@@ -79,22 +79,34 @@ impl Workspace {
                         .child(
                             div().text_sm().child(
                                 // Name the saved host: with hiding on, addresses alone all look alike.
-                                match self
-                                    .pending
-                                    .iter()
-                                    .find(|p| p.host == req.host && p.port == req.port)
-                                {
-                                    Some(p) => format!("Trust {}?", privacy::redact(&p.name)),
-                                    None => "Trust this host?".to_string(),
+                                match (
+                                    self.pending
+                                        .iter()
+                                        .find(|p| p.host == req.host && p.port == req.port),
+                                    req.changed,
+                                ) {
+                                    (Some(p), false) => {
+                                        format!("Trust {}?", privacy::redact(&p.name))
+                                    }
+                                    (Some(p), true) => {
+                                        format!("Host key of {} changed", privacy::redact(&p.name))
+                                    }
+                                    (None, false) => "Trust this host?".to_string(),
+                                    (None, true) => "Host key changed".to_string(),
                                 },
                             ),
                         )
                         .child(
                             div().child(
                                 privacy::redact(&format!(
-                                    "{}:{} has not been seen before.",
+                                    "{}:{} {}",
                                     req.host,
-                                    privacy::port(req.port)
+                                    privacy::port(req.port),
+                                    if req.changed {
+                                        "presented a different key than before. This can be a reinstalled server, or someone intercepting the connection."
+                                    } else {
+                                        "has not been seen before."
+                                    }
                                 ))
                                 .into_owned(),
                             ),
@@ -119,7 +131,7 @@ impl Workspace {
                                 .child(button("trust-no", "Cancel").on_click(
                                     cx.listener(|t, _, w, cx| t.answer_trust(false, w, cx)),
                                 ))
-                                .child(primary_button("trust-yes", "Trust and connect").on_click(
+                                .child(primary_button("trust-yes", if req.changed { "Replace key and connect" } else { "Trust and connect" }).on_click(
                                     cx.listener(|t, _, w, cx| t.answer_trust(true, w, cx)),
                                 )),
                         )

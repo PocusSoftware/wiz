@@ -832,6 +832,7 @@ fn host_key_question_takes_focus(cx: &mut TestAppContext) {
                 host: "127.0.0.1".into(),
                 port: 2222,
                 fingerprint: "SHA256:x".into(),
+                changed: false,
                 reply,
             })
             .ok()

@@ -75,6 +75,8 @@ struct TrustRequest {
     host: String,
     port: u16,
     fingerprint: String,
+    /// The host is known but presented a different key.
+    changed: bool,
     reply: std::sync::mpsc::SyncSender<bool>,
 }
 
