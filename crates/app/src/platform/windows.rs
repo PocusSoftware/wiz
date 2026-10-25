@@ -20,13 +20,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
     ShowWindowAsync, WM_SYSCOMMAND,
 };
 
-use crate::workspace::{
-    CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
-    SelectTab, SplitPane, Workspace,
-};
+use crate::workspace::{NextTab, PrevTab, SelectTab, Workspace};
 
 /// rsync transfers need the macOS bridge; Windows uses SFTP only.
 pub const RSYNC: bool = false;
+
+/// Modifiers a shortcut must hold, for settings text.
+pub const MODIFIER_HINT: &str = "Ctrl or Alt";
 
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
@@ -36,31 +36,63 @@ pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one bel
 /// Plain Ctrl+D, Ctrl+W and Ctrl+K mean something to the shell, so app shortcuts add Shift,
 /// like Windows Terminal. Ctrl+Tab and Ctrl+1 to Ctrl+9 switch tabs, so Ctrl+2 (NUL) and
 /// Ctrl+6 no longer reach the shell. Alt+F4 quits through the window's close request.
-pub fn key_bindings() -> Vec<KeyBinding> {
+pub fn fixed_bindings() -> Vec<KeyBinding> {
     let mut keys = vec![
-        KeyBinding::new("ctrl-shift-w", CloseTab, None),
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
-        KeyBinding::new("ctrl-shift-n", NewHost, None),
-        KeyBinding::new("ctrl-,", OpenSettings, None),
-        KeyBinding::new("ctrl-shift-d", SplitPane, None),
-        KeyBinding::new("ctrl-shift-k", QuickConnect, None),
-        KeyBinding::new("ctrl-shift-l", FocusTabs, None),
-        // Like Windows Terminal.
-        KeyBinding::new("alt-right", NextPane, None),
-        KeyBinding::new("alt-left", PrevPane, None),
     ];
     keys.extend((1..=9).map(|n| KeyBinding::new(&format!("ctrl-{n}"), SelectTab(n - 1), None)));
     keys
 }
 
-/// Label of an app-wide shortcut (`key_bindings`), like "Ctrl+Shift+D".
-pub fn app_shortcut(key: &str) -> String {
-    if key == "," {
-        "Ctrl+,".into()
-    } else {
-        format!("Ctrl+Shift+{key}")
+/// Whether `keys` is one of `fixed_bindings`.
+pub fn is_fixed(keys: &str) -> bool {
+    matches!(keys, "ctrl-tab" | "ctrl-shift-tab")
+        || keys
+            .strip_prefix("ctrl-")
+            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+}
+
+/// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`). Tabs switch
+/// with the fixed Ctrl+Tab, so they have none of their own.
+pub fn default_shortcut(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "split" => "ctrl-shift-d",
+        "split_menu" => "ctrl-shift-s",
+        "tab_menu" => "ctrl-shift-m",
+        // Like Windows Terminal.
+        "next_pane" => "alt-right",
+        "prev_pane" => "alt-left",
+        "focus_tabs" => "ctrl-shift-l",
+        "quick_connect" => "ctrl-shift-k",
+        "new_host" => "ctrl-shift-n",
+        "settings" => "ctrl-,",
+        "close_tab" => "ctrl-shift-w",
+        _ => return None,
+    })
+}
+
+/// Keystrokes written the Windows way: "ctrl-shift-d" is "Ctrl+Shift+D".
+pub fn format_keys(keys: &str) -> String {
+    let Ok(k) = gpui::Keystroke::parse(keys) else {
+        return keys.to_string();
+    };
+    let m = k.modifiers;
+    let mut out = String::new();
+    for (held, name) in [
+        (m.control, "Ctrl+"),
+        (m.alt, "Alt+"),
+        (m.shift, "Shift+"),
+        (m.platform, "Win+"),
+    ] {
+        if held {
+            out.push_str(name);
+        }
     }
+    let mut chars = k.key.chars();
+    out.extend(chars.next().map(|c| c.to_ascii_uppercase()));
+    out.push_str(chars.as_str());
+    out
 }
 
 /// Label of a shortcut inside a view (files, logs), like "Ctrl+R" or "Ctrl+Shift+N".

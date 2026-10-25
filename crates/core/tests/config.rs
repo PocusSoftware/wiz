@@ -23,6 +23,7 @@ fn settings_defaults_and_roundtrip() {
         mask_ipv6: Some(false),
         extra_mask: Some(vec!["falcon".into()]),
         terminal_font_size: Some(15.0),
+        shortcuts: Some([("split".to_string(), "cmd-alt-d".to_string())].into()),
         ..Default::default()
     };
     let text = toml::to_string_pretty(&s).unwrap();
@@ -30,6 +31,8 @@ fn settings_defaults_and_roundtrip() {
     assert!(back.hide_sensitive() && !back.mask_ipv6());
     assert_eq!(back.extra_mask(), vec!["falcon".to_string()]);
     assert_eq!(back.terminal_font_size(), 15.0);
+    assert_eq!(back.shortcuts()["split"], "cmd-alt-d");
+    assert!(d.shortcuts().is_empty());
     // Window buttons are written as a plain word.
     let left: Settings = toml::from_str("window_controls = \"left\"").unwrap();
     assert_eq!(left.window_controls(), WindowControls::Left);

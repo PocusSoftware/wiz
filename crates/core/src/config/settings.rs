@@ -1,5 +1,7 @@
 //! App settings (`settings.toml`), every field optional with a default.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
@@ -87,6 +89,9 @@ pub struct Settings {
     pub block_quit: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
     pub connect_timeout_secs: Option<u32>,
+    // Keyboard
+    /// Shortcuts the user changed: command id to keystrokes like "cmd-shift-d".
+    pub shortcuts: Option<BTreeMap<String, String>>,
     // Credentials
     /// Where passwords and passphrases are kept: `keychain` or `file` (encrypted
     /// `secrets.toml`, unlocked with a master password).
@@ -134,6 +139,7 @@ getters! {
     auto_reconnect: bool = true;
     close_on_exit: bool = true;
     connect_timeout_secs: u32 = 15;
+    shortcuts: BTreeMap<String, String> = BTreeMap::new();
     secret_store: String = "keychain".into();
 }
 

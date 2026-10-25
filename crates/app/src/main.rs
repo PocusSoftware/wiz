@@ -9,6 +9,7 @@ mod prefs;
 mod privacy;
 mod rsync;
 mod runtime;
+mod shortcuts;
 #[cfg(test)]
 mod testing;
 mod theme;
@@ -80,7 +81,7 @@ fn main() {
                     _ => cx.quit(),
                 }
             });
-            cx.bind_keys(platform::key_bindings());
+            shortcuts::apply(cx);
             cx.set_menus(vec![Menu {
                 name: "Wiz".into(),
                 items: vec![

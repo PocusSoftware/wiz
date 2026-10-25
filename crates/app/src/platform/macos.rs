@@ -11,42 +11,76 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSView};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-use crate::workspace::{
-    CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
-    Quit, SelectTab, SplitPane, Workspace,
-};
+use crate::workspace::{NextTab, PrevTab, Quit, SelectTab, Workspace};
 
 /// Large transfers between this Mac and a server can run through rsync.
 pub const RSYNC: bool = true;
+
+/// Modifiers a shortcut must hold, for settings text.
+pub const MODIFIER_HINT: &str = "Cmd, Ctrl or Option";
 
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "⌘Q";
 
 pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
 
-pub fn key_bindings() -> Vec<KeyBinding> {
+/// Shortcuts that cannot be rebound: quit, the tab bar's Ctrl+Tab and Cmd+1 to Cmd+9.
+pub fn fixed_bindings() -> Vec<KeyBinding> {
     let mut keys = vec![
         KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-w", CloseTab, None),
-        KeyBinding::new("cmd-shift-]", NextTab, None),
-        KeyBinding::new("cmd-shift-[", PrevTab, None),
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
-        KeyBinding::new("cmd-n", NewHost, None),
-        KeyBinding::new("cmd-,", OpenSettings, None),
-        KeyBinding::new("cmd-d", SplitPane, None),
-        KeyBinding::new("cmd-k", QuickConnect, None),
-        KeyBinding::new("cmd-l", FocusTabs, None),
-        KeyBinding::new("cmd-]", NextPane, None),
-        KeyBinding::new("cmd-[", PrevPane, None),
     ];
     keys.extend((1..=9).map(|n| KeyBinding::new(&format!("cmd-{n}"), SelectTab(n - 1), None)));
     keys
 }
 
-/// Label of an app-wide shortcut (`key_bindings`), like "⌘D".
-pub fn app_shortcut(key: &str) -> String {
-    format!("⌘{key}")
+/// Whether `keys` is one of `fixed_bindings`.
+pub fn is_fixed(keys: &str) -> bool {
+    matches!(keys, "cmd-q" | "ctrl-tab" | "ctrl-shift-tab")
+        || keys
+            .strip_prefix("cmd-")
+            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+}
+
+/// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`).
+pub fn default_shortcut(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "split" => "cmd-d",
+        "split_menu" => "cmd-shift-d",
+        "tab_menu" => "cmd-shift-m",
+        "next_pane" => "cmd-]",
+        "prev_pane" => "cmd-[",
+        "next_tab" => "cmd-shift-]",
+        "prev_tab" => "cmd-shift-[",
+        "focus_tabs" => "cmd-l",
+        "quick_connect" => "cmd-k",
+        "new_host" => "cmd-n",
+        "settings" => "cmd-,",
+        "close_tab" => "cmd-w",
+        _ => return None,
+    })
+}
+
+/// Keystrokes written the Mac way: "cmd-shift-d" is "⇧⌘D".
+pub fn format_keys(keys: &str) -> String {
+    let Ok(k) = gpui::Keystroke::parse(keys) else {
+        return keys.to_string();
+    };
+    let m = k.modifiers;
+    let mut out = String::new();
+    for (held, mark) in [
+        (m.control, '⌃'),
+        (m.alt, '⌥'),
+        (m.shift, '⇧'),
+        (m.platform, '⌘'),
+    ] {
+        if held {
+            out.push(mark);
+        }
+    }
+    out.push_str(&k.key.to_uppercase());
+    out
 }
 
 /// Label of a shortcut inside a view (files, logs), like "⌘R" or "⇧⌘N".

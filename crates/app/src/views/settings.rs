@@ -1,6 +1,7 @@
 //! Settings page: every behavior that can be configured, saved as you change it.
 
 mod accent;
+mod shortcuts;
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
@@ -40,6 +41,11 @@ pub struct SettingsView {
     /// Known editors that are installed (`platform::installed_editors`).
     editors: Vec<&'static str>,
     error: Option<SharedString>,
+    /// The command whose shortcut is being typed, and the hold that keeps its keystrokes
+    /// from running anything meanwhile.
+    recording: Option<(&'static str, gpui::Subscription)>,
+    /// Why the last typed shortcut was refused.
+    shortcut_note: Option<SharedString>,
 }
 
 fn split_list(s: &str) -> Vec<String> {
@@ -64,6 +70,8 @@ impl SettingsView {
             accent: make("#f05a29", cx),
             editors: crate::platform::installed_editors(),
             error: None,
+            recording: None,
+            shortcut_note: None,
         };
         this.load_inputs(cx);
         for input in [
@@ -435,6 +443,9 @@ impl Render for SettingsView {
                     .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                     .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))
                     .child(self.text("Terminal font", "Family name. Applies after a restart.", &self.terminal_font))
+                    // ---------- Keyboard ----------
+                    .child(Self::section("Shortcuts"))
+                    .child(self.shortcut_rows(cx))
                     // ---------- Files ----------
                     .child(Self::section("Files (SFTP)"))
                     .child(self.toggle("f-dot", "Show dotfiles by default", "Initial state of the eye button in each pane.", s.show_dotfiles(), |s, v| s.show_dotfiles = Some(v), cx))
