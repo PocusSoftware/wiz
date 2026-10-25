@@ -1,4 +1,4 @@
-//! Split terminals: up to four shells of one connection in a tab, laid out for the space.
+//! Split terminals: up to four shells in a tab, on one server or several, laid out for the space.
 
 use super::*;
 
@@ -32,7 +32,7 @@ impl Render for DraggedPane {
 }
 
 /// Most terminals in one tab.
-const MAX_PANES: usize = 4;
+pub(super) const MAX_PANES: usize = 4;
 
 /// Smallest usable pane (header included). Splitting is refused when another pane
 /// would not get at least this much room.
@@ -90,7 +90,7 @@ impl Workspace {
     pub(super) fn focused_pane(t: &TermTab, window: &Window, cx: &App) -> usize {
         t.panes
             .iter()
-            .position(|p| p.focus_handle(cx).contains_focused(window, cx))
+            .position(|p| p.view.focus_handle(cx).contains_focused(window, cx))
             .unwrap_or(t.focused.min(t.panes.len().saturating_sub(1)))
     }
 
@@ -109,47 +109,113 @@ impl Workspace {
         let n = t.panes.len();
         let cur = Self::focused_pane(t, window, cx);
         let next = (if back { cur + n - 1 } else { cur + 1 }) % n;
-        t.panes[next].read(cx).focus(window);
+        t.panes[next].view.read(cx).focus(window);
         cx.notify();
     }
 
-    /// Open another shell on the same server, beside the current one.
-    pub(super) fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.page != Page::Tab {
-            return;
-        }
-        let Some(tab) = self.tabs.get(self.active) else {
-            return;
+    /// Whether terminal tab `ix` has room for `extra` more panes. Says why when it does not.
+    fn room_for(
+        &mut self,
+        ix: usize,
+        extra: usize,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(Tab {
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get(ix)
+        else {
+            return false;
         };
-        let TabKind::Terminal(t) = &tab.kind else {
-            return;
-        };
-        if t.panes.len() >= MAX_PANES {
-            self.set_status(format!("A tab holds at most {MAX_PANES} terminals."), true);
-            cx.notify();
-            return;
-        }
+        let n = t.panes.len() + extra;
         let area = self.area(window);
-        if layout(t.panes.len() + 1, area.0, area.1).is_none() {
+        if n > MAX_PANES {
+            self.set_status(format!("A tab holds at most {MAX_PANES} terminals."), true);
+        } else if layout(n, area.0, area.1).is_none() {
             self.set_status(
                 "The window is too small for another terminal. Make it bigger or close a pane.",
                 true,
             );
-            cx.notify();
+        } else {
+            return true;
+        }
+        cx.notify();
+        false
+    }
+
+    /// Open another shell on the same server as the focused pane, beside it.
+    pub(super) fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
             return;
         }
-        if t.conn.is_closed() {
-            self.set_status("The connection for this tab has closed.", true);
+        let Some(Tab {
+            id,
+            label,
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get(self.active)
+        else {
+            return;
+        };
+        let Some(pane) = t.panes.get(t.focused).or(t.panes.first()) else {
+            return;
+        };
+        if pane.conn.is_closed() {
+            self.set_status("The connection for this pane has closed.", true);
             cx.notify();
             return;
         }
         let (id, label, conn, pw) = (
-            tab.id,
-            tab.label.to_string(),
-            t.conn.clone(),
-            t.password.clone(),
+            *id,
+            label.to_string(),
+            pane.conn.clone(),
+            pane.password.clone(),
         );
         self.spawn_shell(label, conn, pw, None, Some(id), window, cx);
+    }
+
+    /// Open a shell on saved host `host` as a new pane of the active tab.
+    pub(super) fn split_with(&mut self, host: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
+            return;
+        }
+        if let Some(id) = self.tabs.get(self.active).map(|t| t.id) {
+            self.open_host(host, Open::SplitShell(id), window, cx);
+        }
+    }
+
+    /// Move the panes of terminal tab `id` into the split of tab `into`, and close `id`.
+    pub(super) fn merge_tab(
+        &mut self,
+        id: u64,
+        into: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let at = |tabs: &[Tab], id| tabs.iter().position(|t| t.id == id);
+        let (Some(from), Some(to)) = (at(&self.tabs, id), at(&self.tabs, into)) else {
+            return;
+        };
+        let (TabKind::Terminal(src), TabKind::Terminal(_)) =
+            (&self.tabs[from].kind, &self.tabs[to].kind)
+        else {
+            return;
+        };
+        if from == to || !self.room_for(to, src.panes.len(), window, cx) {
+            return;
+        }
+        let TabKind::Terminal(src) = self.tabs.remove(from).kind else {
+            return;
+        };
+        let Some(to) = at(&self.tabs, into) else {
+            return;
+        };
+        if let TabKind::Terminal(t) = &mut self.tabs[to].kind {
+            t.focused = t.panes.len();
+            t.panes.extend(src.panes);
+        }
+        self.select_tab(to, window, cx);
     }
 
     /// Close one pane of a split terminal tab; the last pane closes the tab.
@@ -431,7 +497,7 @@ impl Workspace {
                     .unwrap_or(0.);
                 if let Some(p) = t.panes.get(i) {
                     column = column.child(
-                        self.pane(tab_ix, i, p, i == t.focused, cx)
+                        self.pane(tab_ix, i, &p.view, i == t.focused, cx)
                             .flex_basis(gpui::relative(share))
                             .flex_shrink()
                             .min_h_0(),

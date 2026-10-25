@@ -183,7 +183,7 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
                 .unwrap()
                 .panes
                 .iter()
-                .map(Entity::entity_id)
+                .map(|p| p.view.entity_id())
                 .collect::<Vec<_>>()
         })
     };
@@ -845,4 +845,75 @@ fn host_key_question_takes_focus(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("escape");
     assert_eq!(answer.try_recv(), Ok(false));
     assert!(root.read_with(cx, |r, _| r.trust.is_empty()));
+}
+
+#[gpui::test]
+fn rebound_shortcut_replaces_the_default(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    let default = crate::platform::default_shortcut("quick_connect").unwrap();
+    crate::prefs::update(|s| {
+        s.shortcuts = Some([("quick_connect".to_string(), "ctrl-alt-j".to_string())].into());
+    })
+    .unwrap();
+    root.update(cx, Workspace::settings_changed);
+    // The old keys do nothing any more, the new ones open the dialog.
+    cx.simulate_keystrokes(default);
+    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    cx.simulate_keystrokes("ctrl-alt-j");
+    assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
+}
+
+/// Open a terminal tab with quick connect on the first SSH test server.
+fn quick_shell(root: &Entity<Workspace>, cx: &mut VisualTestContext, tabs: usize) {
+    cx.dispatch_action(QuickConnect);
+    type_text(cx, "tester@127.0.0.1:2222");
+    cx.simulate_keystrokes("tab");
+    type_text(cx, "hunter2");
+    cx.simulate_keystrokes("enter");
+    wait(cx, root, "a quick connect shell", |r, _| {
+        r.tabs.len() == tabs
+    });
+}
+
+#[gpui::test]
+fn tabs_merge_into_one_split_from_the_menu(cx: &mut TestAppContext) {
+    let _g = setup();
+    if !docker() {
+        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        return;
+    }
+    let (root, cx) = open_root(cx);
+    quick_shell(&root, cx, 1);
+    quick_shell(&root, cx, 2);
+    let (first, second) = root.read_with(cx, |r, _| (r.tabs[0].id, r.tabs[1].id));
+
+    // The split menu opens from the keyboard and closes with Escape.
+    cx.dispatch_action(SplitMenu);
+    assert!(root.read_with(cx, |r, _| r.split_menu.is_some()));
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, _| r.split_menu.is_none()));
+
+    // Merging moves the second tab's pane into the first and closes the second.
+    root.update_in(cx, |r, w, cx| r.merge_tab(second, first, w, cx));
+    root.read_with(cx, |r, _| {
+        assert_eq!(r.tabs.len(), 1);
+        assert_eq!(r.tabs[0].id, first);
+        assert!(matches!(&r.tabs[0].kind, TabKind::Terminal(t) if t.panes.len() == 2));
+        assert_eq!(r.active, 0);
+    });
+    // Fill the tab up to four panes; a fifth is refused.
+    for panes in 3..=4 {
+        quick_shell(&root, cx, 2);
+        let tab = root.read_with(cx, |r, _| r.tabs[1].id);
+        root.update_in(cx, |r, w, cx| r.merge_tab(tab, first, w, cx));
+        root.read_with(cx, |r, _| {
+            assert!(matches!(&r.tabs[0].kind, TabKind::Terminal(t) if t.panes.len() == panes));
+        });
+    }
+    quick_shell(&root, cx, 2);
+    let tab = root.read_with(cx, |r, _| r.tabs[1].id);
+    root.update_in(cx, |r, w, cx| r.merge_tab(tab, first, w, cx));
+    assert!(status(&root, cx).contains("at most 4"));
+    assert_eq!(root.read_with(cx, |r, _| r.tabs.len()), 2);
 }

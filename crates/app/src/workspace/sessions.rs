@@ -57,12 +57,20 @@ impl Workspace {
                         },
                     )
                     .detach();
+                    let pane = Pane {
+                        view,
+                        conn,
+                        account,
+                        password,
+                    };
                     let target =
                         split_into.and_then(|id| this.tabs.iter().position(|t| t.id == id));
+                    // A tab that filled up while connecting gets a tab of its own instead.
                     if let Some(ix) = target
                         && let TabKind::Terminal(t) = &mut this.tabs[ix].kind
+                        && t.panes.len() < split::MAX_PANES
                     {
-                        t.panes.push(view);
+                        t.panes.push(pane);
                         t.focused = t.panes.len() - 1;
                         this.select_tab(ix, window, cx);
                         return;
@@ -70,11 +78,8 @@ impl Workspace {
                     this.push_tab(
                         label,
                         TabKind::Terminal(TermTab {
-                            panes: vec![view],
+                            panes: vec![pane],
                             focused: 0,
-                            conn,
-                            account,
-                            password,
                             layout: vec![vec![0]],
                             cols: vec![1.0],
                             rows: vec![vec![1.0]],

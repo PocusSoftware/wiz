@@ -306,9 +306,9 @@ impl Workspace {
         .into_iter()
         .flatten()
         .collect();
-        // Tab stays inside the top one (`move_focus`). An open tab menu is above them all
+        // Tab stays inside the top one (`move_focus`). An open menu is above them all
         // and takes the handle instead.
-        if self.tab_menu.is_none()
+        if !self.menu_open()
             && let Some(top) = open.pop()
         {
             open.push(

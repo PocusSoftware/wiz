@@ -1,6 +1,6 @@
 //! Rearranging tabs: the right-click menu (pin, rename, duplicate, close) and dragging.
 
-use gpui::{MouseButton, Point};
+use gpui::{Div, ElementId, MouseButton, Point, point};
 
 use super::*;
 
@@ -20,6 +20,10 @@ impl Render for DraggedTab {
 /// Width of the menu, also used to keep it inside the window.
 const MENU_W: f32 = 180.;
 
+/// Where a menu opened from the keyboard starts: just under the tab bar.
+const MENU_TOP: f32 = 34.;
+const MENU_LEFT: f32 = 120.;
+
 impl Workspace {
     pub(super) fn open_tab_menu(
         &mut self,
@@ -34,8 +38,19 @@ impl Workspace {
         cx.notify();
     }
 
+    /// The tab menu of the open tab from the keyboard, where F10 is out of reach.
+    pub(super) fn open_active_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab {
+            return;
+        }
+        if let Some(id) = self.tabs.get(self.active).map(|t| t.id) {
+            self.open_tab_menu(id, point(px(MENU_LEFT), px(MENU_TOP)), window, cx);
+        }
+    }
+
     pub(super) fn close_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.tab_menu = None;
+        self.split_menu = None;
         if self.page == Page::Tab {
             self.select_tab(self.active, window, cx);
         } else {
@@ -156,27 +171,65 @@ impl Workspace {
         let command = t
             .panes
             .get(t.focused)
-            .and_then(|p| p.read(cx).command.clone());
-        let (label, conn, password) = (label.to_string(), t.conn.clone(), t.password.clone());
+            .and_then(|p| p.view.read(cx).command.clone());
+        let Some(pane) = t.panes.get(t.focused) else {
+            return;
+        };
+        let (label, conn, password) = (label.to_string(), pane.conn.clone(), pane.password.clone());
         self.open_shell(label, conn, password, command, window, cx);
     }
 
-    /// The open menu, drawn over everything. A click anywhere else closes it.
-    pub(super) fn tab_menu(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (id, at) = self.tab_menu?;
-        let tab = self.tabs.iter().find(|t| t.id == id)?;
-        let item = |name: &'static str, text: &'static str| {
-            keyboard(div().id(name))
-                .focus(|s| s.bg(c(HOVER)))
-                .h(px(26.))
-                .px_2()
-                .flex()
-                .items_center()
-                .rounded(px(2.))
-                .cursor_pointer()
-                .hover(|s| s.bg(c(HOVER)))
-                .child(text)
-        };
+    /// Whether a right-click or split menu is open.
+    pub(super) fn menu_open(&self) -> bool {
+        self.tab_menu.is_some() || self.split_menu.is_some()
+    }
+
+    /// The split button's menu: which server the new pane opens on.
+    /// `at` is where the mouse was; the keyboard opens it at the top right, under the button.
+    pub(super) fn open_split_menu(
+        &mut self,
+        at: Option<Point<Pixels>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let is_terminal = matches!(
+            self.tabs.get(self.active).map(|t| &t.kind),
+            Some(TabKind::Terminal(_))
+        );
+        if self.page != Page::Tab || !is_terminal {
+            return;
+        }
+        self.split_menu =
+            Some(at.unwrap_or_else(|| point(window.viewport_size().width, px(MENU_TOP))));
+        window.focus(&self.focus);
+        cx.notify();
+    }
+
+    /// A row of a menu.
+    fn menu_item(id: impl Into<ElementId>, text: impl Into<SharedString>) -> gpui::Stateful<Div> {
+        keyboard(div().id(id))
+            .focus(|s| s.bg(c(HOVER)))
+            .h(px(26.))
+            .px_2()
+            .flex()
+            .items_center()
+            .rounded(px(2.))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(HOVER)))
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .child(text.into())
+    }
+
+    /// `items` in a menu at `at`, drawn over everything. A click anywhere else closes it.
+    fn menu_overlay(
+        &self,
+        key: usize,
+        at: Point<Pixels>,
+        items: Vec<gpui::Stateful<Div>>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let menu = div()
             .absolute()
             .left((at.x).min(window.viewport_size().width - px(MENU_W + 4.)))
@@ -190,56 +243,108 @@ impl Workspace {
             .border_1()
             .border_color(c(BORDER))
             .text_color(c(TEXT))
-            .child(
-                item("tm-pin", if tab.pinned { "Unpin tab" } else { "Pin tab" }).on_click(
-                    cx.listener(move |t, _, w, cx| {
-                        t.toggle_pin_tab(id, cx);
-                        t.close_tab_menu(w, cx);
-                    }),
-                ),
+            .children(items);
+        div()
+            .id("tab-menu")
+            .track_focus(&self.modal_focus)
+            .absolute()
+            .size_full()
+            .occlude()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|t, _, w, cx| t.close_tab_menu(w, cx)),
             )
-            .child(
-                item("tm-rename", "Rename").on_click(cx.listener(move |t, _, w, cx| {
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|t, _, w, cx| t.close_tab_menu(w, cx)),
+            )
+            .child(fade_in(
+                menu.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                ("tab-menu", key),
+            ))
+            .into_any_element()
+    }
+
+    /// The open menu: the split button's, or the right-click menu of a tab.
+    pub(super) fn tab_menu(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if let Some(at) = self.split_menu {
+            return Some(self.split_menu_view(at, window, cx));
+        }
+        let (id, at) = self.tab_menu?;
+        let tab = self.tabs.iter().find(|t| t.id == id)?;
+        let mut items = vec![
+            Self::menu_item("tm-pin", if tab.pinned { "Unpin tab" } else { "Pin tab" }).on_click(
+                cx.listener(move |t, _, w, cx| {
+                    t.toggle_pin_tab(id, cx);
+                    t.close_tab_menu(w, cx);
+                }),
+            ),
+            Self::menu_item("tm-rename", "Rename").on_click(cx.listener(move |t, _, w, cx| {
+                t.tab_menu = None;
+                t.start_rename(id, w, cx);
+            })),
+        ];
+        if matches!(tab.kind, TabKind::Terminal(_)) {
+            items.push(Self::menu_item("tm-dup", "Duplicate").on_click(cx.listener(
+                move |t, _, w, cx| {
                     t.tab_menu = None;
-                    t.start_rename(id, w, cx);
-                })),
-            )
-            .when(matches!(tab.kind, TabKind::Terminal(_)), |d| {
-                d.child(
-                    item("tm-dup", "Duplicate").on_click(cx.listener(move |t, _, w, cx| {
+                    t.duplicate_tab(id, w, cx);
+                },
+            )));
+            // Put this tab's terminals into the split of another terminal tab.
+            let others = self
+                .tabs
+                .iter()
+                .filter(|o| o.id != id && matches!(o.kind, TabKind::Terminal(_)));
+            for o in others {
+                let into = o.id;
+                let name = o.name.clone().unwrap_or_else(|| o.label.clone());
+                items.push(
+                    Self::menu_item(
+                        ("tm-merge", into as usize),
+                        format!("Merge into {}", privacy::redact(&name)),
+                    )
+                    .on_click(cx.listener(move |t, _, w, cx| {
                         t.tab_menu = None;
-                        t.duplicate_tab(id, w, cx);
+                        t.merge_tab(id, into, w, cx);
                     })),
-                )
-            })
-            .child(
-                item("tm-close", "Close").on_click(cx.listener(move |t, _, w, cx| {
-                    t.tab_menu = None;
-                    if let Some(ix) = t.tabs.iter().position(|t| t.id == id) {
-                        t.request_close(ix, None, w, cx);
-                    }
-                })),
+                );
+            }
+        }
+        items.push(Self::menu_item("tm-close", "Close").on_click(cx.listener(
+            move |t, _, w, cx| {
+                t.tab_menu = None;
+                if let Some(ix) = t.tabs.iter().position(|t| t.id == id) {
+                    t.request_close(ix, None, w, cx);
+                }
+            },
+        )));
+        Some(self.menu_overlay(id as usize, at, items, window, cx))
+    }
+
+    /// Where the next pane opens: the same server, or any saved host.
+    fn split_menu_view(
+        &self,
+        at: Point<Pixels>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut items = vec![
+            Self::menu_item("sm-same", "Same server").on_click(cx.listener(|t, _, w, cx| {
+                t.close_tab_menu(w, cx);
+                t.split(w, cx);
+            })),
+        ];
+        for (ix, h) in self.cfg.hosts.iter().enumerate() {
+            items.push(
+                Self::menu_item(("sm-host", ix), h.name.clone()).on_click(cx.listener(
+                    move |t, _, w, cx| {
+                        t.close_tab_menu(w, cx);
+                        t.split_with(ix, w, cx);
+                    },
+                )),
             );
-        Some(
-            div()
-                .id("tab-menu")
-                .track_focus(&self.modal_focus)
-                .absolute()
-                .size_full()
-                .occlude()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|t, _, w, cx| t.close_tab_menu(w, cx)),
-                )
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(|t, _, w, cx| t.close_tab_menu(w, cx)),
-                )
-                .child(fade_in(
-                    menu.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                    ("tab-menu", id as usize),
-                ))
-                .into_any_element(),
-        )
+        }
+        self.menu_overlay(usize::MAX, at, items, window, cx)
     }
 }

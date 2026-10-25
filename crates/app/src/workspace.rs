@@ -59,6 +59,8 @@ actions!(
         NewHost,
         OpenSettings,
         SplitPane,
+        SplitMenu,
+        TabMenu,
         QuickConnect,
         FocusTabs,
         NextPane,
@@ -100,15 +102,21 @@ struct Pending {
     _cancel: oneshot::Sender<()>,
 }
 
-/// A terminal tab: one shell, or several split side by side, all on one connection.
-struct TermTab {
-    panes: Vec<Entity<TerminalView>>,
-    /// Pane that had focus last; gets it back when the tab is selected.
-    focused: usize,
+/// One shell of a terminal tab, with the connection it runs on: the panes of a split may
+/// be on different servers.
+struct Pane {
+    view: Entity<TerminalView>,
     conn: Arc<Connection>,
     /// Which host `conn` belongs to, so a lost terminal can reconnect.
     account: String,
     password: Option<Secret>,
+}
+
+/// A terminal tab: one shell, or several split side by side.
+struct TermTab {
+    panes: Vec<Pane>,
+    /// Pane that had focus last; gets it back when the tab is selected.
+    focused: usize,
     /// Pane indices per column, left to right, each column top to bottom. Picked from the
     /// space available on every render (see `layout`).
     layout: Vec<Vec<usize>>,
@@ -154,6 +162,8 @@ enum Open {
     SftpSource(gpui::WeakEntity<SftpView>, SftpSide),
     /// Reconnect a terminal whose connection dropped (attempt number).
     Reattach(gpui::WeakEntity<TerminalView>, u32),
+    /// Connect a host and open a shell for it as a new pane of the terminal tab with this id.
+    SplitShell(u64),
 }
 
 enum TabKind {
@@ -195,6 +205,8 @@ pub struct Workspace {
     active: usize,
     /// Right-click menu of a tab: its id, and where the mouse was.
     tab_menu: Option<(u64, gpui::Point<Pixels>)>,
+    /// The menu of the split button, where the mouse was: pick the server for a new pane.
+    split_menu: Option<gpui::Point<Pixels>>,
     /// A tab being renamed in place: its id, the name field, and the blur watch that
     /// saves when focus leaves it.
     renaming: Option<(u64, Entity<TextInput>, gpui::Subscription)>,
@@ -299,6 +311,7 @@ impl Workspace {
             tabs: vec![],
             active: 0,
             tab_menu: None,
+            split_menu: None,
             renaming: None,
             page: Page::Home,
             settings: None,
@@ -430,11 +443,12 @@ impl Workspace {
     /// Settings changed somewhere: repaint every page (they read the live settings) and
     /// re-filter file lists.
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
+        crate::shortcuts::apply(cx);
         for tab in &self.tabs {
             match &tab.kind {
                 TabKind::Terminal(t) => {
                     for p in &t.panes {
-                        p.update(cx, |_, cx| cx.notify());
+                        p.view.update(cx, |_, cx| cx.notify());
                     }
                 }
                 TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
@@ -506,7 +520,7 @@ impl Render for Workspace {
                     cx.stop_propagation();
                     return;
                 }
-                if t.tab_menu.is_some() {
+                if t.menu_open() {
                     match ev.keystroke.key.as_str() {
                         "escape" => t.close_tab_menu(w, cx),
                         "up" => t.move_focus(true, w, cx),
@@ -548,6 +562,8 @@ impl Render for Workspace {
                 }
             }))
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
+            .on_action(cx.listener(|t, _: &SplitMenu, w, cx| t.open_split_menu(None, w, cx)))
+            .on_action(cx.listener(|t, _: &TabMenu, w, cx| t.open_active_tab_menu(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {
                 Page::Tab => t.close_current(w, cx),
                 Page::Settings => t.close_settings(w, cx),

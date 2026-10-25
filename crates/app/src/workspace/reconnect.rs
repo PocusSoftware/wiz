@@ -47,7 +47,7 @@ impl Workspace {
             for _ in 0..polls {
                 cx.background_executor().timer(step).await;
                 dropped = this
-                    .update(cx, |this, cx| this.connection_dropped(&view, cx))
+                    .update(cx, |this, _| this.connection_dropped(&view))
                     .unwrap_or(false);
                 if dropped {
                     break;
@@ -80,7 +80,7 @@ impl Workspace {
                 TabKind::Terminal(tt) => tt
                     .panes
                     .iter()
-                    .position(|p| p.entity_id() == view.entity_id())
+                    .position(|p| p.view.entity_id() == view.entity_id())
                     .map(|p| (i, p)),
                 _ => None,
             });
@@ -152,14 +152,10 @@ impl Workspace {
                 runtime::spawn(async move { c.open_shell(100, 30, cmd.as_deref()).await }).await;
             this.update_in(cx, |this, window, cx| match r {
                 Ok(shell) => {
-                    // Point the tab at the new connection.
-                    for t in this.tabs.iter_mut() {
-                        if let TabKind::Terminal(tt) = &mut t.kind
-                            && tt.panes.iter().any(|p| p.entity_id() == view.entity_id())
-                        {
-                            tt.conn = conn.clone();
-                            tt.password = password.clone();
-                        }
+                    // Point the pane at the new connection.
+                    if let Some(pane) = this.pane_of(&view) {
+                        pane.conn = conn.clone();
+                        pane.password = password.clone();
                     }
                     view.update(cx, |v, cx| v.attach(shell, password.clone(), cx))
                         .ok();
@@ -174,31 +170,20 @@ impl Workspace {
         .detach();
     }
 
-    /// The tab holding `view`: its index and host account.
-    fn terminal_tab(
-        &self,
-        view: &gpui::WeakEntity<TerminalView>,
-    ) -> Option<(usize, String, Arc<Connection>)> {
+    /// The pane showing `view`.
+    fn pane_of(&mut self, view: &gpui::WeakEntity<TerminalView>) -> Option<&mut Pane> {
         self.tabs
-            .iter()
-            .enumerate()
-            .find_map(|(i, t)| match &t.kind {
-                TabKind::Terminal(tt)
-                    if tt.panes.iter().any(|p| p.entity_id() == view.entity_id()) =>
-                {
-                    Some((i, tt.account.clone(), tt.conn.clone()))
-                }
+            .iter_mut()
+            .filter_map(|t| match &mut t.kind {
+                TabKind::Terminal(tt) => Some(tt),
                 _ => None,
             })
+            .flat_map(|tt| tt.panes.iter_mut())
+            .find(|p| p.view.entity_id() == view.entity_id())
     }
 
-    fn connection_dropped(
-        &self,
-        view: &gpui::WeakEntity<TerminalView>,
-        _: &mut Context<Self>,
-    ) -> bool {
-        self.terminal_tab(view)
-            .is_some_and(|(_, _, conn)| conn.is_closed())
+    fn connection_dropped(&mut self, view: &gpui::WeakEntity<TerminalView>) -> bool {
+        self.pane_of(view).is_some_and(|p| p.conn.is_closed())
     }
 
     fn try_reattach(
@@ -208,7 +193,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((_, account, _)) = self.terminal_tab(&view) else {
+        let Some(account) = self.pane_of(&view).map(|p| p.account.clone()) else {
             return; // closed meanwhile
         };
         let found = match self.cfg.hosts.iter().find(|h| h.account() == account) {

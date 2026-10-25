@@ -11,7 +11,7 @@ const MAX_STEPS: usize = 500;
 impl Workspace {
     /// A dialog or the tab menu is open, so Tab stays inside it.
     pub(super) fn modal_open(&self) -> bool {
-        self.tab_menu.is_some()
+        self.menu_open()
             || !self.trust.is_empty()
             || self.form.is_some()
             || self.quick_form.is_some()

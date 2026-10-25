@@ -45,7 +45,7 @@ impl Workspace {
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => {
                 if let Some(p) = t.panes.get(t.focused).or(t.panes.first()) {
-                    p.read(cx).focus(window)
+                    p.view.read(cx).focus(window)
                 }
             }
             TabKind::Sftp(v) => {
@@ -217,7 +217,7 @@ impl Workspace {
                 text = privacy::redact(name).into_owned();
             } else if let TabKind::Terminal(t) = &tab.kind
                 && let Some(p) = t.panes.get(t.focused)
-                && let Some(title) = p.read(cx).title()
+                && let Some(title) = p.view.read(cx).title()
                 && !title.is_empty()
             {
                 text = format!("{text} · {}", privacy::redact(&title));
@@ -330,7 +330,7 @@ impl Workspace {
                         icon_button(
                             ("tab-close", ix),
                             "x",
-                            format!("Close ({})", crate::platform::app_shortcut("W")),
+                            format!("Close ({})", crate::shortcuts::label("close_tab")),
                             MUTED,
                         )
                         .size(px(16.))
@@ -437,12 +437,17 @@ impl Workspace {
                                     "split-btn",
                                     "columns",
                                     format!(
-                                        "Split terminal ({})",
-                                        crate::platform::app_shortcut("D")
+                                        "Split terminal ({} splits the same server, {} picks one)",
+                                        crate::shortcuts::label("split"),
+                                        crate::shortcuts::label("split_menu")
                                     ),
                                     MUTED,
                                 )
-                                .on_click(cx.listener(|t, _, w, cx| t.split(w, cx))),
+                                .on_click(cx.listener(
+                                    |t, ev: &ClickEvent, w, cx| {
+                                        t.open_split_menu(Some(ev.position()), w, cx)
+                                    },
+                                )),
                             )
                         },
                     )
@@ -450,7 +455,10 @@ impl Workspace {
                         icon_button(
                             "quick-btn",
                             "arrow-right",
-                            format!("Quick connect ({})", crate::platform::app_shortcut("K")),
+                            format!(
+                                "Quick connect ({})",
+                                crate::shortcuts::label("quick_connect")
+                            ),
                             MUTED,
                         )
                         .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
@@ -475,7 +483,7 @@ impl Workspace {
                             if self.page == Page::Settings {
                                 "Close settings (Esc)".to_string()
                             } else {
-                                format!("Settings ({})", crate::platform::app_shortcut(","))
+                                format!("Settings ({})", crate::shortcuts::label("settings"))
                             },
                             if self.page == Page::Settings {
                                 accent_text()
@@ -528,7 +536,7 @@ impl Workspace {
         }
         match self.tabs.get(self.active).map(|t| &t.kind) {
             Some(TabKind::Terminal(t)) if t.panes.len() == 1 => {
-                t.panes[0].clone().into_any_element()
+                t.panes[0].view.clone().into_any_element()
             }
             Some(TabKind::Terminal(t)) => self.split_view(t, cx),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),

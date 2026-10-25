@@ -27,6 +27,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 |---|---|
 | Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_ipv4`, `mask_ipv6`, `mask_ports`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
 | Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `accent_color` ("#RRGGBB"), `window_controls` ("left" or "right"), `animations` |
+| Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
 | Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |
 | Credentials | `secret_store` (`keychain` or `file`) |
@@ -35,6 +36,8 @@ The eye button in the title bar flips `hide_sensitive`.
 
 ## Split terminals
 ⌘D opens another shell on the same server in the current tab, up to 4. Two sit side by side, a third and fourth go below them as a 2x2 grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged. ⌘] and ⌘[ move between the panes.
+
+To put another server in the split, click the split button or press ⇧⌘D and pick a saved host. To join two open tabs, open the menu of the tab you want to move (right-click, or ⇧⌘M for the open tab) and pick "Merge into" the other one. Both work from the keyboard (Tab or the arrow keys move in the menu, Enter picks, Escape closes). All shortcuts above can be changed under Shortcuts in Settings: select the shortcut, press Enter, type the new keys (hold Cmd, Ctrl or Option).
 
 ## Keyboard
 Everything works without a mouse. Tab and Shift+Tab, or the arrow keys, move between controls. Enter or Space presses the focused one. A dialog keeps Tab inside it, fields first, then its buttons. The terminal keeps Tab for the shell, so ⌘L jumps to the tab bar. There Left and Right move between tabs, Home and End go to the ends, Enter selects, Shift+Left and Shift+Right move a tab, Delete closes it, and Shift+F10 opens its menu (Up and Down to pick). In the file panes Left and Right switch between the two lists.
@@ -56,7 +59,7 @@ The file is unlocked on first use (connecting, adding or editing a host) and sta
 
 ## macOS and Windows
 macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
-- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
+- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+S split with another server, Ctrl+Shift+M tab menu, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
 - Missing on purpose: the Keychain (passwords always live in the encrypted secrets file), rsync transfers and the rsync hint (files go over SFTP), and the installed-editor picks (the editor setting takes a program name or path; empty opens Notepad, never the file's default app).
 - Build on Windows with `cargo build --release -p ssh-app` (gives `target\release\wiz.exe`), or run the "Windows build" workflow (`gh workflow run windows.yml`), which tests on Windows and uploads `Wiz.exe` as an artifact. Release builds compile GPUI's shaders with `fxc.exe` from the Windows SDK. From a Mac, `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu` checks the Windows side (needs `brew install mingw-w64` and `rustup target add x86_64-pc-windows-gnu`).
 
