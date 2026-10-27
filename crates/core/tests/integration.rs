@@ -292,6 +292,27 @@ fn keychain_roundtrip() {
     assert!(keychain::get(Kind::Password, &acct).unwrap().is_none());
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn keychain_entry_moves_from_the_old_app_id() {
+    use security_framework::passwords::{get_generic_password, set_generic_password};
+    gate!();
+    let acct = format!("test-old-{}@localhost:1", std::process::id());
+    let old = "dev.enty.ssh-client.password";
+    set_generic_password(old, &acct, b"from before").unwrap();
+    assert_eq!(
+        keychain::get(Kind::Password, &acct)
+            .unwrap()
+            .map(|s| s.reveal().to_string())
+            .as_deref(),
+        Some("from before")
+    );
+    // Moved: the old entry is gone and the new one answers from now on.
+    assert!(get_generic_password(old, &acct).is_err());
+    keychain::delete(Kind::Password, &acct).unwrap();
+    assert!(keychain::get(Kind::Password, &acct).unwrap().is_none());
+}
+
 #[tokio::test]
 async fn dropping_shell_ends_remote_process() {
     gate!();

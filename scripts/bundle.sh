@@ -20,7 +20,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>Wiz</string>
   <key>CFBundleDisplayName</key><string>Wiz</string>
-  <key>CFBundleIdentifier</key><string>dev.enty.wiz</string>
+  <key>CFBundleIdentifier</key><string>software.pocus.wiz</string>
   <key>CFBundleExecutable</key><string>wiz</string>
   <key>CFBundleIconFile</key><string>Wiz</string>
   <key>CFBundlePackageType</key><string>APPL</string>

@@ -70,13 +70,13 @@ macOS is the main platform. Everything that differs lives in `crates/app/src/pla
 - SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).
 
 ## Data locations
-Hosts, known hosts and settings live in `~/Library/Application Support/dev.enty.ssh-client/` on macOS and `%APPDATA%\dev.enty.ssh-client\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
+Hosts, known hosts and settings live in `~/Library/Application Support/software.pocus.wiz/` on macOS and `%APPDATA%\software.pocus.wiz\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
 
 ## Versioning
 The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scripts/version.sh` prints it, `scripts/version.sh 0.2.0` sets it; then commit and tag `v0.2.0`. The app shows the version and build commit at the bottom of Settings, and `scripts/bundle.sh` writes it into `Info.plist` (build number = commit count).
 
 ## App bundle and icon
-`scripts/bundle.sh` builds `Wiz.app` (release binary, icon, ad-hoc signature) and installs it to `/Applications`, replacing the previous build. The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/hat.svg`. The config folder keeps its original name (`dev.enty.ssh-client`) so existing hosts and Keychain entries carry over.
+`scripts/bundle.sh` builds `Wiz.app` (release binary, icon, ad-hoc signature) and installs it to `/Applications`, replacing the previous build. The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/hat.svg`. Data from before the rename (the `dev.enty.ssh-client` folder and Keychain entries) is moved over on first use.
 
 ## Hide sensitive information
 Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.

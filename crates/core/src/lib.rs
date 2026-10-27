@@ -13,7 +13,9 @@ pub mod terminal;
 pub use error::{Error, Result};
 
 /// Keychain service name and config directory name.
-pub const APP_ID: &str = "dev.enty.ssh-client";
+pub const APP_ID: &str = "software.pocus.wiz";
+/// What `APP_ID` was before. Data found under it is moved over on first use.
+pub(crate) const OLD_APP_ID: &str = "dev.enty.ssh-client";
 
 /// Where hosts, known_hosts and settings live. `SSHC_CONFIG_DIR` overrides it (used by
 /// tests so they never touch real data).
@@ -22,8 +24,19 @@ pub fn config_dir() -> Result<std::path::PathBuf> {
         return Ok(d.into());
     }
     dirs::config_dir()
-        .map(|d| d.join(APP_ID))
+        .map(|d| app_dir(&d))
         .ok_or_else(|| Error::Config("no config dir".into()))
+}
+
+/// The app's folder in `base`, renamed from the old ID's folder when only that one exists.
+/// If the rename fails the old folder stays in use, so nothing ever looks lost.
+fn app_dir(base: &std::path::Path) -> std::path::PathBuf {
+    let (new, old) = (base.join(APP_ID), base.join(OLD_APP_ID));
+    if new.exists() || !old.exists() || std::fs::rename(&old, &new).is_ok() {
+        new
+    } else {
+        old
+    }
 }
 
 /// Write `bytes` to `path` through a temp file and a rename, so a crash never leaves it half
@@ -46,3 +59,6 @@ pub(crate) fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> 
     std::fs::rename(tmp, path)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
