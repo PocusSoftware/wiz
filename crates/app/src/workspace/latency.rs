@@ -26,7 +26,10 @@ impl Workspace {
         cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor().timer(EVERY).await;
-                let Ok(conn) = this.update(cx, |t, _| t.focused_conn()) else {
+                let Ok(conn) = this.update(cx, |t, _| {
+                    t.focused_conn()
+                        .filter(|_| crate::prefs::get().show_latency())
+                }) else {
                     return; // the window closed
                 };
                 let ms = match conn.clone() {
@@ -57,7 +60,9 @@ impl Workspace {
 
     /// "42 ms" in the tab bar, for the terminal in front.
     pub(super) fn latency_label(&self) -> Option<AnyElement> {
-        let ms = self.latency.filter(|_| self.focused_conn().is_some())?;
+        let ms = self
+            .latency
+            .filter(|_| crate::prefs::get().show_latency() && self.focused_conn().is_some())?;
         Some(
             div()
                 .id("latency")

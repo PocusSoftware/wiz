@@ -19,7 +19,12 @@ impl SettingsView {
                 .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
                 .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                 .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))
-                .child(self.text("Terminal font", "Family name. Applies after a restart.", &self.terminal_font)),
+                .child(self.text("Terminal font", "Family name. Applies after a restart.", &self.terminal_font))
+                .child(Self::group("Tab bar"))
+                .child(self.toggle("a-latency", "Show latency", "The round trip to the server of the terminal in front, like 42 ms.", s.show_latency(), |s, v| s.show_latency = Some(v), cx))
+                .child(self.toggle("a-split-btn", "Split button", "Splits the terminal in front. The shortcut keeps working without it.", s.show_split_button(), |s, v| s.show_split_button = Some(v), cx))
+                .child(self.toggle("a-quick-btn", "Quick connect button", "The shortcut keeps working without it.", s.show_quick_connect_button(), |s, v| s.show_quick_connect_button = Some(v), cx))
+                .child(self.toggle("a-privacy-btn", "Privacy button", "The eye that hides hosts, users and ports. The setting stays under Privacy.", s.show_privacy_button(), |s, v| s.show_privacy_button = Some(v), cx)),
             Category::Privacy => {
                 let on = s.hide_sensitive();
                 // Dimmed, not disabled: options can still be set up while the switch is off.

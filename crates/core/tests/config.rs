@@ -18,6 +18,7 @@ fn settings_defaults_and_roundtrip() {
     assert_eq!(d.window_controls(), WindowControls::Right);
     assert_eq!(d.accent_color(), "#f05a29");
     assert!(!d.oled_black());
+    assert!(!d.show_latency() && d.show_split_button() && d.show_privacy_button());
 
     let s = Settings {
         hide_sensitive: Some(true),

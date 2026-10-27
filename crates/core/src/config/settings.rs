@@ -48,6 +48,12 @@ pub struct Settings {
     pub oled_black: Option<bool>,
     /// Draw icons in gray and white instead of red, green and the accent.
     pub monochrome_icons: Option<bool>,
+    /// Show the round trip to the server of the focused terminal in the tab bar.
+    pub show_latency: Option<bool>,
+    /// Tab bar buttons (settings is always there).
+    pub show_split_button: Option<bool>,
+    pub show_quick_connect_button: Option<bool>,
+    pub show_privacy_button: Option<bool>,
     // Privacy
     pub hide_sensitive: Option<bool>,
     pub mask_hosts: Option<bool>,
@@ -122,6 +128,10 @@ getters! {
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
     monochrome_icons: bool = false;
+    show_latency: bool = false;
+    show_split_button: bool = true;
+    show_quick_connect_button: bool = true;
+    show_privacy_button: bool = true;
     hide_sensitive: bool = false;
     mask_hosts: bool = true;
     mask_users: bool = true;

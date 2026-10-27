@@ -206,7 +206,8 @@ impl Workspace {
         const RESERVED: f32 = HOME_W + 4. * 24. + 3. + 8. + 3. * 40. + 32.;
         let room = f32::from(window_w) - RESERVED;
         let tab_w = (room / self.tabs.len().max(1) as f32).clamp(110., 220.);
-        let left = crate::prefs::get().window_controls() == WindowControls::Left;
+        let prefs = crate::prefs::get();
+        let left = prefs.window_controls() == WindowControls::Left;
         // Where a tab starts, for the tab menu opened from the keyboard.
         let strip_x = if left { CONTROLS_W } else { 0. } + HOME_W;
         let scroll_x = self.tab_scroll.offset().x;
@@ -420,7 +421,8 @@ impl Workspace {
                     .gap(px(1.))
                     .children(self.latency_label())
                     .when(
-                        self.page == Page::Tab
+                        prefs.show_split_button()
+                            && self.page == Page::Tab
                             && matches!(
                                 self.tabs.get(self.active).map(|t| &t.kind),
                                 Some(TabKind::Terminal(_))
@@ -445,31 +447,35 @@ impl Workspace {
                             )
                         },
                     )
-                    .child(
-                        icon_button(
-                            "quick-btn",
-                            "arrow-right",
-                            format!(
-                                "Quick connect ({})",
-                                crate::shortcuts::label("quick_connect")
-                            ),
-                            MUTED,
+                    .when(prefs.show_quick_connect_button(), |d| {
+                        d.child(
+                            icon_button(
+                                "quick-btn",
+                                "arrow-right",
+                                format!(
+                                    "Quick connect ({})",
+                                    crate::shortcuts::label("quick_connect")
+                                ),
+                                MUTED,
+                            )
+                            .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
                         )
-                        .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
-                    )
-                    .child(
-                        icon_button(
-                            "hide-btn",
-                            if privacy::hide() { "eye-off" } else { "eye" },
-                            "Hide sensitive information",
-                            if privacy::hide() {
-                                accent_text()
-                            } else {
-                                MUTED
-                            },
+                    })
+                    .when(prefs.show_privacy_button(), |d| {
+                        d.child(
+                            icon_button(
+                                "hide-btn",
+                                if privacy::hide() { "eye-off" } else { "eye" },
+                                "Hide sensitive information",
+                                if privacy::hide() {
+                                    accent_text()
+                                } else {
+                                    MUTED
+                                },
+                            )
+                            .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
                         )
-                        .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
-                    )
+                    })
                     .child(
                         icon_button(
                             "settings-btn",
