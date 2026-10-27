@@ -11,6 +11,7 @@ static PREFS: RwLock<Option<Arc<Settings>>> = RwLock::new(None);
 
 fn apply(s: &Settings) {
     privacy::configure(s);
+    theme::set_oled(s.oled_black());
     theme::set_accent(theme::parse_hex(&s.accent_color()).unwrap_or(theme::DEFAULT_ACCENT));
     ssh_core::secrets::set_store(ssh_core::secrets::Store::from_setting(&s.secret_store()));
 }

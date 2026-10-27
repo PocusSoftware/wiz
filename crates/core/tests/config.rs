@@ -17,6 +17,7 @@ fn settings_defaults_and_roundtrip() {
     assert!(d.secret_file_patterns().contains(&".env".to_string()));
     assert_eq!(d.window_controls(), WindowControls::Right);
     assert_eq!(d.accent_color(), "#f05a29");
+    assert!(!d.oled_black());
 
     let s = Settings {
         hide_sensitive: Some(true),

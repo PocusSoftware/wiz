@@ -44,6 +44,8 @@ pub struct Settings {
     /// Color of buttons, the active tab, the cursor and focus, as "#RRGGBB".
     pub accent_color: Option<String>,
     pub window_controls: Option<WindowControls>,
+    /// Pure black window and terminal background for OLED screens.
+    pub oled_black: Option<bool>,
     // Privacy
     pub hide_sensitive: Option<bool>,
     pub mask_hosts: Option<bool>,
@@ -111,6 +113,7 @@ getters! {
     animations: bool = true;
     accent_color: String = "#f05a29".into();
     window_controls: WindowControls = WindowControls::Right;
+    oled_black: bool = false;
     hide_sensitive: bool = false;
     mask_hosts: bool = true;
     mask_users: bool = true;

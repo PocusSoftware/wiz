@@ -18,7 +18,7 @@ impl Render for DragLabel {
             .py(px(3.))
             .rounded(px(2.))
             .bg(c(accent()))
-            .text_color(c(0xffffff))
+            .text_color(c(on_accent()))
             .child(self.0.clone())
     }
 }

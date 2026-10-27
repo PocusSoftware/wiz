@@ -592,7 +592,7 @@ impl Render for Workspace {
             .flex()
             .font_family(ui())
             .text_size(px(12.))
-            .bg(c(BG))
+            .bg(c(bg()))
             .text_color(c(TEXT))
             .child(
                 div()

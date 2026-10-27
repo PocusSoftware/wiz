@@ -36,7 +36,7 @@ fn resolve(color: Color, default: u32) -> u32 {
                 | NamedColor::BrightForeground
                 | NamedColor::DimForeground
                 | NamedColor::Cursor => TEXT,
-                NamedColor::Background => BG,
+                NamedColor::Background => bg(),
                 _ if i < 16 => ANSI[i],
                 _ if i >= NamedColor::DimBlack as usize => {
                     ANSI[(i - NamedColor::DimBlack as usize).min(7)]
@@ -107,18 +107,18 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
             continue;
         }
         let mut fg = resolve(cell.cell.fg, TEXT);
-        let mut bg = resolve(cell.cell.bg, BG);
+        let mut back = resolve(cell.cell.bg, bg());
         if f.contains(Flags::INVERSE) {
-            std::mem::swap(&mut fg, &mut bg);
+            std::mem::swap(&mut fg, &mut back);
         }
         let selected = selection.is_some_and(|s| s.contains(cell.point));
         let at_cursor = focused && cursor_visible && cell.point == cursor_pt;
         if selected {
-            bg = crate::theme::selection();
+            back = crate::theme::selection();
         }
         if at_cursor {
-            bg = accent();
-            fg = BG;
+            back = accent();
+            fg = bg();
         }
         let ch_ = if f.contains(Flags::HIDDEN) {
             ' '
@@ -129,7 +129,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
             ch_,
             Style {
                 fg,
-                bg: (bg != BG).then_some(bg),
+                bg: (back != bg()).then_some(back),
                 bold: f.contains(Flags::BOLD),
                 italic: f.contains(Flags::ITALIC),
                 underline: f.intersects(Flags::ALL_UNDERLINES),
@@ -157,7 +157,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
                 continue;
             }
             let (bg, fg) = if i == s.cur {
-                (accent(), BG)
+                (accent(), bg())
             } else {
                 (MATCH_BG, TEXT)
             };
@@ -207,7 +207,7 @@ pub(super) fn paint_grid(
         cursor_pt,
         cursor_visible,
     } = snap;
-    window.paint_quad(fill(bounds, c(BG)));
+    window.paint_quad(fill(bounds, c(bg())));
     let ts = window.text_system().clone();
     let fs = px(mono_size());
 

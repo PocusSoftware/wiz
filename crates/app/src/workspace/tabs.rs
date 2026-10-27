@@ -265,7 +265,7 @@ impl Workspace {
                             .bg(c(accent())),
                     )
                 })
-                .bg(c(BG))
+                .bg(c(bg()))
                 .text_color(c(if active { TEXT } else { MUTED }))
                 .hover(|s| s.text_color(c(TEXT)))
                 // Selecting moves focus to the tab's content; no flash of the focus look.
@@ -354,7 +354,7 @@ impl Workspace {
             .h(px(TITLEBAR_H))
             .flex_none()
             .flex()
-            .bg(c(BG))
+            .bg(c(bg()))
             .border_b_1()
             .border_color(c(BORDER_VARIANT))
             .children(lead)
@@ -518,7 +518,7 @@ impl Workspace {
             .flex()
             .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
             .border_color(c(BORDER_VARIANT))
-            .bg(c(BG))
+            .bg(c(bg()))
             // A click here is not a click outside an open dialog.
             .occlude()
             .children(if left {

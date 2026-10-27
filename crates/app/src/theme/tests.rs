@@ -25,5 +25,20 @@ fn accent_shades() {
     assert_eq!(accent(), 0x3e63dd);
     assert_eq!(accent_text(), 0x6582e4);
     assert_eq!(selection(), 0x192346);
+    assert_eq!(on_accent(), 0xffffff);
+    // White text would vanish on a white accent.
+    set_accent(0xffffff);
+    assert_eq!(on_accent(), DARK_BG);
     set_accent(DEFAULT_ACCENT);
+}
+
+#[test]
+fn oled_black() {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    set_oled(true);
+    assert_eq!(bg(), 0x000000);
+    set_oled(false);
+    assert_eq!(bg(), DARK_BG);
 }

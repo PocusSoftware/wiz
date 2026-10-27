@@ -12,6 +12,7 @@ const SWATCHES: &[(&str, u32)] = &[
     ("Sky", 0x0090ff),
     ("Teal", 0x12a594),
     ("Green", 0x46a758),
+    ("White", 0xffffff),
 ];
 
 impl SettingsView {
@@ -32,7 +33,7 @@ impl SettingsView {
                         .rounded(px(2.))
                         .bg(c(rgb))
                         .border_2()
-                        .border_color(c(if rgb == current { TEXT } else { BG }))
+                        .border_color(c(if rgb == current { TEXT } else { bg() }))
                         .cursor_pointer()
                         .tooltip(tip(name))
                         .on_click(cx.listener(move |t, _, _, cx| t.pick_accent(rgb, cx)))

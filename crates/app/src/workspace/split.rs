@@ -404,7 +404,7 @@ impl Workspace {
                     .gap(px(6.))
                     .border_b_1()
                     .border_color(c(BORDER_VARIANT))
-                    .bg(c(if focused { PANEL } else { BG }))
+                    .bg(c(if focused { PANEL } else { bg() }))
                     .text_xs()
                     .text_color(c(if focused { TEXT } else { PLACEHOLDER }))
                     .cursor_pointer()

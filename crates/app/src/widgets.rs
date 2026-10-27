@@ -138,7 +138,7 @@ pub fn button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
 }
 
 pub fn primary_button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
-    base(id, text, accent(), 0xffffff, accent_text())
+    base(id, text, accent(), on_accent(), accent_text())
 }
 
 pub fn label(text: &str) -> Div {
@@ -166,7 +166,7 @@ pub fn checkbox(id: impl Into<ElementId>, checked: bool, text: &str) -> Stateful
                 .border_2()
                 .border_color(c(if checked { accent() } else { BORDER }))
                 .bg(c(if checked { accent() } else { ELEMENT }))
-                .when(checked, |d| d.child(icon("check", 10., 0xffffff))),
+                .when(checked, |d| d.child(icon("check", 10., on_accent()))),
         )
         .child(text.to_string())
 }

@@ -17,7 +17,8 @@ pub fn c(hex: u32) -> Hsla {
     }
 }
 
-pub const BG: u32 = 0x0a0a0b;
+/// The window background, unless OLED black is on.
+const DARK_BG: u32 = 0x0a0a0b;
 pub const PANEL: u32 = 0x171718;
 pub const ELEVATED: u32 = 0x1d1d1e;
 pub const ELEMENT: u32 = 0x161617;
@@ -40,6 +41,7 @@ pub const DEFAULT_ACCENT: u32 = 0xf05a29;
 const DEFAULT_ACCENT_TEXT: u32 = 0xf87c49;
 const DEFAULT_SELECTION: u32 = 0x4a2a1e;
 
+static BG: AtomicU32 = AtomicU32::new(DARK_BG);
 static ACCENT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT);
 static ACCENT_TEXT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT_TEXT);
 static SELECTION: AtomicU32 = AtomicU32::new(DEFAULT_SELECTION);
@@ -50,11 +52,22 @@ pub fn set_accent(rgb: u32) {
     let (text, selection) = if rgb == DEFAULT_ACCENT {
         (DEFAULT_ACCENT_TEXT, DEFAULT_SELECTION)
     } else {
-        (mix(rgb, 0xffffff, 0.2), mix(rgb, BG, 0.72))
+        (mix(rgb, 0xffffff, 0.2), mix(rgb, DARK_BG, 0.72))
     };
     ACCENT.store(rgb, Ordering::Relaxed);
     ACCENT_TEXT.store(text, Ordering::Relaxed);
     SELECTION.store(selection, Ordering::Relaxed);
+}
+
+/// Pure black behind the terminal and the window, so OLED screens turn those pixels off.
+/// Panels and inputs keep their grays to stay apart from it.
+pub fn set_oled(on: bool) {
+    BG.store(if on { 0x000000 } else { DARK_BG }, Ordering::Relaxed);
+}
+
+/// The window and terminal background.
+pub fn bg() -> u32 {
+    BG.load(Ordering::Relaxed)
 }
 
 /// Buttons, the active tab, the cursor, focus.
@@ -65,6 +78,18 @@ pub fn accent() -> u32 {
 /// Accent text and icons, a little lighter so they read on the dark background.
 pub fn accent_text() -> u32 {
     ACCENT_TEXT.load(Ordering::Relaxed)
+}
+
+/// Text and icons on an accent background: white, or the dark background color when the
+/// accent is too light for white to read (like the white swatch).
+pub fn on_accent() -> u32 {
+    let rgb = accent();
+    let [r, g, b] = [16, 8, 0].map(|shift| ((rgb >> shift) & 0xff) as f32);
+    if 0.2126 * r + 0.7152 * g + 0.0722 * b > 160. {
+        DARK_BG
+    } else {
+        0xffffff
+    }
 }
 
 /// Selected text in the terminal.
