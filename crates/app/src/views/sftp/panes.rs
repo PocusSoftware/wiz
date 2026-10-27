@@ -109,13 +109,7 @@ impl SftpView {
                         14.,
                         if e.is_dir { accent_text() } else { MUTED },
                     ))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .child(div().whitespace_nowrap().child(e.name.clone())),
-                    )
+                    .child(div().flex_1().min_w_0().truncate().child(e.name.clone()))
                     .child(
                         div()
                             .w(px(64.))

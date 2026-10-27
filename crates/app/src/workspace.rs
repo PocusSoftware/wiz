@@ -552,7 +552,7 @@ impl Render for Workspace {
             crate::mark("first render");
         }
         let overlays = self.overlays(cx);
-        let tab_menu = self.tab_menu(window, cx);
+        let tab_menu = self.tab_menu(cx);
 
         div()
             .id("root")

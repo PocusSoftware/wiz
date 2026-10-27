@@ -191,16 +191,15 @@ impl Workspace {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .overflow_hidden()
+                            .truncate()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .whitespace_nowrap()
                             .child(h.name.clone()),
                     )
                     .child(div().size(px(7.)).bg(c(dot))),
             )
             .child(
-                div().text_color(c(MUTED)).whitespace_nowrap().child(
+                div().text_color(c(MUTED)).truncate().child(
                     privacy::redact(&format!("{}@{}:{}", h.user, h.host, privacy::port(h.port)))
                         .into_owned(),
                 ),

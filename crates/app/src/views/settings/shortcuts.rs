@@ -1,6 +1,6 @@
 //! The shortcuts section: one row per command, click or Enter to type a new keystroke.
 
-use gpui::Keystroke;
+use gpui::{FontWeight, HighlightStyle, Keystroke, StyledText};
 
 use super::*;
 use crate::shortcuts::{self, COMMANDS};
@@ -36,6 +36,30 @@ pub(super) fn keycaps(label: &str) -> Vec<String> {
         caps.push("+".into());
     }
     caps
+}
+
+/// Byte range of `query` (already lowercase) in `name`, ignoring case.
+pub(super) fn match_range(name: &str, query: &str) -> Option<std::ops::Range<usize>> {
+    let lower = name.to_lowercase();
+    // Offsets only line up when lowercasing kept every character's size.
+    if query.is_empty() || lower.len() != name.len() {
+        return None;
+    }
+    lower.find(query).map(|at| at..at + query.len())
+}
+
+/// `name` with the part matching `query` in the accent color.
+fn highlighted(name: &str, query: &str) -> StyledText {
+    StyledText::new(name.to_string()).with_highlights(match_range(name, query).map(|range| {
+        (
+            range,
+            HighlightStyle {
+                color: Some(c(accent_text())),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..Default::default()
+            },
+        )
+    }))
 }
 
 fn keycap(text: String, lit: bool) -> gpui::Div {
@@ -76,8 +100,8 @@ impl SettingsView {
             (!rows.is_empty()).then(|| {
                 let last = rows.len() - 1;
                 let items = rows.into_iter().enumerate().map(|(n, i)| {
-                    let (id, name) = COMMANDS[i];
-                    self.shortcut_row(i, id, name, saved.contains_key(id), n < last, cx)
+                    let changed = saved.contains_key(COMMANDS[i].0);
+                    self.shortcut_row(i, &query, changed, n < last, cx)
                 });
                 div().child(Self::group(group)).child(
                     div()
@@ -120,12 +144,12 @@ impl SettingsView {
     fn shortcut_row(
         &self,
         i: usize,
-        id: &'static str,
-        name: &str,
+        query: &str,
         changed: bool,
         divider: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
+        let (id, name) = COMMANDS[i];
         let recording = self.recording.as_ref().is_some_and(|(r, _)| *r == id);
         let caps = if recording {
             div()
@@ -146,7 +170,13 @@ impl SettingsView {
             .py_2()
             .hover(|s| s.bg(c(HOVER)))
             .when(divider, |d| d.border_b_1().border_color(c(BORDER_VARIANT)))
-            .child(div().flex_1().min_w_0().child(name.to_string()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(highlighted(name, query)),
+            )
             .when(changed, |d| {
                 d.child(
                     keyboard(div().id(("sc-reset", i)))

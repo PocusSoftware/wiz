@@ -301,14 +301,7 @@ impl Workspace {
                 .map(|d| match self.rename_field(id) {
                     Some(field) => d.child(field),
                     // Fills the tab, so the close button sits at its right edge.
-                    None => d.child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .child(text),
-                    ),
+                    None => d.child(div().flex_1().min_w_0().truncate().child(text)),
                 })
                 // Pane count of a split tab, outside the text so truncation never hides it.
                 .when(panes > 1, |d| {

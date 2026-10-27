@@ -1,6 +1,6 @@
 //! Rearranging tabs: the right-click menu (pin, rename, duplicate, close) and dragging.
 
-use gpui::{Div, ElementId, MouseButton, Point, point};
+use gpui::{Div, ElementId, MouseButton, Point, anchored, point};
 
 use super::*;
 
@@ -17,7 +17,7 @@ impl Render for DraggedTab {
     }
 }
 
-/// Width of the menu, also used to keep it inside the window.
+/// Width of the menu.
 const MENU_W: f32 = 180.;
 
 /// Where a menu opened from the keyboard starts: just under the tab bar.
@@ -227,13 +227,9 @@ impl Workspace {
         key: usize,
         at: Point<Pixels>,
         items: Vec<gpui::Stateful<Div>>,
-        window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let menu = div()
-            .absolute()
-            .left((at.x).min(window.viewport_size().width - px(MENU_W + 4.)))
-            .top(at.y)
             .w(px(MENU_W))
             .p_1()
             .flex()
@@ -258,17 +254,23 @@ impl Workspace {
                 MouseButton::Right,
                 cx.listener(|t, _, w, cx| t.close_tab_menu(w, cx)),
             )
-            .child(fade_in(
-                menu.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                ("tab-menu", key),
-            ))
+            // Anchored keeps the menu inside the window, flipping it up near the bottom.
+            .child(
+                anchored()
+                    .position(at)
+                    .snap_to_window_with_margin(px(4.))
+                    .child(fade_in(
+                        menu.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                        ("tab-menu", key),
+                    )),
+            )
             .into_any_element()
     }
 
     /// The open menu: the split button's, or the right-click menu of a tab.
-    pub(super) fn tab_menu(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(super) fn tab_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Some(at) = self.split_menu {
-            return Some(self.split_menu_view(at, window, cx));
+            return Some(self.split_menu_view(at, cx));
         }
         let (id, at) = self.tab_menu?;
         let tab = self.tabs.iter().find(|t| t.id == id)?;
@@ -319,16 +321,11 @@ impl Workspace {
                 }
             },
         )));
-        Some(self.menu_overlay(id as usize, at, items, window, cx))
+        Some(self.menu_overlay(id as usize, at, items, cx))
     }
 
     /// Where the next pane opens: the same server, or any saved host.
-    fn split_menu_view(
-        &self,
-        at: Point<Pixels>,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn split_menu_view(&self, at: Point<Pixels>, cx: &mut Context<Self>) -> AnyElement {
         let mut items = vec![
             Self::menu_item("sm-same", "Same server").on_click(cx.listener(|t, _, w, cx| {
                 t.close_tab_menu(w, cx);
@@ -345,6 +342,6 @@ impl Workspace {
                 )),
             );
         }
-        self.menu_overlay(usize::MAX, at, items, window, cx)
+        self.menu_overlay(usize::MAX, at, items, cx)
     }
 }

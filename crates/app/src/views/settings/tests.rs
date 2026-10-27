@@ -62,3 +62,12 @@ fn every_shortcut_is_in_one_section_and_keys_split_into_caps() {
     assert_eq!(keycaps("Ctrl+Shift+D"), ["Ctrl", "Shift", "D"]);
     assert_eq!(keycaps("Ctrl++"), ["Ctrl", "+"]);
 }
+
+#[test]
+fn search_matches_are_found_case_insensitively() {
+    let at = |name: &str, q: &str| shortcuts::match_range(name, q);
+    assert_eq!(at("Next pane", "pane"), Some(5..9));
+    assert_eq!(at("Next pane", "PANE".to_lowercase().as_str()), Some(5..9));
+    assert_eq!(at("Next pane", ""), None);
+    assert_eq!(at("Next pane", "tab"), None);
+}

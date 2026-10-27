@@ -436,14 +436,7 @@ impl Workspace {
                     } else {
                         ACTIVE
                     })))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .child(title),
-                    )
+                    .child(div().flex_1().min_w_0().truncate().child(title))
                     .child(
                         icon_button(("pane-close", i), "x", "Close pane", MUTED)
                             .size(px(16.))
