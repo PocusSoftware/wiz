@@ -1,6 +1,9 @@
 //! Add/edit host dialog. Secrets go to the secret store (Keychain or the encrypted file),
 //! never to the config file.
 
+#[cfg(test)]
+mod tests;
+
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
@@ -142,7 +145,10 @@ impl HostForm {
             Some(inner) => inner.to_string(),
             None => host,
         };
-        let user = get(&self.user);
+        // Like the placeholder says: an empty user is root.
+        let user = Some(get(&self.user))
+            .filter(|u| !u.is_empty())
+            .unwrap_or_else(|| "root".into());
         let port_s = get(&self.port);
         let port: u16 = if port_s.is_empty() {
             22
