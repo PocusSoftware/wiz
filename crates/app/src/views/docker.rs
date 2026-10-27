@@ -1,9 +1,15 @@
 //! Container list with start/stop/restart/remove, logs, and (remote only) a shell.
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::HashSet;
 use std::time::Duration;
 
-use gpui::{Context, EventEmitter, IntoElement, Render, SharedString, Window, div, prelude::*, px};
+use gpui::{
+    ClickEvent, Context, EventEmitter, IntoElement, Render, SharedString, Window, div, prelude::*,
+    px,
+};
 use ssh_core::docker::{Action, Backend, Container};
 
 use crate::runtime;
@@ -129,6 +135,7 @@ impl Render for DockerView {
             let id = ct.id.clone();
             let name = ct.name.clone();
             let confirming = self.confirm_remove.as_deref() == Some(ct.id.as_str());
+            let (log_id, log_name) = (ct.id.clone(), ct.name.clone());
 
             let mut actions = div().flex().gap_0p5().items_center();
             if busy {
@@ -218,12 +225,22 @@ impl Render for DockerView {
                         .bg(c(if running { GREEN } else { ACTIVE })),
                 )
                 .child(
+                    // Double click opens the logs. Only here, so quick clicks on the
+                    // action buttons don't open them too.
                     div()
+                        .id(("ct", ix))
                         .flex_1()
                         .min_w_0()
+                        .h_full()
                         .overflow_hidden()
                         .flex()
+                        .items_center()
                         .gap_2()
+                        .on_click(cx.listener(move |t, ev: &ClickEvent, _, cx| {
+                            if ev.click_count() >= 2 {
+                                t.logs(log_id.clone(), log_name.clone(), cx);
+                            }
+                        }))
                         .child(div().whitespace_nowrap().child(ct.name.clone()))
                         .child(
                             div()
