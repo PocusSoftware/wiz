@@ -4,7 +4,7 @@
 mod tests;
 
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use gpui::{Hsla, SharedString, rgb, rgba};
 
@@ -45,6 +45,7 @@ static BG: AtomicU32 = AtomicU32::new(DARK_BG);
 static ACCENT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT);
 static ACCENT_TEXT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT_TEXT);
 static SELECTION: AtomicU32 = AtomicU32::new(DEFAULT_SELECTION);
+static MONOCHROME_ICONS: AtomicBool = AtomicBool::new(false);
 
 /// Use `rgb` (0xRRGGBB) as the accent. Other colors than the default get their shades
 /// mixed: lighter for text, dark for the terminal selection.
@@ -63,6 +64,25 @@ pub fn set_accent(rgb: u32) {
 /// Panels and inputs keep their grays to stay apart from it.
 pub fn set_oled(on: bool) {
     BG.store(if on { 0x000000 } else { DARK_BG }, Ordering::Relaxed);
+}
+
+/// Draw icons without color (the monochrome setting).
+pub fn set_monochrome_icons(on: bool) {
+    MONOCHROME_ICONS.store(on, Ordering::Relaxed);
+}
+
+/// The color an icon is drawn in: as asked, or gray and white when icons are monochrome.
+/// Colored icons turn white (the accent) or gray (red, green, yellow), so an active tab
+/// still stands out from the others.
+pub fn icon_color(color: u32) -> u32 {
+    if !MONOCHROME_ICONS.load(Ordering::Relaxed) {
+        return color;
+    }
+    match color {
+        c if c == accent() || c == accent_text() => TEXT,
+        RED | GREEN | YELLOW => MUTED,
+        c => c,
+    }
 }
 
 /// The window and terminal background.

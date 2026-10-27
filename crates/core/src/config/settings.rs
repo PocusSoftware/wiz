@@ -46,6 +46,8 @@ pub struct Settings {
     pub window_controls: Option<WindowControls>,
     /// Pure black window and terminal background for OLED screens.
     pub oled_black: Option<bool>,
+    /// Draw icons in gray and white instead of red, green and the accent.
+    pub monochrome_icons: Option<bool>,
     // Privacy
     pub hide_sensitive: Option<bool>,
     pub mask_hosts: Option<bool>,
@@ -119,6 +121,7 @@ getters! {
     accent_color: String = "#f05a29".into();
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
+    monochrome_icons: bool = false;
     hide_sensitive: bool = false;
     mask_hosts: bool = true;
     mask_users: bool = true;

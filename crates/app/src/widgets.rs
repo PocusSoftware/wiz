@@ -89,7 +89,7 @@ pub fn icon(name: &str, size: f32, color: u32) -> gpui::Svg {
         .path(format!("icons/{name}.svg"))
         .size(px(size))
         .flex_none()
-        .text_color(c(color))
+        .text_color(c(icon_color(color)))
 }
 
 /// Square icon button with a hover tooltip.

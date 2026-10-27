@@ -33,6 +33,19 @@ fn accent_shades() {
 }
 
 #[test]
+fn monochrome_icons_drop_color() {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert_eq!(icon_color(RED), RED);
+    set_monochrome_icons(true);
+    assert_eq!(icon_color(RED), MUTED);
+    assert_eq!(icon_color(accent_text()), TEXT);
+    assert_eq!(icon_color(MUTED), MUTED);
+    set_monochrome_icons(false);
+}
+
+#[test]
 fn oled_black() {
     let _g = crate::testing::GLOBALS
         .lock()
