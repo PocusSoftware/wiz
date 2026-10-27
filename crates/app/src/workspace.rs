@@ -47,7 +47,7 @@ use crate::views::logs::LogView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::views::terminal::{TerminalEvent, TerminalView};
-use crate::widgets::anim::{fade_in, pop_in, stagger_in};
+use crate::widgets::anim::{fade_in, page_in, pop_in, stagger_in};
 use crate::widgets::input::TextInput;
 use crate::widgets::{FocusNext, FocusPrev, button, icon, icon_button, keyboard, primary_button};
 
@@ -451,7 +451,10 @@ impl Workspace {
             cx.subscribe_in(&view, window, |this, _, ev: &SettingsEvent, window, cx| {
                 match ev {
                     SettingsEvent::Changed => {}
-                    SettingsEvent::Close => this.close_settings(window, cx),
+                    SettingsEvent::Close => {
+                        this.close_settings(window, cx);
+                        return;
+                    }
                     SettingsEvent::SwitchStore(to) => this.switch_store(*to, window, cx),
                     SettingsEvent::Unlock => this.show_unlock(UnlockMode::for_file(), window, cx),
                     SettingsEvent::Lock => {
@@ -661,7 +664,7 @@ impl Render for Workspace {
                             .flex_1()
                             .min_h_0()
                             .relative()
-                            .child(fade_in(
+                            .child(page_in(
                                 div().size_full().child(self.content(cx)),
                                 ("page", self.epoch as usize),
                             ))

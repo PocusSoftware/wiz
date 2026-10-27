@@ -25,6 +25,19 @@ pub fn fade_in<E: Styled + IntoElement + 'static>(
     )
 }
 
+/// Short fade for switching pages and tabs. It starts half visible: from nothing, even a
+/// quick fade reads as a blank pause before the page shows up.
+pub fn page_in<E: Styled + IntoElement + 'static>(
+    el: E,
+    id: impl Into<ElementId>,
+) -> impl IntoElement {
+    el.with_animation(
+        id,
+        Animation::new(ms(80)).with_easing(ease_out_quint()),
+        |el, t| el.opacity(0.5 + 0.5 * t),
+    )
+}
+
 /// Fade in while rising 8 px, for dialogs and menus.
 pub fn pop_in<E: Styled + IntoElement + 'static>(
     el: E,

@@ -19,3 +19,14 @@ fn every_page_has_its_own_name() {
     names.dedup();
     assert_eq!(names.len(), Category::ALL.len());
 }
+
+#[test]
+fn picker_colors_round_trip() {
+    use super::accent::{hsv_to_rgb, rgb_to_hsv};
+    for rgb in [0xf05a29, 0x3e63dd, 0xffffff, 0x000000, 0x808080, 0x12a594] {
+        assert_eq!(hsv_to_rgb(rgb_to_hsv(rgb)), rgb, "{rgb:06x}");
+    }
+    assert_eq!(hsv_to_rgb((0., 1., 1.)), 0xff0000);
+    assert_eq!(hsv_to_rgb((120., 1., 1.)), 0x00ff00);
+    assert_eq!(hsv_to_rgb((240., 1., 1.)), 0x0000ff);
+}

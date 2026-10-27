@@ -84,6 +84,7 @@ pub struct SettingsView {
     agent_socket: Entity<TextInput>,
     /// Filters the list on the shortcuts page.
     shortcut_search: Entity<TextInput>,
+    picker: accent::Picker,
     /// The accent color as #RRGGBB.
     accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
@@ -119,6 +120,7 @@ impl SettingsView {
             agent_socket: make(crate::platform::AGENT_DEFAULT, cx),
             shortcut_search: make("Search shortcuts", cx),
             accent: make("#f05a29", cx),
+            picker: Default::default(),
             editors: crate::platform::installed_editors(),
             error: None,
             recording: None,
