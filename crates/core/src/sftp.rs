@@ -55,6 +55,13 @@ pub fn join(dir: &str, name: &str) -> String {
     }
 }
 
+/// True when `name` is a single path component that stays inside the folder it is joined
+/// to, on this system and on the server. Names from a server go through this before they
+/// reach a local or remote path, so `../x`, `/etc/x` or `C:x` can't point elsewhere.
+pub fn is_safe_name(name: &str) -> bool {
+    !name.contains(['/', '\\']) && Path::new(name).file_name() == Some(name.as_ref())
+}
+
 /// Parent of a POSIX path ("/" stays "/").
 pub fn parent(path: &str) -> String {
     let t = path.trim_end_matches('/');
@@ -198,7 +205,9 @@ impl Sftp {
         let mut out = Vec::new();
         for ent in self.inner.read_dir(path).await.map_err(e)? {
             let name = ent.file_name();
-            if name == "." || name == ".." {
+            // Also skips `.` and `..`. A server sending other unsafe names is malicious or
+            // broken, and they would be written outside the target folder.
+            if !is_safe_name(&name) {
                 continue;
             }
             let md = ent.metadata();

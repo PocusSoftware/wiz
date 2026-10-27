@@ -69,6 +69,18 @@ fn roundtrip() {
     let back: Config = toml::from_str(&s).unwrap();
     assert_eq!(back.hosts, cfg.hosts);
     assert!(!s.contains("pinned = false"));
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("hosts.toml");
+    cfg.save(&path).unwrap();
+    assert_eq!(Config::load(&path).unwrap().hosts, cfg.hosts);
+    // It lists hosts and users, so only the owner may read it.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
 }
 
 #[test]
@@ -120,6 +132,7 @@ fn validate() {
     assert!(h("example.com", "", 22).validate().is_err());
     assert!(h("example.com", "ro ot", 22).validate().is_err());
     assert!(h("example.com", "a@b", 22).validate().is_err());
+    assert!(h("example.com", "-oProxyCommand=x", 22).validate().is_err());
     assert!(h("example.com", "root", 0).validate().is_err());
     assert!(h("example.com", "deploy-user.1", 65535).validate().is_ok());
 }

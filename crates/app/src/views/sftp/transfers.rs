@@ -131,6 +131,10 @@ impl SftpView {
             last_done: 0,
             speed: 0.0,
             rsync: rsync_cmd,
+            rsync_agent: matches!(
+                (&from_src, &to_src),
+                (Source::Remote(_), Source::Remote(_))
+            ),
             rsync_prompts: [&from_src, &to_src].iter().any(|s| {
                 matches!(s, Source::Remote(r) if matches!(r.host.auth, ssh_core::config::AuthMethod::Password))
             }),
@@ -311,7 +315,7 @@ impl SftpView {
                 ),
                 TState::Done => ("Done".into(), GREEN),
                 TState::Cancelled => ("Cancelled".into(), YELLOW),
-                TState::Failed(e) => (e.clone(), RED),
+                TState::Failed(e) => (crate::privacy::redact(e).into_owned(), RED),
             };
             let bar_color = match tr.state {
                 TState::Failed(_) => RED,
@@ -401,12 +405,16 @@ impl SftpView {
                         cx.notify();
                     })),
                 );
-            let hint = (crate::platform::RSYNC
-                && big
-                && running
-                && !tr.via_rsync.load(Ordering::Relaxed))
-            .then(|| {
-                let cmd = tr.rsync.clone();
+            let hint = tr
+                .rsync
+                .clone()
+                .filter(|_| {
+                    crate::platform::RSYNC
+                        && big
+                        && running
+                        && !tr.via_rsync.load(Ordering::Relaxed)
+                })
+                .map(|cmd| {
                 div()
                     .px_2()
                     .pb(px(5.))
@@ -415,11 +423,16 @@ impl SftpView {
                     .gap_2()
                     .text_color(c(YELLOW))
                     .child(format!(
-                        "Large transfer ({} files, {}): rsync is faster (needs rsync on the server){}.",
+                        "Large transfer ({} files, {}): rsync is faster (needs rsync on the server){}{}.",
                         files,
                         human_size(total),
                         if tr.rsync_prompts {
                             ". It will ask for the password"
+                        } else {
+                            ""
+                        },
+                        if tr.rsync_agent {
+                            ". It lets the source server use your ssh agent while it runs"
                         } else {
                             ""
                         }

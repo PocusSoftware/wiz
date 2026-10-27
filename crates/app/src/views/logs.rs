@@ -384,7 +384,11 @@ impl Render for LogView {
                     }))
                     .child(div().flex_1())
                     .when_some(self.error.clone(), |d, e| {
-                        d.child(div().text_color(c(RED)).child(e))
+                        d.child(
+                            div()
+                                .text_color(c(RED))
+                                .child(crate::privacy::redact(&e).into_owned()),
+                        )
                     })
                     .child(
                         div()

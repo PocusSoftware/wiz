@@ -65,12 +65,23 @@ fn ssh_e(port: u16, key: Option<&str>) -> String {
 /// Up to this many names are passed as arguments; more go through `--files-from`.
 const INLINE_MAX: usize = 8;
 
-/// Command to copy `names` from `src` into `dst`'s directory.
-pub fn command(src: &Endpoint, names: &[String], dst: &Endpoint) -> String {
-    if names.len() > INLINE_MAX {
-        return files_from(src, names, dst);
+/// Command to copy `names` from `src` into `dst`'s directory. `None` when a name or folder
+/// holds a control character: a newline would end the `--files-from` list early and run the
+/// rest as a command once pasted, and escapes could hide text in the terminal.
+pub fn command(src: &Endpoint, names: &[String], dst: &Endpoint) -> Option<String> {
+    let unsafe_text = |s: &str| s.chars().any(char::is_control);
+    if [&src.dir, &dst.dir]
+        .into_iter()
+        .chain(names)
+        .any(|s| unsafe_text(s))
+    {
+        return None;
     }
-    inline(src, names, dst)
+    Some(if names.len() > INLINE_MAX {
+        files_from(src, names, dst)
+    } else {
+        inline(src, names, dst)
+    })
 }
 
 /// Exact for any selection size: names are read from stdin, relative to the source folder.
@@ -109,7 +120,11 @@ fn files_from(src: &Endpoint, names: &[String], dst: &Endpoint) -> String {
             } else {
                 format!(" -p {port}")
             };
-            body(format!("ssh -A{p} {user}@{host} {}", q(&inner)))
+            body(format!(
+                "ssh -A{p} {} {}",
+                q(&format!("{user}@{host}")),
+                q(&inner)
+            ))
         }
     }
 }
@@ -161,7 +176,7 @@ fn inline(src: &Endpoint, names: &[String], dst: &Endpoint) -> String {
             } else {
                 format!(" -p {sp}")
             };
-            format!("ssh -t -A{port} {su}@{sh} {}", q(&inner))
+            format!("ssh -t -A{port} {} {}", q(&format!("{su}@{sh}")), q(&inner))
         }
     }
 }

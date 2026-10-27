@@ -49,11 +49,7 @@ impl SftpView {
             return;
         }
         // The name comes from the server: never let it point outside the temp folder.
-        if std::path::Path::new(&name)
-            .file_name()
-            .and_then(|n| n.to_str())
-            != Some(name.as_str())
-        {
+        if !sftp::is_safe_name(&name) {
             self.pane_mut(side).error = Some("That file name can't be opened safely.".into());
             cx.notify();
             return;
@@ -198,7 +194,7 @@ impl SftpView {
                 ),
                 EState::Modified => ("Saved locally, not uploaded".into(), YELLOW),
                 EState::Uploading => ("Uploading...".into(), MUTED),
-                EState::Failed(m) => (m.clone(), RED),
+                EState::Failed(m) => (crate::privacy::redact(m).into_owned(), RED),
             };
             let can_upload =
                 e.downloaded && matches!(e.state, EState::Modified | EState::Failed(_));

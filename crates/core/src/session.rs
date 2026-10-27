@@ -325,9 +325,7 @@ async fn authenticate(
                 KeyboardInteractiveAuthResponse::Failure { .. } => Err(Error::AuthFailed),
                 KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
                     let mut resp = handle
-                        .authenticate_keyboard_interactive_respond(
-                            prompts.iter().map(|_| pw.to_string()).collect(),
-                        )
+                        .authenticate_keyboard_interactive_respond(kbd_answers(&prompts, &pw))
                         .await?;
                     // Allow one extra empty round (some PAM stacks send a trailing request).
                     if let KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } = resp {
@@ -363,3 +361,22 @@ async fn authenticate(
         }
     }
 }
+
+/// Answers to a keyboard-interactive round: the password goes to the first hidden prompt
+/// only, the rest get nothing. A server asking for something else as well (a one-time code)
+/// then fails the login instead of receiving the password a second time.
+fn kbd_answers(prompts: &[client::Prompt], password: &str) -> Vec<String> {
+    let first_hidden = prompts.iter().position(|p| !p.echo);
+    (0..prompts.len())
+        .map(|i| {
+            if Some(i) == first_hidden {
+                password.to_string()
+            } else {
+                String::new()
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

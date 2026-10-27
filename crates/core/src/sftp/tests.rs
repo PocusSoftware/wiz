@@ -24,6 +24,16 @@ fn path_helpers() {
 }
 
 #[test]
+fn unsafe_names_are_rejected() {
+    for ok in ["a", "a.txt", ".env", "..a", "a b"] {
+        assert!(is_safe_name(ok), "{ok}");
+    }
+    for bad in ["", ".", "..", "../x", "a/b", "/etc/passwd", "a\\b", "..\\x"] {
+        assert!(!is_safe_name(bad), "{bad}");
+    }
+}
+
+#[test]
 fn dirs_sort_first_case_insensitive() {
     let f = |n: &str, d: bool| Entry {
         name: n.into(),

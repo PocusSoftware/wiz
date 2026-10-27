@@ -21,7 +21,7 @@ fn upload_with_port_and_quotes() {
         at: remote(2222),
         dir: "/srv".into(),
     };
-    let c = command(&src, &["it's".into(), "b".into()], &dst);
+    let c = command(&src, &["it's".into(), "b".into()], &dst).unwrap();
     assert_eq!(
         c,
         "rsync -avzP -e 'ssh -p 2222' '/tmp/a/it'\\''s' '/tmp/a/b' 'u@h:/srv/'"
@@ -43,7 +43,7 @@ fn key_host_passes_identity_file_quoted() {
         },
         dir: "/srv".into(),
     };
-    let c = command(&src, &["f".into()], &dst);
+    let c = command(&src, &["f".into()], &dst).unwrap();
     assert_eq!(
         c,
         "rsync -avzP -e 'ssh -p 2223 -i '\\''/Users/me/my keys/id'\\''' '/x/f' 'u@h:/srv/'"
@@ -61,7 +61,7 @@ fn many_files_use_files_from_with_heredoc() {
         dir: "/srv".into(),
     };
     let names: Vec<String> = (1..=20).map(|i| format!("f{i}")).collect();
-    let c = command(&src, &names, &dst);
+    let c = command(&src, &names, &dst).unwrap();
     let (first, rest) = c.split_once('\n').unwrap();
     assert_eq!(
         first,
@@ -83,8 +83,8 @@ fn download_default_port() {
         dir: "/Users/x".into(),
     };
     assert_eq!(
-        command(&src, &["app".into()], &dst),
-        "rsync -avzP 'u@h:/var/log/app' '/Users/x/'"
+        command(&src, &["app".into()], &dst).as_deref(),
+        Some("rsync -avzP 'u@h:/var/log/app' '/Users/x/'")
     );
 }
 
@@ -106,7 +106,51 @@ fn server_to_server_runs_on_source() {
         },
         dir: "/b".into(),
     };
-    let c = command(&src, &["x".into()], &dst);
-    assert!(c.starts_with("ssh -t -A -p 2223 u@h 'rsync -avzP "), "{c}");
+    let c = command(&src, &["x".into()], &dst).unwrap();
+    assert!(
+        c.starts_with("ssh -t -A -p 2223 'u@h' 'rsync -avzP "),
+        "{c}"
+    );
     assert!(c.contains("d@dh:/b/"), "{c}");
+}
+
+#[test]
+fn server_login_is_quoted() {
+    let src = Endpoint {
+        at: Where::Remote {
+            user: "$(id)".into(),
+            host: "h".into(),
+            port: 22,
+            key: None,
+        },
+        dir: "/a".into(),
+    };
+    let dst = Endpoint {
+        at: remote(22),
+        dir: "/b".into(),
+    };
+    let c = command(&src, &["x".into()], &dst).unwrap();
+    assert!(c.starts_with("ssh -t -A '$(id)@h' "), "{c}");
+}
+
+#[test]
+fn control_characters_give_no_command() {
+    let local = Endpoint {
+        at: Where::Local,
+        dir: "/data".into(),
+    };
+    let dst = Endpoint {
+        at: remote(22),
+        dir: "/srv".into(),
+    };
+    // Past INLINE_MAX the names go into a heredoc, where a newline would end it early.
+    let mut names: Vec<String> = (1..=20).map(|i| format!("f{i}")).collect();
+    names.push("x\nRSYNC_FILES_EOF\ntouch /tmp/pwned".into());
+    assert_eq!(command(&local, &names, &dst), None);
+    assert_eq!(command(&local, &["a\u{1b}[2J".into()], &dst), None);
+    let bad_dir = Endpoint {
+        at: Where::Local,
+        dir: "/d\n".into(),
+    };
+    assert_eq!(command(&bad_dir, &["a".into()], &dst), None);
 }

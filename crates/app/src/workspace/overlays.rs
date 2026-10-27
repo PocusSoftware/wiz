@@ -83,7 +83,7 @@ impl Workspace {
                                     self.pending
                                         .iter()
                                         .find(|p| p.host == req.host && p.port == req.port),
-                                    req.changed,
+                                    req.previous.is_some(),
                                 ) {
                                     (Some(p), false) => {
                                         format!("Trust {}?", privacy::redact(&p.name))
@@ -102,7 +102,7 @@ impl Workspace {
                                     "{}:{} {}",
                                     req.host,
                                     privacy::port(req.port),
-                                    if req.changed {
+                                    if req.previous.is_some() {
                                         "presented a different key than before. This can be a reinstalled server, or someone intercepting the connection."
                                     } else {
                                         "has not been seen before."
@@ -111,30 +111,29 @@ impl Workspace {
                                 .into_owned(),
                             ),
                         )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(c(MUTED))
-                                .child("Fingerprint (SHA256)"),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(mono())
-                                .child(req.fingerprint.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .justify_end()
-                                .gap_2()
-                                .child(button("trust-no", "Cancel").on_click(
-                                    cx.listener(|t, _, w, cx| t.answer_trust(false, w, cx)),
-                                ))
-                                .child(primary_button("trust-yes", if req.changed { "Replace key and connect" } else { "Trust and connect" }).on_click(
-                                    cx.listener(|t, _, w, cx| t.answer_trust(true, w, cx)),
-                                )),
-                        )
+                        .children(req.previous.clone().map(|p| fingerprint("Previous fingerprint (SHA256)", p)))
+                        .child(fingerprint(
+                            if req.previous.is_some() { "New fingerprint (SHA256)" } else { "Fingerprint (SHA256)" },
+                            req.fingerprint.clone(),
+                        ))
+                        .child({
+                            let no = cx.listener(|t, _, w, cx| t.answer_trust(false, w, cx));
+                            let yes = cx.listener(|t, _, w, cx| t.answer_trust(true, w, cx));
+                            // A changed key is more likely an attack than a new one, so there
+                            // the safe answer is the primary button.
+                            let (no, yes) = if req.previous.is_some() {
+                                (
+                                    primary_button("trust-no", "Cancel").on_click(no),
+                                    button("trust-yes", "Replace key and connect").on_click(yes),
+                                )
+                            } else {
+                                (
+                                    button("trust-no", "Cancel").on_click(no),
+                                    primary_button("trust-yes", "Trust and connect").on_click(yes),
+                                )
+                            };
+                            div().flex().justify_end().gap_2().child(no).child(yes)
+                        })
                         .into_any_element(),
                     None,
                 )
@@ -322,4 +321,14 @@ impl Workspace {
         }
         open
     }
+}
+
+/// A labeled SHA256 fingerprint in the host key question.
+fn fingerprint(label: &'static str, value: String) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(div().text_xs().text_color(c(MUTED)).child(label))
+        .child(div().text_xs().font_family(mono()).child(value))
 }

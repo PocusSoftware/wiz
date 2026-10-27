@@ -277,7 +277,10 @@ struct Transfer {
     finished: Option<Instant>,
     last_done: u64,
     speed: f64,
-    rsync: String,
+    /// `None` when the names can't be put in a command safely.
+    rsync: Option<String>,
+    /// Both ends are servers, so the command forwards the ssh agent to the source one.
+    rsync_agent: bool,
     /// An endpoint uses password auth, so rsync will prompt.
     rsync_prompts: bool,
     /// Running with the built-in rsync instead of SFTP.

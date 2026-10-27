@@ -79,6 +79,10 @@ impl Host {
         {
             return Err("User can't contain spaces, @, : or /.".into());
         }
+        // ssh and rsync would read `-oProxyCommand=...@host` as an option.
+        if self.user.starts_with('-') {
+            return Err("User can't start with -.".into());
+        }
         if self.port == 0 {
             return Err("Port must be 1-65535.".into());
         }
@@ -138,14 +142,7 @@ impl Config {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let s = toml::to_string_pretty(self).map_err(|e| Error::Config(e.to_string()))?;
-        // Write then rename so a crash never leaves a truncated file.
-        let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, s)?;
-        std::fs::rename(tmp, path)?;
-        Ok(())
+        crate::write_private(path, s.as_bytes())
     }
 }

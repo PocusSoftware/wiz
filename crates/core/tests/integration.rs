@@ -471,6 +471,39 @@ async fn sftp_server_to_server_and_local_copy() {
 }
 
 // Makes local symlinks, which need extra rights on Windows.
+#[tokio::test]
+async fn sftp_hides_names_that_would_leave_the_folder() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let c = Connection::connect(
+        &host(2223, AuthMethod::Password),
+        &Credentials::Key {
+            path: keys().join("ed25519"),
+            passphrase: None,
+        },
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let sftp = c.open_sftp().await.unwrap();
+    // A backslash is an ordinary character on Linux but a separator on Windows.
+    let base = "/home/tester/names-test";
+    c.exec(&format!(
+        "rm -rf {base}; mkdir -p {base}; touch {base}/ok '{base}/..\\up'"
+    ))
+    .await
+    .unwrap();
+    let names: Vec<String> = sftp
+        .list(base)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert_eq!(names, ["ok"]);
+    c.exec(&format!("rm -rf {base}")).await.unwrap();
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn sftp_symlink_loops_terminate_and_progress_is_exact() {

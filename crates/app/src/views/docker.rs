@@ -277,7 +277,14 @@ impl Render for DockerView {
                     ),
             )
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().px_2().py_1().text_xs().text_color(c(RED)).child(e))
+                d.child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .text_xs()
+                        .text_color(c(RED))
+                        .child(crate::privacy::redact(&e).into_owned()),
+                )
             })
             .when(
                 self.loaded && self.items.is_empty() && self.error.is_none(),

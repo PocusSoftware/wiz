@@ -149,14 +149,8 @@ getters! {
 impl Settings {
     /// Write to `settings.toml` (atomic rename, creates the folder).
     pub fn save(&self) -> Result<()> {
-        let dir = crate::config_dir()?;
-        std::fs::create_dir_all(&dir)?;
-        let path = dir.join("settings.toml");
         let s = toml::to_string_pretty(self).map_err(|e| Error::Config(e.to_string()))?;
-        let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, s)?;
-        std::fs::rename(tmp, path)?;
-        Ok(())
+        crate::write_private(&crate::config_dir()?.join("settings.toml"), s.as_bytes())
     }
 
     pub fn load() -> Self {

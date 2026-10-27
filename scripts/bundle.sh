@@ -34,8 +34,19 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 # Sign with the first code signing certificate when there is one. An ad-hoc signature
 # names the exact build, so the Keychain would forget "Always Allow" on every reinstall.
+# The hardened runtime stops other processes of the same user from injecting code into Wiz
+# or attaching a debugger to read the secrets it holds. A secure timestamp needs a real
+# identity, so ad-hoc builds go without.
 IDENTITY=$(security find-identity -v -p codesigning | awk '/\)/ {print $2; exit}')
-codesign --force --deep -s "${IDENTITY:--}" "$APP"
+codesign --force --deep --options runtime ${IDENTITY:+--timestamp} -s "${IDENTITY:--}" "$APP"
+# Builds for others must be notarized or Gatekeeper blocks them. NOTARY_PROFILE names a
+# profile saved with `xcrun notarytool store-credentials`, and needs a Developer ID identity.
+if [ -n "$NOTARY_PROFILE" ]; then
+  ditto -c -k --keepParent "$APP" dist/Wiz.zip
+  xcrun notarytool submit dist/Wiz.zip --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  rm dist/Wiz.zip
+fi
 echo "built $APP ($VERSION, build $BUILD)"
 rm -rf /Applications/Wiz.app
 ditto "$APP" /Applications/Wiz.app

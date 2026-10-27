@@ -413,7 +413,7 @@ impl SftpView {
                         .py(px(3.))
                         .text_color(c(RED))
                         .bg(c(0xe5534b1a))
-                        .child(e),
+                        .child(crate::privacy::redact(&e).into_owned()),
                 )
             })
             .child(self.sort_header(side, cx))

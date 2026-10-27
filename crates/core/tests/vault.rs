@@ -75,3 +75,15 @@ fn delete_and_change_master() {
     );
     assert!(v.get(Kind::Password, "b@h:22").unwrap().is_none());
 }
+
+#[test]
+fn excessive_key_costs_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("secrets.toml");
+    Vault::create(&path, "pw").unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    // 4 TiB of memory: refused before any key derivation starts.
+    let line = text.lines().find(|l| l.starts_with("m_cost")).unwrap();
+    std::fs::write(&path, text.replace(line, "m_cost = 4294967295")).unwrap();
+    assert!(matches!(Vault::unlock(&path, "pw"), Err(Error::Vault(_))));
+}

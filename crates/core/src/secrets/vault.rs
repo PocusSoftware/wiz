@@ -6,7 +6,6 @@
 //! keys stay strong against quantum attacks (Grover's search leaves 128 bits), and there is
 //! no public-key step that a quantum computer could break.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
@@ -32,6 +31,9 @@ const CHECK_AAD: &[u8] = b"check";
 const M_COST: u32 = 64 * 1024;
 const T_COST: u32 = 3;
 const P_COST: u32 = 1;
+/// Highest costs a file may ask for: 1 GiB, 10 passes, 16 lanes. The costs are read from the
+/// file, and a doctored one could otherwise make unlock run out of memory or never finish.
+const MAX_COST: (u32, u32, u32) = (1 << 20, 10, 16);
 
 #[derive(Serialize, Deserialize)]
 struct File {
@@ -120,6 +122,12 @@ impl Vault {
         let file: File = toml::from_str(&text).map_err(|e| Error::Vault(e.to_string()))?;
         if file.version != VERSION {
             return Err(Error::Vault("unsupported secrets file format".into()));
+        }
+        let (m, t, p) = MAX_COST;
+        if file.m_cost > m || file.t_cost > t || file.p_cost > p {
+            return Err(Error::Vault(
+                "the secrets file asks for too much work to open".into(),
+            ));
         }
         let salt = B64
             .decode(&file.salt)
@@ -251,23 +259,8 @@ impl Vault {
         self.save()
     }
 
-    /// Owner-only file (mode 0600 on unix; on Windows the per-user config folder already
-    /// keeps other users out), written to a temp file and renamed so a crash never
-    /// truncates it.
     fn save(&self) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let s = toml::to_string_pretty(&self.file).map_err(|e| Error::Vault(e.to_string()))?;
-        let tmp = self.path.with_extension("toml.tmp");
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
-        let mut f = opts.open(&tmp)?;
-        f.write_all(s.as_bytes())?;
-        f.sync_all()?;
-        std::fs::rename(tmp, &self.path)?;
-        Ok(())
+        crate::write_private(&self.path, s.as_bytes())
     }
 }

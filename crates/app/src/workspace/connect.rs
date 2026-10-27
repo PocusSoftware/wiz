@@ -5,13 +5,13 @@ use super::*;
 
 impl GuiPrompt {
     /// Block until the user answers the host key question in the UI.
-    fn ask(&self, host: &str, port: u16, fingerprint: &str, changed: bool) -> bool {
+    fn ask(&self, host: &str, port: u16, fingerprint: &str, previous: Option<&str>) -> bool {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let req = TrustRequest {
             host: host.into(),
             port,
             fingerprint: fingerprint.into(),
-            changed,
+            previous: previous.map(Into::into),
             reply: tx,
         };
         if self.tx.send(req).is_err() {
@@ -26,11 +26,17 @@ impl GuiPrompt {
 
 impl TrustPrompt for GuiPrompt {
     fn trust_new_host(&self, host: &str, port: u16, fingerprint: &str) -> bool {
-        self.ask(host, port, fingerprint, false)
+        self.ask(host, port, fingerprint, None)
     }
 
-    fn replace_changed_host(&self, host: &str, port: u16, fingerprint: &str) -> bool {
-        self.ask(host, port, fingerprint, true)
+    fn replace_changed_host(
+        &self,
+        host: &str,
+        port: u16,
+        previous: &str,
+        fingerprint: &str,
+    ) -> bool {
+        self.ask(host, port, fingerprint, Some(previous))
     }
 }
 
