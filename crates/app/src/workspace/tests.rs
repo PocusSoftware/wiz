@@ -584,7 +584,7 @@ fn select_tab_by_number_and_pin(cx: &mut TestAppContext) {
             first_mouse: false,
         });
     };
-    // Tabs start after the castle and are 220 px wide here: "a" is first, then "c".
+    // Tabs start after the hat and are 220 px wide here: "a" is first, then "c".
     middle(cx, 100.);
     assert_eq!(labels(&root, cx), ["a", "c", "b"]);
     middle(cx, 320.);
@@ -671,7 +671,7 @@ fn rename_tab_for_the_session(cx: &mut TestAppContext) {
     type_text(cx, "db");
     cx.simulate_keystrokes("escape");
     assert_eq!(name(cx).as_deref(), Some("web"));
-    // Clicking away (here the castle, for the hosts page) keeps it.
+    // Clicking away (here the hat, for the hosts page) keeps it.
     rename(cx);
     type_text(cx, "db");
     cx.simulate_click(gpui::point(px(19.), px(15.)), gpui::Modifiers::default());

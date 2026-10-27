@@ -201,7 +201,7 @@ impl Workspace {
 
     /// The tab strip doubles as the title bar: empty space drags the window.
     pub(super) fn tab_bar(&self, window_w: Pixels, cx: &mut Context<Self>) -> impl IntoElement {
-        // Share the space between the castle and the buttons on the right: tabs are 220 px
+        // Share the space between the hat and the buttons on the right: tabs are 220 px
         // wide until they don't fit, then narrow down to 110 px and the strip scrolls.
         const RESERVED: f32 = HOME_W + 4. * 24. + 3. + 8. + 3. * 40. + 32.;
         let room = f32::from(window_w) - RESERVED;
@@ -391,7 +391,7 @@ impl Workspace {
                     .tooltip(crate::widgets::tip("Hosts"))
                     .on_click(cx.listener(|t, _, w, cx| t.show_page(Page::Home, w, cx)))
                     .child(icon(
-                        "castle",
+                        "hat",
                         16.,
                         if self.page == Page::Home {
                             accent_text()

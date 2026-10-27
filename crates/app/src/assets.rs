@@ -43,7 +43,7 @@ icons!(
     "chevron-down",
     "check",
     "arrow-down",
-    "castle",
+    "hat",
     "sliders",
     "pin",
     "chevron-right",

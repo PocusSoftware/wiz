@@ -123,7 +123,7 @@ pub fn font_exists(ts: &TextSystem) -> impl Fn(&str) -> bool {
     move |name| ts.resolve_font(&gpui::font(name.to_string())) != fallback
 }
 
-/// Show the castle in the Dock even when running unbundled (cargo run).
+/// Show the hat in the Dock even when running unbundled (cargo run).
 pub fn on_launch() {
     use objc2::AnyThread;
     use objc2_app_kit::NSImage;
