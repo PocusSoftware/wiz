@@ -3,8 +3,9 @@
 use std::{cell::Cell, rc::Rc};
 
 use gpui::{
-    Bounds, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, canvas,
-    linear_color_stop, linear_gradient,
+    AnchoredPositionMode, Bounds, Corner, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, anchored, canvas, deferred, linear_color_stop, linear_gradient,
+    point,
 };
 
 use super::*;
@@ -69,7 +70,7 @@ pub(super) fn rgb_to_hsv(rgb: u32) -> (f32, f32, f32) {
 impl SettingsView {
     pub(super) fn accent_row(&self, cx: &mut Context<Self>) -> gpui::Div {
         let current = accent();
-        let row = Self::row(
+        Self::row(
             "Accent color",
             "Buttons, the active tab, the cursor and focus. Pick one or type any #RRGGBB.",
             div()
@@ -90,29 +91,42 @@ impl SettingsView {
                         .on_click(cx.listener(move |t, _, _, cx| t.pick_accent(rgb, cx)))
                 }))
                 .child(
-                    keyboard(div().id("accent-custom"))
-                        .focus(|s| s.border_color(c(MUTED)))
-                        .size(px(20.))
-                        .rounded(px(2.))
-                        .border_2()
-                        .border_color(c(if self.picker.open { TEXT } else { bg() }))
-                        .bg(linear_gradient(
-                            45.,
-                            linear_color_stop(c(0xe5484d), 0.),
-                            linear_color_stop(c(0x0090ff), 1.),
-                        ))
-                        .cursor_pointer()
-                        .tooltip(tip("Custom color"))
-                        .on_click(cx.listener(|t, _, _, cx| {
-                            t.picker.open = !t.picker.open;
-                            cx.notify();
-                        })),
+                    div()
+                        .relative()
+                        .child(
+                            keyboard(div().id("accent-custom"))
+                                .focus(|s| s.border_color(c(MUTED)))
+                                .size(px(20.))
+                                .rounded(px(2.))
+                                .border_2()
+                                .border_color(c(if self.picker.open { TEXT } else { bg() }))
+                                .bg(linear_gradient(
+                                    45.,
+                                    linear_color_stop(c(0xe5484d), 0.),
+                                    linear_color_stop(c(0x0090ff), 1.),
+                                ))
+                                .cursor_pointer()
+                                .tooltip(tip("Custom color"))
+                                .on_click(cx.listener(|t, _, _, cx| {
+                                    t.picker.open = true;
+                                    cx.notify();
+                                })),
+                        )
+                        .when(self.picker.open, |d| {
+                            // Deferred, so it paints over the rows below; anchored, so it
+                            // stays inside the window.
+                            d.child(deferred(
+                                anchored()
+                                    .position_mode(AnchoredPositionMode::Local)
+                                    .position(point(px(20.), px(26.)))
+                                    .anchor(Corner::TopRight)
+                                    .snap_to_window_with_margin(px(8.))
+                                    .child(self.picker_panel(cx)),
+                            ))
+                        }),
                 )
                 .child(div().ml_1().w(px(90.)).child(self.accent.clone())),
-        );
-        div()
-            .child(row)
-            .when(self.picker.open, |d| d.child(self.picker_panel(cx)))
+        )
     }
 
     fn picker_panel(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -132,11 +146,17 @@ impl SettingsView {
                 .border_color(c(0xffffff))
         };
         div()
-            .py_2()
-            .flex()
-            .justify_end()
-            .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .p_3()
+            .rounded(px(6.))
+            .bg(c(ELEVATED))
+            .border_1()
+            .border_color(c(BORDER))
+            .shadow_lg()
+            .occlude()
+            .on_mouse_down_out(cx.listener(|t, _, _, cx| {
+                t.picker.open = false;
+                cx.notify();
+            }))
             .on_mouse_move(cx.listener(|t, ev: &MouseMoveEvent, _, cx| {
                 if t.picker.drag.is_some() {
                     t.pick_at(ev.position, cx);
