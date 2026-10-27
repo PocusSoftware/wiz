@@ -33,31 +33,55 @@ impl SettingsView {
             .children(items)
             .child(div().flex_1())
             .child(
-                button("reset", "Reset to defaults").on_click(cx.listener(|t, _, _, cx| {
-                    // The secret store stays: switching it means moving secrets.
-                    t.apply(cx, |s| {
-                        *s = Settings {
-                            secret_store: s.secret_store.take(),
-                            ..Default::default()
-                        }
-                    });
-                    t.load_inputs(cx);
-                })),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(button("reset", "Reset to defaults").on_click(cx.listener(
+                                |t, _, _, cx| {
+                                    // The secret store stays: switching it means moving secrets.
+                                    t.apply(cx, |s| {
+                                        *s = Settings {
+                                            secret_store: s.secret_store.take(),
+                                            ..Default::default()
+                                        }
+                                    });
+                                    t.load_inputs(cx);
+                                },
+                            ))),
+                    )
+                    .child(
+                        icon_button("open-file", "external-link", "Open settings file", MUTED)
+                            .on_click(cx.listener(|t, _, _, cx| t.open_file(cx))),
+                    ),
             )
             .child(
                 div()
-                    .mt_2()
+                    .mt_3()
+                    .px_2()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
                     .text_xs()
                     .text_color(c(PLACEHOLDER))
-                    .child(
-                        ssh_core::config_dir()
-                            .map(|d| {
-                                format!("Saved automatically to {}/settings.toml", d.display())
-                            })
-                            .unwrap_or_default(),
-                    )
-                    .child(format!("Wiz {}", crate::version())),
+                    .child(format!("Wiz {}", crate::version()))
+                    .child("Changes save automatically"),
             )
+    }
+
+    /// Open `settings.toml` in the editor chosen under Files.
+    fn open_file(&mut self, cx: &mut Context<Self>) {
+        let opened = ssh_core::config_dir().and_then(|d| {
+            crate::platform::open_in_editor(&d.join("settings.toml"), &prefs::get().editor_app())
+                .map_err(Into::into)
+        });
+        if let Err(e) = opened {
+            self.error = Some(format!("Could not open settings file: {e}").into());
+            cx.notify();
+        }
     }
 
     /// Switch to another page.

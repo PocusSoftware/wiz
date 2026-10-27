@@ -54,3 +54,31 @@ fn only_single_normalized_keystrokes_are_valid() {
     assert!(!is_valid(""));
     assert!(!is_valid("shift-cmd-d"));
 }
+
+#[test]
+fn a_hand_edited_duplicate_is_not_bound_twice() {
+    let _g = with_settings(Settings {
+        shortcuts: Some(
+            [
+                ("new_host".to_string(), "ctrl-alt-j".to_string()),
+                ("settings".to_string(), "ctrl-alt-j".to_string()),
+            ]
+            .into(),
+        ),
+        ..Default::default()
+    });
+    let bound = resolved();
+    let keys: Vec<_> = bound.iter().map(|(_, k)| k).collect();
+    assert!(
+        keys.iter()
+            .all(|k| keys.iter().filter(|o| o == &k).count() == 1)
+    );
+    let id = |name| {
+        bound
+            .iter()
+            .find(|(i, _)| *i == name)
+            .map(|(_, k)| k.as_str())
+    };
+    assert_eq!(id("new_host"), Some("ctrl-alt-j"));
+    assert_eq!(id("settings"), platform::default_shortcut("settings"));
+}

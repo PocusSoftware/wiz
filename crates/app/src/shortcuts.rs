@@ -77,15 +77,29 @@ fn binding(id: &str, keys: &str) -> Option<KeyBinding> {
     })
 }
 
+/// The keystrokes each command is bound to. A saved keystroke that does not parse or is
+/// already taken by a built-in or an earlier command (hand-edited settings) falls back to
+/// the default, and a default that is taken too leaves the command unbound.
+fn resolved() -> Vec<(&'static str, String)> {
+    let mut used: Vec<String> = Vec::new();
+    COMMANDS
+        .iter()
+        .filter_map(|&(id, _)| {
+            let free = |k: &String| is_valid(k) && !platform::is_fixed(k) && !used.contains(k);
+            let chosen = keys(id).filter(free).or_else(|| {
+                platform::default_shortcut(id)
+                    .map(str::to_string)
+                    .filter(free)
+            })?;
+            used.push(chosen.clone());
+            Some((id, chosen))
+        })
+        .collect()
+}
+
 /// Bind the built-in shortcuts and the commands, replacing whatever was bound before.
-/// A saved keystroke that does not parse falls back to the default.
 pub fn apply(cx: &mut App) {
     cx.clear_key_bindings();
     cx.bind_keys(platform::fixed_bindings());
-    let bindings = COMMANDS.iter().filter_map(|(id, _)| {
-        let saved = keys(id).filter(|k| is_valid(k));
-        let chosen = saved.or_else(|| platform::default_shortcut(id).map(str::to_string));
-        binding(id, &chosen?)
-    });
-    cx.bind_keys(bindings);
+    cx.bind_keys(resolved().iter().filter_map(|(id, keys)| binding(id, keys)));
 }

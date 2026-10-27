@@ -19,17 +19,27 @@ impl SettingsView {
                 .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                 .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))
                 .child(self.text("Terminal font", "Family name. Applies after a restart.", &self.terminal_font)),
-            Category::Privacy => d
-                .child(self.toggle("p-hide", "Hide sensitive information", "Master switch. Everything below only applies while this is on.", s.hide_sensitive(), |s, v| s.hide_sensitive = Some(v), cx))
-                .child(self.toggle("p-hosts", "Mask hostnames", "Saved hosts' addresses, wherever they appear.", s.mask_hosts(), |s, v| s.mask_hosts = Some(v), cx))
-                .child(self.toggle("p-users", "Mask usernames", "Saved users and your macOS user.", s.mask_users(), |s, v| s.mask_users = Some(v), cx))
-                .child(self.toggle("p-v4", "Mask IPv4 addresses", "Any address like 10.0.0.5, even unsaved ones.", s.mask_ipv4(), |s, v| s.mask_ipv4 = Some(v), cx))
-                .child(self.toggle("p-v6", "Mask IPv6 addresses", "Full and compressed forms, ::1, zone ids (fe80::1%en0).", s.mask_ipv6(), |s, v| s.mask_ipv6 = Some(v), cx))
-                .child(self.toggle("p-ports", "Mask ports", "After addresses and saved hosts (host:2222), ssh -p 2222, Port 22, PORT=3000.", s.mask_ports(), |s, v| s.mask_ports = Some(v), cx))
-                .child(self.toggle("p-sec", "Mask secret values", "The value in PASSWORD=..., token: ..., \"api_key\": \"...\" lines.", s.mask_secrets(), |s, v| s.mask_secrets = Some(v), cx))
-                .child(self.toggle("p-files", "Hide secret files", "Leave files matching the patterns below out of file lists.", s.hide_secret_files(), |s, v| s.hide_secret_files = Some(v), cx))
-                .child(self.text("Secret file patterns", "Comma separated. * matches any run, ? one character.", &self.patterns))
-                .child(self.text("Extra words to mask", "Comma separated, 3+ letters, case-insensitive (project or client names).", &self.extra_mask)),
+            Category::Privacy => {
+                let on = s.hide_sensitive();
+                // Dimmed, not disabled: options can still be set up while the switch is off.
+                let options = div()
+                    .flex()
+                    .flex_col()
+                    .when(!on, |d| d.opacity(0.45))
+                    .child(Self::group("What to mask"))
+                    .child(self.toggle("p-hosts", "Hostnames", "Saved hosts' addresses, wherever they appear.", s.mask_hosts(), |s, v| s.mask_hosts = Some(v), cx))
+                    .child(self.toggle("p-users", "Usernames", "Saved users and your macOS user.", s.mask_users(), |s, v| s.mask_users = Some(v), cx))
+                    .child(self.toggle("p-v4", "IPv4 addresses", "Any address like 10.0.0.5, even unsaved ones.", s.mask_ipv4(), |s, v| s.mask_ipv4 = Some(v), cx))
+                    .child(self.toggle("p-v6", "IPv6 addresses", "Full and compressed forms, ::1, zone ids (fe80::1%en0).", s.mask_ipv6(), |s, v| s.mask_ipv6 = Some(v), cx))
+                    .child(self.toggle("p-ports", "Ports", "After addresses and saved hosts (host:2222), ssh -p 2222, Port 22, PORT=3000.", s.mask_ports(), |s, v| s.mask_ports = Some(v), cx))
+                    .child(self.toggle("p-sec", "Secret values", "The value in PASSWORD=..., token: ..., \"api_key\": \"...\" lines.", s.mask_secrets(), |s, v| s.mask_secrets = Some(v), cx))
+                    .child(self.text("Extra words", "Comma separated, 3+ letters, case-insensitive (project or client names).", &self.extra_mask))
+                    .child(Self::group("Files"))
+                    .child(self.toggle("p-files", "Hide secret files", "Leave files matching the patterns below out of file lists.", s.hide_secret_files(), |s, v| s.hide_secret_files = Some(v), cx))
+                    .child(self.text("Secret file patterns", "Comma separated. * matches any run, ? one character.", &self.patterns));
+                d.child(self.toggle("p-hide", "Hide sensitive information", if on { "On. Everything below is masked." } else { "Off. Turn on to apply the options below." }, on, |s, v| s.hide_sensitive = Some(v), cx))
+                    .child(options)
+            }
             Category::Passwords => d.child(self.credentials(cx)),
             Category::Shortcuts => d.child(self.shortcut_rows(cx)),
             Category::Files => d

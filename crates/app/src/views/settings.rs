@@ -79,6 +79,8 @@ pub struct SettingsView {
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
     agent_socket: Entity<TextInput>,
+    /// Filters the list on the shortcuts page.
+    shortcut_search: Entity<TextInput>,
     /// The accent color as #RRGGBB.
     accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
@@ -112,6 +114,7 @@ impl SettingsView {
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
             agent_socket: make(crate::platform::AGENT_DEFAULT, cx),
+            shortcut_search: make("Search shortcuts", cx),
             accent: make("#f05a29", cx),
             editors: crate::platform::installed_editors(),
             error: None,
@@ -119,6 +122,10 @@ impl SettingsView {
             shortcut_note: None,
         };
         this.load_inputs(cx);
+        cx.subscribe(&this.shortcut_search, |_, _, _: &InputEvent, cx| {
+            cx.notify()
+        })
+        .detach();
         for input in [
             &this.ui_font,
             &this.terminal_font,
@@ -204,6 +211,16 @@ impl SettingsView {
                     ),
             )
             .child(div().flex_none().child(control))
+    }
+
+    /// Small heading over a run of related rows.
+    fn group(name: &str) -> gpui::Div {
+        div()
+            .mt_4()
+            .mb_1()
+            .text_xs()
+            .text_color(c(MUTED))
+            .child(name.to_uppercase())
     }
 
     fn title(title: &str) -> gpui::Div {

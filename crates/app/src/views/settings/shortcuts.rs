@@ -8,7 +8,13 @@ use crate::shortcuts::{self, COMMANDS};
 impl SettingsView {
     pub(super) fn shortcut_rows(&self, cx: &mut Context<Self>) -> gpui::Div {
         let saved = prefs::get().shortcuts();
-        let rows = COMMANDS.iter().enumerate().map(|(i, &(id, name))| {
+        let query = self.shortcut_search.read(cx).value().trim().to_lowercase();
+        let shown = COMMANDS.iter().enumerate().filter(|&(_, &(id, name))| {
+            query.is_empty()
+                || name.to_lowercase().contains(&query)
+                || shortcuts::label(id).to_lowercase().contains(&query)
+        });
+        let rows = shown.map(|(i, &(id, name))| {
             let recording = self.recording.as_ref().is_some_and(|(r, _)| *r == id);
             let text = if recording {
                 "Type the shortcut...".to_string()
@@ -43,7 +49,23 @@ impl SettingsView {
         div()
             .flex()
             .flex_col()
+            .child(div().py_2().child(self.shortcut_search.clone()))
             .children(rows)
+            .when(
+                !COMMANDS.iter().any(|&(id, name)| {
+                    query.is_empty()
+                        || name.to_lowercase().contains(&query)
+                        || shortcuts::label(id).to_lowercase().contains(&query)
+                }),
+                |d| {
+                    d.child(
+                        div()
+                            .py_2()
+                            .text_color(c(MUTED))
+                            .child("No shortcuts match."),
+                    )
+                },
+            )
             .when_some(self.shortcut_note.clone(), |d, n| {
                 d.child(div().mt_1().text_color(c(RED)).child(n))
             })
