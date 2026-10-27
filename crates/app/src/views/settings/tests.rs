@@ -30,3 +30,21 @@ fn picker_colors_round_trip() {
     assert_eq!(hsv_to_rgb((120., 1., 1.)), 0x00ff00);
     assert_eq!(hsv_to_rgb((240., 1., 1.)), 0x0000ff);
 }
+
+#[gpui::test]
+fn reset_restores_defaults_and_closes_the_prompt(cx: &mut TestAppContext) {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = tempfile::tempdir().unwrap();
+    // SAFETY: GLOBALS is held, no other test reads the environment meanwhile.
+    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    prefs::update(|s| s.max_splits = Some(8)).unwrap();
+    let view = cx.new(SettingsView::new);
+    view.update(cx, |v, cx| {
+        v.confirm_reset = true;
+        v.reset(cx);
+        assert!(!v.confirm_reset);
+    });
+    assert_eq!(prefs::get().max_splits(), 4);
+}

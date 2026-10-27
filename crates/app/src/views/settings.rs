@@ -85,6 +85,8 @@ pub struct SettingsView {
     /// Filters the list on the shortcuts page.
     shortcut_search: Entity<TextInput>,
     picker: accent::Picker,
+    /// "Reset to defaults" was clicked and waits for a yes.
+    confirm_reset: bool,
     /// The accent color as #RRGGBB.
     accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
@@ -121,6 +123,7 @@ impl SettingsView {
             shortcut_search: make("Search shortcuts", cx),
             accent: make("#f05a29", cx),
             picker: Default::default(),
+            confirm_reset: false,
             editors: crate::platform::installed_editors(),
             error: None,
             recording: None,

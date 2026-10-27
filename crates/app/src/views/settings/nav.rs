@@ -35,26 +35,44 @@ impl SettingsView {
             .child(
                 div()
                     .flex()
-                    .items_center()
+                    .flex_col()
                     .gap_1()
+                    .when(!self.confirm_reset, |d| {
+                        d.child(button("reset", "Reset to defaults").on_click(cx.listener(
+                            |t, _, _, cx| {
+                                t.confirm_reset = true;
+                                cx.notify();
+                            },
+                        )))
+                    })
+                    .when(self.confirm_reset, |d| {
+                        d.child(
+                            div()
+                                .px_2()
+                                .text_xs()
+                                .text_color(c(MUTED))
+                                .child("Reset every setting?"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .gap_1()
+                                .child(div().flex_1().child(button("reset-no", "Cancel").on_click(
+                                    cx.listener(|t, _, _, cx| {
+                                        t.confirm_reset = false;
+                                        cx.notify();
+                                    }),
+                                )))
+                                .child(
+                                    div().flex_1().child(
+                                        primary_button("reset-yes", "Reset")
+                                            .on_click(cx.listener(|t, _, _, cx| t.reset(cx))),
+                                    ),
+                                ),
+                        )
+                    })
                     .child(
-                        div()
-                            .flex_1()
-                            .child(button("reset", "Reset to defaults").on_click(cx.listener(
-                                |t, _, _, cx| {
-                                    // The secret store stays: switching it means moving secrets.
-                                    t.apply(cx, |s| {
-                                        *s = Settings {
-                                            secret_store: s.secret_store.take(),
-                                            ..Default::default()
-                                        }
-                                    });
-                                    t.load_inputs(cx);
-                                },
-                            ))),
-                    )
-                    .child(
-                        icon_button("open-file", "external-link", "Open settings file", MUTED)
+                        button("open-file", "Open settings file")
                             .on_click(cx.listener(|t, _, _, cx| t.open_file(cx))),
                     ),
             )
@@ -70,6 +88,18 @@ impl SettingsView {
                     .child(format!("Wiz {}", crate::version()))
                     .child("Changes save automatically"),
             )
+    }
+
+    /// Back to the defaults. The secret store stays: switching it means moving secrets.
+    pub(super) fn reset(&mut self, cx: &mut Context<Self>) {
+        self.confirm_reset = false;
+        self.apply(cx, |s| {
+            *s = Settings {
+                secret_store: s.secret_store.take(),
+                ..Default::default()
+            }
+        });
+        self.load_inputs(cx);
     }
 
     /// Open `settings.toml` in the editor chosen under Files.
