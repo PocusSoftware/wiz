@@ -101,11 +101,19 @@ impl SftpView {
         let dst_dir = self.pane(to).path.clone();
         let from_src = self.pane(from).source.clone();
         let to_src = self.pane(to).source.clone();
-        let rsync_cmd = rsync::command(
-            &from_src.endpoint(&src_dir),
-            &names,
-            &to_src.endpoint(&dst_dir),
-        );
+        // A copied command would need the jump hosts and their keys too: none then.
+        let through_jump = [&from_src, &to_src]
+            .iter()
+            .any(|s| matches!(s, Source::Remote(r) if r.host.jump.is_some()));
+        let rsync_cmd = if through_jump {
+            None
+        } else {
+            rsync::command(
+                &from_src.endpoint(&src_dir),
+                &names,
+                &to_src.endpoint(&dst_dir),
+            )
+        };
         let id = self.next_id;
         self.next_id += 1;
         let label = if names.len() == 1 {

@@ -19,13 +19,13 @@ impl Workspace {
 
     fn show_form(&mut self, existing: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         let ex = existing.and_then(|i| self.cfg.hosts.get(i).cloned().map(|h| (i, h)));
-        let taken = self
+        let others = self
             .cfg
             .hosts
             .iter()
             .enumerate()
             .filter(|(i, _)| Some(*i) != existing)
-            .map(|(_, h)| h.account())
+            .map(|(_, h)| h.clone())
             .collect();
         let groups = self
             .cfg
@@ -33,12 +33,17 @@ impl Workspace {
             .iter()
             .filter_map(|h| h.group.clone())
             .collect();
-        let form = cx.new(|cx| HostForm::new(ex, taken, groups, cx));
+        let form = cx.new(|cx| HostForm::new(ex, others, groups, cx));
         cx.subscribe_in(&form, window, |this, _, ev: &FormEvent, window, cx| {
             match ev {
                 FormEvent::Saved { host, index } => {
                     match index {
-                        Some(i) if *i < this.cfg.hosts.len() => this.cfg.hosts[*i] = host.clone(),
+                        Some(i) if *i < this.cfg.hosts.len() => {
+                            // Hosts that go through this one follow it to its new address.
+                            let old = this.cfg.hosts[*i].account();
+                            this.cfg.retarget_jumps(&old, &host.account());
+                            this.cfg.hosts[*i] = host.clone();
+                        }
                         _ => this.cfg.hosts.push(host.clone()),
                     }
                     this.save_config();
@@ -106,6 +111,29 @@ impl Workspace {
             }
         }
         self.conns.remove(&acct);
+        // Hosts that went through it now connect directly; say so rather than fail later.
+        let mut direct = Vec::new();
+        for other in &mut self.cfg.hosts {
+            if other.jump.as_ref() == Some(&acct) {
+                other.jump = None;
+                direct.push(other.name.clone());
+            }
+        }
+        if !direct.is_empty() {
+            let verb = if direct.len() == 1 {
+                "connects"
+            } else {
+                "connect"
+            };
+            self.set_status(
+                format!(
+                    "{} now {verb} directly, without {}.",
+                    direct.join(", "),
+                    h.name
+                ),
+                false,
+            );
+        }
         self.save_config();
         cx.notify();
     }

@@ -21,6 +21,12 @@ pub enum Error {
     Config(String),
     #[error("authentication failed")]
     AuthFailed,
+    /// The server asks for more than the saved credentials (a one-time code), and nobody
+    /// was there to answer: an automatic reconnect.
+    #[error("the server asks for a code")]
+    CodeRequired,
+    #[error("login cancelled")]
+    LoginCancelled,
     #[error("no usable credentials: {0}")]
     NoCredentials(String),
     #[error("key is encrypted, passphrase required")]

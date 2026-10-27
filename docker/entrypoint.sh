@@ -22,6 +22,7 @@ if [ "$MODE" = "key" ]; then
 else
   PA=yes
 fi
-exec /usr/sbin/sshd -D -e \
+# Forwarding on, so the password server can be a jump host to the others.
+exec /usr/sbin/sshd -D -e -o AllowTcpForwarding=yes \
   -o PasswordAuthentication=$PA -o KbdInteractiveAuthentication=$PA \
   -o PubkeyAuthentication=$([ "$MODE" = key ] && echo yes || echo no)

@@ -117,6 +117,7 @@ fn test_host(user: &str) -> Host {
         user: user.into(),
         group: None,
         pinned: false,
+        jump: None,
         auth: AuthMethod::Password,
     }
 }
@@ -829,6 +830,7 @@ fn host_key_question_takes_focus(cx: &mut TestAppContext) {
     root.read_with(cx, |r, _| {
         r.trust_tx
             .send(TrustRequest {
+                attempt: 0,
                 host: "127.0.0.1".into(),
                 port: 2222,
                 fingerprint: "SHA256:x".into(),
@@ -916,4 +918,76 @@ fn tabs_merge_into_one_split_from_the_menu(cx: &mut TestAppContext) {
     root.update_in(cx, |r, w, cx| r.merge_tab(tab, first, w, cx));
     assert!(status(&root, cx).contains("at most 4"));
     assert_eq!(root.read_with(cx, |r, _| r.tabs.len()), 2);
+}
+
+#[gpui::test]
+fn login_question_is_asked_and_answered(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.update(|w, _| w.activate_window());
+    let modal = root.read_with(cx, |r, _| r.modal_focus.clone());
+    let ask = |cx: &mut VisualTestContext| {
+        let (reply, answer) = std::sync::mpsc::sync_channel(1);
+        root.read_with(cx, |r, _| {
+            r.code_tx
+                .send(CodeRequest {
+                    attempt: 7,
+                    host: "bastion".into(),
+                    text: "Open your authenticator app.\u{1b}[31m".into(),
+                    questions: vec![Question {
+                        text: "Verification code: ".into(),
+                        hidden: true,
+                    }],
+                    reply,
+                })
+                .ok()
+        });
+        cx.run_until_parked();
+        answer
+    };
+    let answer = ask(cx);
+    // It takes the keyboard like any dialog; the server's escape sequence is not shown.
+    assert!(cx.update(|w, cx| modal.contains_focused(w, cx)));
+    root.read_with(cx, |r, cx| {
+        let shown = r.code.as_ref().unwrap().read(cx);
+        assert!(!shown.text().contains('\u{1b}'));
+    });
+    type_text(cx, "123456");
+    cx.simulate_keystrokes("enter");
+    assert_eq!(answer.try_recv(), Ok(Some(vec!["123456".to_string()])));
+    assert!(root.read_with(cx, |r, _| r.code.is_none() && r.codes.is_empty()));
+
+    // Escape cancels the login.
+    let answer = ask(cx);
+    cx.simulate_keystrokes("escape");
+    assert_eq!(answer.try_recv(), Ok(None));
+
+    // So does giving up on the connect it belongs to, whichever host is asking.
+    let answer = ask(cx);
+    root.update(cx, |r, _| r.dismiss_codes(7));
+    cx.run_until_parked();
+    assert_eq!(answer.try_recv(), Ok(None));
+    assert!(root.read_with(cx, |r, _| r.code.is_none() && r.codes.is_empty()));
+}
+
+#[gpui::test]
+fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    let bastion = test_host("jumper");
+    let inner = Host {
+        name: "inner".into(),
+        jump: Some(bastion.account()),
+        ..test_host("inner")
+    };
+    root.update_in(cx, |r, w, cx| {
+        r.cfg.hosts = vec![bastion, inner];
+        r.confirm_delete = Some(0);
+        r.answer_delete_host(true, w, cx);
+    });
+    root.read_with(cx, |r, _| {
+        assert_eq!(r.cfg.hosts.len(), 1);
+        assert_eq!(r.cfg.hosts[0].jump, None);
+    });
+    assert!(status(&root, cx).contains("inner now connects directly"));
 }

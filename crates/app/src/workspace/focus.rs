@@ -13,6 +13,7 @@ impl Workspace {
     pub(super) fn modal_open(&self) -> bool {
         self.menu_open()
             || !self.trust.is_empty()
+            || self.code.is_some()
             || self.form.is_some()
             || self.quick_form.is_some()
             || self.unlock.is_some()

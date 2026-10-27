@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{PoisonError, RwLock};
 
 use russh::Signer;
-use russh::client;
+use russh::client::{self, AuthResult};
 use russh::keys::agent::AgentIdentity;
 use russh::keys::agent::client::AgentClient;
 use russh::keys::{PrivateKey, PublicKey};
@@ -68,13 +68,14 @@ pub(super) async fn keys(agent: &mut Agent) -> Result<Vec<PublicKey>> {
         .collect())
 }
 
-/// Offer `keys` one by one until the server takes one. True once logged in.
+/// Offer `keys` one by one until the server takes one: logged in, or accepted with another
+/// step to go (a one-time code).
 pub(super) async fn login<S: Signer>(
     handle: &mut client::Handle<Handler>,
     user: &str,
     keys: Vec<PublicKey>,
     signer: &mut S,
-) -> Result<bool> {
+) -> Result<AuthResult> {
     let hash = handle.best_supported_rsa_hash().await?.flatten();
     for key in keys {
         // Servers hang up after too many tries (MaxAuthTries).
@@ -85,34 +86,51 @@ pub(super) async fn login<S: Signer>(
         if let Ok(r) = handle
             .authenticate_publickey_with(user, key, hash, signer)
             .await
-            && r.success()
+            && matches!(
+                r,
+                AuthResult::Success
+                    | AuthResult::Failure {
+                        partial_success: true,
+                        ..
+                    }
+            )
         {
-            return Ok(true);
+            return Ok(r);
         }
     }
-    Ok(false)
+    Ok(AuthResult::Failure {
+        remaining_methods: russh::MethodSet::empty(),
+        partial_success: false,
+    })
 }
 
 /// Log in with the agent's copy of the key in `path`, if it holds one. Only that key is
-/// offered, so the server doesn't see every key in the agent. False on any problem: the
-/// caller then reads the file itself.
+/// offered, so the server doesn't see every key in the agent. `None` when that didn't get
+/// anywhere: the caller then reads the file itself.
 pub(super) async fn login_with_key_of(
     handle: &mut client::Handle<Handler>,
     user: &str,
     path: &Path,
-) -> bool {
+) -> Option<AuthResult> {
     // The public half of an OpenSSH key file is readable without the passphrase.
-    let Ok(key) = PrivateKey::read_openssh_file(path) else {
-        return false;
-    };
-    let Ok(mut agent) = open(handle).await else {
-        return false;
-    };
-    let public = key.public_key().clone();
-    if !keys(&mut agent).await.is_ok_and(|k| k.contains(&public)) {
-        return false;
+    let public = PrivateKey::read_openssh_file(path)
+        .ok()?
+        .public_key()
+        .clone();
+    let mut agent = open(handle).await.ok()?;
+    if !keys(&mut agent).await.ok()?.contains(&public) {
+        return None;
     }
     login(handle, user, vec![public], &mut agent)
         .await
-        .unwrap_or(false)
+        .ok()
+        .filter(|r| {
+            !matches!(
+                r,
+                AuthResult::Failure {
+                    partial_success: false,
+                    ..
+                }
+            )
+        })
 }

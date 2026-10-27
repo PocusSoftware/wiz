@@ -2,33 +2,12 @@
 
 use super::*;
 
-fn prompt(text: &str, echo: bool) -> client::Prompt {
-    client::Prompt {
-        prompt: text.into(),
-        echo,
-    }
-}
-
-#[test]
-fn password_only_answers_the_first_hidden_prompt() {
-    let prompts = [
-        prompt("Username: ", true),
-        prompt("Password: ", false),
-        prompt("Verification code: ", false),
-    ];
-    assert_eq!(kbd_answers(&prompts, "pw"), ["", "pw", ""]);
-    assert_eq!(kbd_answers(&[prompt("Password: ", false)], "pw"), ["pw"]);
-    // A prompt that echoes is never a password prompt.
-    assert_eq!(kbd_answers(&[prompt("Name: ", true)], "pw"), [""]);
-}
-
 /// Logging in through a throwaway ssh-agent against the docker key server (`docker/`).
-#[cfg(unix)]
 mod agent_login {
     use std::path::PathBuf;
 
     use russh::keys::agent::client::AgentClient;
-    use russh::keys::{PrivateKey, PublicKey};
+    use russh::keys::{PrivateKey, PublicKey, load_secret_key};
     use russh::{AgentAuthError, Signer};
 
     use super::*;
@@ -149,11 +128,10 @@ mod agent_login {
             declined: 0,
         };
         let keys = vec![ed.public_key().clone(), rsa.public_key().clone()];
-        assert!(
-            agent::login(&mut handle, "tester", keys, &mut signer)
-                .await
-                .unwrap()
-        );
+        let r = agent::login(&mut handle, "tester", keys, &mut signer)
+            .await
+            .unwrap();
+        assert!(r.success());
         assert_eq!(signer.declined, 1);
     }
 
@@ -174,6 +152,7 @@ mod agent_login {
             user: "tester".into(),
             group: None,
             pinned: false,
+            jump: None,
             auth: AuthMethod::Agent,
         };
         let connect = |creds: Credentials| {

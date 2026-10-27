@@ -1,12 +1,13 @@
 //! SSH connections: connect and authenticate, run commands, open shells and SFTP.
 
 mod agent;
+mod auth;
 
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use russh::client::{self, KeyboardInteractiveAuthResponse};
-use russh::keys::{PrivateKeyWithHashAlg, PublicKey, load_secret_key};
+use russh::client;
+use russh::keys::PublicKey;
 use russh::{ChannelMsg, Disconnect};
 use tokio::sync::{mpsc, oneshot};
 
@@ -15,6 +16,7 @@ use crate::hostkey::HostKeyVerifier;
 use crate::secrets::{self, Kind, Secret};
 use crate::{Error, Result};
 pub use agent::set_socket as set_agent_socket;
+pub use auth::{AuthPrompt, Question};
 
 #[derive(Clone)]
 pub enum Credentials {
@@ -117,10 +119,34 @@ async fn learn_announced(
     let _ = tokio::task::spawn_blocking(move || verifier.learn_proven(&host, port, new)).await;
 }
 
+/// How to connect, beyond the host and its credentials.
+#[derive(Clone)]
+pub struct Options {
+    /// Time between keep-alive probes; zero turns them off.
+    pub keepalive: Duration,
+    /// Reach the host through this connection (a jump host), like `ssh -J`.
+    pub via: Option<Arc<Connection>>,
+    /// Asks the user what the server wants beyond the credentials (one-time codes). Without
+    /// one such a login fails with `Error::CodeRequired`.
+    pub prompt: Option<Arc<dyn AuthPrompt>>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            keepalive: Duration::from_secs(30),
+            via: None,
+            prompt: None,
+        }
+    }
+}
+
 pub struct Connection {
     handle: Arc<client::Handle<Handler>>,
     /// Address connected to, to look for FTP when the server has no SFTP.
     host: String,
+    /// The jump host this connection runs through, kept open as long as this one.
+    via: Option<Arc<Connection>>,
 }
 
 #[derive(Debug)]
@@ -142,16 +168,17 @@ impl Connection {
         creds: &Credentials,
         verifier: HostKeyVerifier,
     ) -> Result<Self> {
-        Self::connect_with(host, creds, verifier, Duration::from_secs(30)).await
+        Self::connect_with(host, creds, verifier, Options::default()).await
     }
 
-    /// Like `connect`, with a custom keep-alive interval (zero disables it).
+    /// Like `connect`, with `options`.
     pub async fn connect_with(
         host: &Host,
         creds: &Credentials,
         verifier: HostKeyVerifier,
-        keepalive: Duration,
+        options: Options,
     ) -> Result<Self> {
+        let keepalive = options.keepalive;
         let config = Arc::new(client::Config {
             inactivity_timeout: None,
             keepalive_interval: (!keepalive.is_zero()).then_some(keepalive),
@@ -166,8 +193,22 @@ impl Connection {
             verifier: verifier.clone(),
             announced: Some(announced),
         };
-        let mut handle = client::connect(config, (host.host.as_str(), host.port), handler).await?;
-        authenticate(&mut handle, &host.user, creds).await?;
+        let mut handle = match &options.via {
+            None => client::connect(config, (host.host.as_str(), host.port), handler).await?,
+            Some(via) => {
+                // The name goes to the jump host as typed, so names only it knows work.
+                let channel = via
+                    .handle
+                    .channel_open_direct_tcpip(host.host.as_str(), host.port.into(), "127.0.0.1", 0)
+                    .await?;
+                client::connect_stream(config, channel.into_stream(), handler).await?
+            }
+        };
+        let ask = auth::Asker {
+            host: &host.name,
+            prompt: options.prompt.as_ref(),
+        };
+        auth::authenticate(&mut handle, &host.user, creds, &ask).await?;
         let handle = Arc::new(handle);
         tokio::spawn(learn_announced(
             Arc::downgrade(&handle),
@@ -179,11 +220,24 @@ impl Connection {
         Ok(Self {
             handle,
             host: host.host.clone(),
+            via: options.via,
         })
     }
 
     pub fn is_closed(&self) -> bool {
         self.handle.is_closed()
+    }
+
+    /// Round trip to the server (through any jump hosts), or `None` when it doesn't answer
+    /// within 5 s or the connection is gone.
+    pub async fn ping(&self) -> Option<Duration> {
+        let start = Instant::now();
+        tokio::time::timeout(Duration::from_secs(5), self.handle.send_ping())
+            .await
+            .ok()?
+            .ok()?;
+        // A closed connection answers at once; that is no round trip.
+        (!self.is_closed()).then(|| start.elapsed())
     }
 
     pub async fn disconnect(&self) -> Result<()> {
@@ -250,7 +304,8 @@ impl Connection {
             .await
             .unwrap_or(false)
         {
-            let ftp = crate::sftp::ftp_offered(&self.host).await;
+            // Behind a jump host the address may be internal; never dial it from here.
+            let ftp = self.via.is_none() && crate::sftp::ftp_offered(&self.host).await;
             return Err(Error::NoSftp { ftp });
         }
         crate::sftp::Sftp::new(ch.into_stream()).await
@@ -362,97 +417,6 @@ impl Shell {
     }
 }
 
-async fn authenticate(
-    handle: &mut client::Handle<Handler>,
-    user: &str,
-    creds: &Credentials,
-) -> Result<()> {
-    match creds {
-        Credentials::Password(pw) => {
-            // russh takes owned strings and doesn't wipe them; keep our copy short-lived.
-            let pw = pw.reveal();
-            if handle
-                .authenticate_password(user, pw.to_string())
-                .await?
-                .success()
-            {
-                return Ok(());
-            }
-            // Many servers expose password login only as keyboard-interactive.
-            match handle
-                .authenticate_keyboard_interactive_start(user, None)
-                .await?
-            {
-                KeyboardInteractiveAuthResponse::Success => Ok(()),
-                KeyboardInteractiveAuthResponse::Failure { .. } => Err(Error::AuthFailed),
-                KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
-                    let mut resp = handle
-                        .authenticate_keyboard_interactive_respond(kbd_answers(&prompts, &pw))
-                        .await?;
-                    // Allow one extra empty round (some PAM stacks send a trailing request).
-                    if let KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } = resp {
-                        resp = handle
-                            .authenticate_keyboard_interactive_respond(
-                                prompts.iter().map(|_| String::new()).collect(),
-                            )
-                            .await?;
-                    }
-                    match resp {
-                        KeyboardInteractiveAuthResponse::Success => Ok(()),
-                        _ => Err(Error::AuthFailed),
-                    }
-                }
-            }
-        }
-        Credentials::Agent => {
-            let mut agent = agent::open(handle).await?;
-            let keys = agent::keys(&mut agent).await?;
-            if agent::login(handle, user, keys, &mut agent).await? {
-                Ok(())
-            } else {
-                Err(Error::AuthFailed)
-            }
-        }
-        Credentials::Key { path, passphrase } => {
-            // The agent may hold this key already (unlocked, or behind Touch ID). Use it then,
-            // and fall back to the file when it isn't there or declines.
-            if agent::login_with_key_of(handle, user, path).await {
-                return Ok(());
-            }
-            let passphrase = passphrase.as_ref().map(Secret::reveal);
-            let key =
-                load_secret_key(path, passphrase.as_deref().map(String::as_str)).map_err(|e| {
-                    if passphrase.is_none() && e.to_string().to_lowercase().contains("encrypted") {
-                        Error::PassphraseRequired
-                    } else {
-                        Error::Key(e)
-                    }
-                })?;
-            let hash = handle.best_supported_rsa_hash().await?.flatten();
-            let ok = handle
-                .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash))
-                .await?
-                .success();
-            if ok { Ok(()) } else { Err(Error::AuthFailed) }
-        }
-    }
-}
-
-/// Answers to a keyboard-interactive round: the password goes to the first hidden prompt
-/// only, the rest get nothing. A server asking for something else as well (a one-time code)
-/// then fails the login instead of receiving the password a second time.
-fn kbd_answers(prompts: &[client::Prompt], password: &str) -> Vec<String> {
-    let first_hidden = prompts.iter().position(|p| !p.echo);
-    (0..prompts.len())
-        .map(|i| {
-            if Some(i) == first_hidden {
-                password.to_string()
-            } else {
-                String::new()
-            }
-        })
-        .collect()
-}
-
-#[cfg(test)]
+// Its tests need a unix ssh-agent.
+#[cfg(all(test, unix))]
 mod tests;

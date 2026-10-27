@@ -101,7 +101,7 @@ impl Workspace {
             this.quick_form = None;
             window.focus(&this.focus);
             if let QuickEvent::Connect { host, creds, save } = ev {
-                this.quick_connect(host.clone(), creds.clone(), *save, window, cx);
+                this.quick_connect((**host).clone(), creds.clone(), *save, window, cx);
             }
             cx.notify();
         })

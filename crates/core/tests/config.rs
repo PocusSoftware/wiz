@@ -52,6 +52,7 @@ fn roundtrip() {
                 user: "u".into(),
                 group: Some("prod".into()),
                 pinned: true,
+                jump: None,
                 auth: AuthMethod::Password,
             },
             Host {
@@ -61,6 +62,7 @@ fn roundtrip() {
                 user: "u".into(),
                 group: None,
                 pinned: false,
+                jump: None,
                 auth: AuthMethod::Key { path: "/k".into() },
             },
         ],
@@ -91,6 +93,52 @@ fn old_files_without_group_or_pin_still_load() {
     assert_eq!(cfg.hosts[0].group, None);
     assert!(!cfg.hosts[0].pinned);
     assert_eq!(cfg.hosts[0].port, 22);
+    assert_eq!(cfg.hosts[0].jump, None);
+}
+
+#[test]
+fn jump_chains() {
+    let h = |name: &str, jump: Option<&str>| Host {
+        name: name.into(),
+        host: name.into(),
+        port: 22,
+        user: "u".into(),
+        group: None,
+        pinned: false,
+        jump: jump.map(|j| format!("u@{j}:22")),
+        auth: AuthMethod::Agent,
+    };
+    let mut cfg = Config {
+        hosts: vec![
+            h("bastion", None),
+            h("inner", Some("bastion")),
+            h("db", Some("inner")),
+        ],
+    };
+    let names = |c: &Config, host: &Host| -> Vec<String> {
+        c.jump_chain(host)
+            .unwrap()
+            .into_iter()
+            .map(|h| h.name)
+            .collect()
+    };
+    assert_eq!(names(&cfg, &cfg.hosts[2]), ["bastion", "inner"]);
+    assert!(names(&cfg, &cfg.hosts[0]).is_empty());
+    // Saved without its jump host, or in a circle: refused.
+    assert!(cfg.jump_chain(&h("x", Some("gone"))).is_err());
+    cfg.hosts[0].jump = Some("u@db:22".into());
+    assert!(cfg.jump_chain(&cfg.hosts[2]).is_err());
+    assert!(cfg.jump_chain(&h("self", Some("self"))).is_err());
+
+    // The jump host moves: the hosts going through it follow.
+    cfg.hosts[0].jump = None;
+    cfg.retarget_jumps("u@inner:22", "u@inner.example:2222");
+    assert_eq!(cfg.hosts[2].jump.as_deref(), Some("u@inner.example:2222"));
+    assert_eq!(cfg.hosts[1].jump.as_deref(), Some("u@bastion:22"));
+
+    let saved = toml::to_string_pretty(&cfg).unwrap();
+    let back: Config = toml::from_str(&saved).unwrap();
+    assert_eq!(back.hosts, cfg.hosts);
 }
 
 #[test]
@@ -102,6 +150,7 @@ fn validate() {
         user: user.into(),
         group: None,
         pinned: false,
+        jump: None,
         auth: AuthMethod::Password,
     };
     for ok in [

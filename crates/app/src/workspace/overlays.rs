@@ -158,6 +158,11 @@ impl Workspace {
                 }))),
             )
         });
+        // No dismissing by a click outside: that would cancel the login by accident.
+        let code = self
+            .code
+            .clone()
+            .map(|d| overlay("code", d.into_any_element(), None));
         let unlock = self.unlock.clone().map(|f| {
             let cancel = f.clone();
             overlay(
@@ -298,6 +303,7 @@ impl Workspace {
             form.map(IntoElement::into_any_element),
             quick_form.map(IntoElement::into_any_element),
             unlock.map(IntoElement::into_any_element),
+            code.map(IntoElement::into_any_element),
             confirm_dialog.map(IntoElement::into_any_element),
             delete_dialog.map(IntoElement::into_any_element),
             quit_dialog.map(IntoElement::into_any_element),

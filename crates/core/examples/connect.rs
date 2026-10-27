@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user: user.into(),
         group: None,
         pinned: false,
+        jump: None,
         auth: AuthMethod::Password,
     };
     let creds = match creds {

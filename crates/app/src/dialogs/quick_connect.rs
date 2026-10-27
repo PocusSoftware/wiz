@@ -15,7 +15,7 @@ use crate::widgets::{button, checkbox, icon_button, label, primary_button};
 
 pub enum QuickEvent {
     Connect {
-        host: Host,
+        host: Box<Host>,
         creds: Credentials,
         save: bool,
     },
@@ -63,7 +63,7 @@ impl QuickConnect {
     fn submit(&mut self, cx: &mut Context<Self>) {
         match self.build(cx) {
             Ok((host, creds)) => cx.emit(QuickEvent::Connect {
-                host,
+                host: Box::new(host),
                 creds,
                 save: self.save,
             }),
@@ -119,6 +119,7 @@ impl QuickConnect {
             user,
             group: None,
             pinned: false,
+            jump: None,
             auth,
         };
         host.validate()?;

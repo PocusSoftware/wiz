@@ -5,7 +5,7 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{AuthMethod, Host};
+use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::secrets::{self, Kind};
 
 use crate::theme::*;
@@ -30,8 +30,8 @@ impl EventEmitter<FormEvent> for HostForm {}
 pub struct HostForm {
     index: Option<usize>,
     old: Option<Host>,
-    /// Accounts (user@host:port) of the other saved hosts, to refuse duplicates.
-    taken: Vec<String>,
+    /// The other saved hosts, to refuse duplicates and to pick a jump host from.
+    others: Vec<Host>,
     /// Existing group names, so "prod" joins an existing "Prod" instead of making a twin.
     groups: Vec<String>,
     name: Entity<TextInput>,
@@ -39,6 +39,8 @@ pub struct HostForm {
     host: Entity<TextInput>,
     port: Entity<TextInput>,
     user: Entity<TextInput>,
+    /// Name of the saved host to connect through.
+    jump: Entity<TextInput>,
     password: Entity<TextInput>,
     key_path: Entity<TextInput>,
     passphrase: Entity<TextInput>,
@@ -50,7 +52,7 @@ pub struct HostForm {
 impl HostForm {
     pub fn new(
         existing: Option<(usize, Host)>,
-        taken: Vec<String>,
+        others: Vec<Host>,
         groups: Vec<String>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -59,6 +61,7 @@ impl HostForm {
         let host = cx.new(|cx| TextInput::new("example.com or 10.0.0.5", false, cx));
         let port = cx.new(|cx| TextInput::new("22", false, cx));
         let user = cx.new(|cx| TextInput::new("root", false, cx));
+        let jump = cx.new(|cx| TextInput::new("Optional, name of a saved host", false, cx));
         // Host, user and port are bullets unless the field is being edited.
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
@@ -79,6 +82,9 @@ impl HostForm {
                 host.update(cx, |t, _| t.set_value(&h.host));
                 port.update(cx, |t, _| t.set_value(&h.port.to_string()));
                 user.update(cx, |t, _| t.set_value(&h.user));
+                if let Some(j) = others.iter().find(|o| Some(o.account()) == h.jump) {
+                    jump.update(cx, |t, _| t.set_value(&j.name));
+                }
                 match &h.auth {
                     AuthMethod::Password => {}
                     AuthMethod::Key { path } => {
@@ -94,13 +100,14 @@ impl HostForm {
         Self {
             index,
             old,
-            taken,
+            others,
             groups,
             name,
             group,
             host,
             port,
             user,
+            jump,
             password,
             key_path,
             passphrase,
@@ -150,6 +157,22 @@ impl HostForm {
                 .unwrap_or(g)
         });
         let name = get(&self.name);
+        let jump_name = get(&self.jump);
+        let jump = if jump_name.is_empty() {
+            None
+        } else {
+            let mut named = self
+                .others
+                .iter()
+                .filter(|o| o.name.to_lowercase() == jump_name.to_lowercase());
+            match (named.next(), named.next()) {
+                (Some(j), None) => Some(j.account()),
+                (None, _) => return Err("No saved host has that jump host name.".into()),
+                (Some(_), Some(_)) => {
+                    return Err("Several saved hosts have that name; rename one first.".into());
+                }
+            }
+        };
         let auth = match self.mode {
             Mode::Password => AuthMethod::Password,
             Mode::Key => {
@@ -172,6 +195,7 @@ impl HostForm {
             user,
             group,
             pinned: self.old.as_ref().is_some_and(|o| o.pinned),
+            jump,
             auth,
         };
         new.validate()?;
@@ -181,9 +205,14 @@ impl HostForm {
             new.name = format!("{}@{}", new.user, new.host);
         }
         let acct = new.account();
-        if self.taken.contains(&acct) {
+        if self.others.iter().any(|o| o.account() == acct) {
             return Err("Another saved host already uses this user, host and port.".into());
         }
+        // A jump host that (through others) goes through this one would never connect.
+        let all = Config {
+            hosts: self.others.iter().cloned().chain([new.clone()]).collect(),
+        };
+        all.jump_chain(&new)?;
         // Every check above runs before the secret store is touched.
         let (pw, pass) = (
             self.password.read(cx).value().to_string(),
@@ -338,7 +367,13 @@ impl Render for HostForm {
                     .child(field("Host", &self.host).flex_1())
                     .child(field("Port", &self.port).w(px(80.))),
             )
-            .child(field("User", &self.user))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(field("User", &self.user).flex_1())
+                    .child(field("Jump host", &self.jump).flex_1()),
+            )
             .child(
                 div()
                     .flex()

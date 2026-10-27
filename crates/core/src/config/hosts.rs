@@ -31,6 +31,9 @@ pub struct Host {
     /// Listed at the top of the hosts page.
     #[serde(default, skip_serializing_if = "is_false")]
     pub pinned: bool,
+    /// Account (`user@host:port`) of the saved host to connect through, like `ssh -J`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump: Option<String>,
     // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }
@@ -130,7 +133,42 @@ pub struct Config {
     pub hosts: Vec<Host>,
 }
 
+/// Most jump hosts in a row before the target.
+pub const MAX_JUMPS: usize = 5;
+
 impl Config {
+    /// Point the hosts that go through `old` (an account) at `new`, after its user, host or
+    /// port changed.
+    pub fn retarget_jumps(&mut self, old: &str, new: &str) {
+        for h in &mut self.hosts {
+            if h.jump.as_deref() == Some(old) {
+                h.jump = Some(new.into());
+            }
+        }
+    }
+
+    /// The saved hosts `host` connects through, the first one to dial first. Fails when a
+    /// jump host is gone, the chain loops back, or it is longer than `MAX_JUMPS`.
+    pub fn jump_chain(&self, host: &Host) -> std::result::Result<Vec<Host>, String> {
+        let mut chain: Vec<Host> = Vec::new();
+        let mut next = host.jump.clone();
+        while let Some(account) = next {
+            let Some(hop) = self.hosts.iter().find(|h| h.account() == account) else {
+                return Err("The jump host is no longer saved.".into());
+            };
+            if hop.account() == host.account() || chain.iter().any(|h| h.account() == account) {
+                return Err("The jump hosts go round in a circle.".into());
+            }
+            if chain.len() == MAX_JUMPS {
+                return Err(format!("At most {MAX_JUMPS} jump hosts in a row."));
+            }
+            next = hop.jump.clone();
+            chain.push(hop.clone());
+        }
+        chain.reverse();
+        Ok(chain)
+    }
+
     pub fn default_path() -> Result<PathBuf> {
         Ok(crate::config_dir()?.join("hosts.toml"))
     }

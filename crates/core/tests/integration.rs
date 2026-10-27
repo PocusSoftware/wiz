@@ -11,7 +11,7 @@ use ssh_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
 use ssh_core::secrets::Secret;
 #[cfg(target_os = "macos")]
 use ssh_core::secrets::{Kind, keychain};
-use ssh_core::session::{Connection, Credentials, Shell, ShellEvent};
+use ssh_core::session::{Connection, Credentials, Options, Shell, ShellEvent};
 use ssh_core::{Error, terminal::Terminal};
 
 macro_rules! gate {
@@ -42,6 +42,7 @@ fn host(port: u16, auth: AuthMethod) -> Host {
         user: "tester".into(),
         group: None,
         pinned: false,
+        jump: None,
         auth,
     }
 }
@@ -196,6 +197,56 @@ async fn proven_host_keys_are_remembered() {
     let text = std::fs::read_to_string(&v.known_hosts).unwrap();
     let keys = text.lines().filter(|l| !l.is_empty()).count();
     assert_eq!(keys, found.len(), "one key per algorithm: {text}");
+}
+
+#[tokio::test]
+async fn jump_host_and_ping() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let v = verifier(&d, Arc::new(TrustAll));
+    let jump = Connection::connect(
+        &host(2222, AuthMethod::Password),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
+        v.clone(),
+    )
+    .await
+    .unwrap();
+    let rtt = jump.ping().await.unwrap();
+    assert!(
+        rtt > Duration::ZERO && rtt < Duration::from_secs(5),
+        "{rtt:?}"
+    );
+    let jump = Arc::new(jump);
+    // The key server by its name inside the compose network: only the jump host knows it.
+    let target = Host {
+        host: "ssh-key".into(),
+        port: 22,
+        ..host(22, AuthMethod::Password)
+    };
+    let creds = Credentials::Key {
+        path: keys().join("ed25519"),
+        passphrase: None,
+    };
+    let options = Options {
+        via: Some(jump.clone()),
+        ..Default::default()
+    };
+    let c = Connection::connect_with(&target, &creds, v, options)
+        .await
+        .unwrap();
+    assert_eq!(
+        c.exec("whoami").await.unwrap().stdout_str().trim(),
+        "tester"
+    );
+    assert!(c.ping().await.is_some());
+    c.disconnect().await.unwrap();
+    for _ in 0..50 {
+        if c.is_closed() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(c.ping().await, None);
 }
 
 #[tokio::test]

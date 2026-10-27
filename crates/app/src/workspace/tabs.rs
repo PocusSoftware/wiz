@@ -425,6 +425,7 @@ impl Workspace {
                     .items_center()
                     // Touching buttons share their edge pixel, and a click there hit both.
                     .gap(px(1.))
+                    .children(self.latency_label())
                     .when(
                         self.page == Page::Tab
                             && matches!(

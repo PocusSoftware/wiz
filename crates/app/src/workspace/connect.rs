@@ -8,6 +8,7 @@ impl GuiPrompt {
     fn ask(&self, host: &str, port: u16, fingerprint: &str, previous: Option<&str>) -> bool {
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         let req = TrustRequest {
+            attempt: self.attempt,
             host: host.into(),
             port,
             fingerprint: fingerprint.into(),
@@ -37,6 +38,25 @@ impl TrustPrompt for GuiPrompt {
         fingerprint: &str,
     ) -> bool {
         self.ask(host, port, fingerprint, Some(previous))
+    }
+}
+
+impl AuthPrompt for GuiAsk {
+    fn answer(&self, host: &str, text: &str, questions: &[Question]) -> Option<Vec<String>> {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        let req = CodeRequest {
+            attempt: self.attempt,
+            host: host.into(),
+            text: text.into(),
+            questions: questions.to_vec(),
+            reply: tx,
+        };
+        self.tx.send(req).ok()?;
+        // Time to open an authenticator app doesn't count against the connect timeout.
+        self.prompting.store(true, Ordering::Relaxed);
+        let answers = rx.recv_timeout(Duration::from_secs(300)).ok().flatten();
+        self.prompting.store(false, Ordering::Relaxed);
+        answers
     }
 }
 
@@ -107,9 +127,37 @@ impl Workspace {
             p.queued.push(what);
             return;
         }
+        let chain = match self.cfg.jump_chain(&host) {
+            Ok(c) => c,
+            Err(e) => {
+                match &what {
+                    Open::Reattach(v, ..) => {
+                        v.update(cx, |v, cx| v.set_notice(Some(e), true, cx)).ok();
+                    }
+                    _ => self.set_status(format!("{}: {e}", host.name), true),
+                }
+                return;
+            }
+        };
+        // Jump hosts already open are used as they are.
+        let hops: Vec<(Host, Option<Arc<Connection>>)> = chain
+            .into_iter()
+            .map(|h| {
+                let live = self
+                    .conns
+                    .get(&h.account())
+                    .filter(|l| !l.conn.is_closed())
+                    .map(|l| l.conn.clone());
+                (h, live)
+            })
+            .collect();
         // Agent hosts keep nothing in the secret store, so a locked file doesn't matter.
-        if creds.is_none() && host.auth != AuthMethod::Agent && !secrets::ready() {
-            if let Open::Reattach(v, _) = &what {
+        let needs_secrets = (creds.is_none() && host.auth != AuthMethod::Agent)
+            || hops
+                .iter()
+                .any(|(h, live)| live.is_none() && h.auth != AuthMethod::Agent);
+        if needs_secrets && !secrets::ready() {
+            if let Open::Reattach(v, ..) = &what {
                 // Don't pop a dialog up on its own during an automatic reconnect.
                 v.update(cx, |v, cx| {
                     v.set_notice(
@@ -147,10 +195,19 @@ impl Workspace {
             known_hosts: HostKeyVerifier::default_path()
                 .unwrap_or_else(|_| PathBuf::from("known_hosts")),
             prompt: Arc::new(GuiPrompt {
+                attempt: id,
                 tx: self.trust_tx.clone(),
                 prompting: prompting.clone(),
             }),
         };
+        // An automatic reconnect asks nothing: a one-time code can't be reused anyway.
+        let prompt = (!matches!(what, Open::Reattach(_, _, false))).then(|| {
+            Arc::new(GuiAsk {
+                attempt: id,
+                tx: self.code_tx.clone(),
+                prompting: prompting.clone(),
+            }) as Arc<dyn AuthPrompt>
+        });
         let prefs = crate::prefs::get();
         let (keepalive_secs, timeout_secs) = (prefs.keepalive_secs(), prefs.connect_timeout_secs());
         cx.spawn_in(window, async move |this, cx| {
@@ -158,28 +215,58 @@ impl Workspace {
             let r = runtime::spawn(async move {
                 // Keychain access can block on a system prompt, keep it off the async workers.
                 // It is not timed: macOS may be waiting for the user to allow access.
-                let hk = h.clone();
+                let load = |host: &Host| {
+                    let host = host.clone();
+                    tokio::task::spawn_blocking(move || Credentials::from_store(&host))
+                };
                 let creds = match creds {
                     Some(c) => c,
                     None => tokio::select! {
-                        r = tokio::task::spawn_blocking(move || Credentials::from_store(&hk)) => {
-                            r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??
-                        }
+                        r = load(&h) => r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??,
                         _ = &mut cancel_rx => return Ok(None),
                     },
                 };
+                // Only the hops after the nearest open one are dialed.
+                let skip = hops.iter().rposition(|(_, live)| live.is_some()).unwrap_or(0);
+                let mut chain = Vec::new();
+                for (hop, live) in hops.into_iter().skip(skip) {
+                    let way = match live {
+                        Some(conn) => Ok(conn),
+                        None => tokio::select! {
+                            r = load(&hop) => Err(r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??),
+                            _ = &mut cancel_rx => return Ok(None),
+                        },
+                    };
+                    chain.push((hop, way));
+                }
                 let pw = match &creds {
                     Credentials::Password(p) => Some(p.clone()),
                     _ => None,
                 };
-                let keepalive = Duration::from_secs(keepalive_secs as u64);
-                let conn = race(
-                    Connection::connect_with(&h, &creds, verifier, keepalive),
-                    &mut cancel_rx,
-                    timeout_secs,
-                    &prompting,
-                )
-                .await?;
+                let options = |via| Options {
+                    keepalive: Duration::from_secs(keepalive_secs as u64),
+                    via,
+                    prompt: prompt.clone(),
+                };
+                let work = async {
+                    let mut via = None;
+                    for (hop, way) in chain {
+                        via = Some(match way {
+                            Ok(conn) => conn,
+                            Err(hop_creds) => Arc::new(
+                                Connection::connect_with(
+                                    &hop,
+                                    &hop_creds,
+                                    verifier.clone(),
+                                    options(via.take()),
+                                )
+                                .await?,
+                            ),
+                        });
+                    }
+                    Connection::connect_with(&h, &creds, verifier, options(via)).await
+                };
+                let conn = race(work, &mut cancel_rx, timeout_secs, &prompting).await?;
                 Ok::<_, ssh_core::Error>(conn.map(|c| (c, pw)))
             })
             .await;
@@ -215,7 +302,7 @@ impl Workspace {
                     Ok(_) => {
                         // Cancelled: a terminal waiting to reconnect lets the user retry by hand.
                         for w in std::iter::once(&what).chain(&queued) {
-                            if let Open::Reattach(v, _) = w {
+                            if let Open::Reattach(v, ..) = w {
                                 v.update(cx, |v, cx| {
                                     v.set_notice(
                                         Some("Reconnect cancelled. Press Enter to retry.".into()),
@@ -228,12 +315,15 @@ impl Workspace {
                         }
                     }
                     Err(e) => {
-                        this.dismiss_trust(&host.host, host.port);
+                        this.dismiss_trust(id);
+                        this.dismiss_codes(id);
                         use ssh_core::Error as E;
                         // Wrong password or a changed host key will not fix itself: stop.
                         let fatal = matches!(
                             e,
                             E::AuthFailed
+                                | E::CodeRequired
+                                | E::LoginCancelled
                                 | E::HostKeyChanged { .. }
                                 | E::HostKeyRejected { .. }
                                 | E::PassphraseRequired
@@ -246,7 +336,7 @@ impl Workspace {
                         let mut other = false;
                         for w in std::iter::once(&what).chain(&queued) {
                             match w {
-                                Open::Reattach(v, _) if fatal => {
+                                Open::Reattach(v, ..) if fatal => {
                                     v.update(cx, |v, cx| {
                                         v.set_notice(
                                             Some(format!(
@@ -258,7 +348,7 @@ impl Workspace {
                                     })
                                     .ok();
                                 }
-                                Open::Reattach(v, n) => this.start_reconnect(
+                                Open::Reattach(v, n, _) => this.start_reconnect(
                                     v.clone(),
                                     n + 1,
                                     Some(msg.clone()),
@@ -285,15 +375,16 @@ impl Workspace {
     pub(super) fn cancel_connect(&mut self, account: &str, cx: &mut Context<Self>) {
         if let Some(pos) = self.pending.iter().position(|p| p.account == account) {
             let p = self.pending.remove(pos);
-            self.dismiss_trust(&p.host, p.port);
+            self.dismiss_trust(p.id);
+            self.dismiss_codes(p.id);
             cx.notify();
         }
     }
 
-    /// Answer "no" to an open host key prompt for this address.
-    fn dismiss_trust(&mut self, host: &str, port: u16) {
+    /// Answer "no" to the host key questions of connect `attempt` (cancelled or failed).
+    fn dismiss_trust(&mut self, attempt: u64) {
         self.trust.retain(|t| {
-            let hit = t.host == host && t.port == port;
+            let hit = t.attempt == attempt;
             if hit {
                 let _ = t.reply.send(false);
             }
@@ -318,9 +409,47 @@ impl Workspace {
             Open::Docker => self.open_docker(host, conn, password, window, cx),
             Open::Sftp => self.open_sftp(host, conn, window, cx),
             Open::SftpSource(view, side) => self.attach_sftp(host, conn, view, side, window, cx),
-            Open::Reattach(view, attempt) => {
+            Open::Reattach(view, attempt, _) => {
                 self.reattach(view, attempt, conn, password, window, cx)
             }
         }
+    }
+
+    /// Show the login question in front of the queue.
+    pub(super) fn show_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(req) = self.codes.front() else {
+            return;
+        };
+        let dialog = cx.new(|cx| CodeDialog::new(&req.host, &req.text, &req.questions, cx));
+        cx.subscribe_in(&dialog, window, |this, _, ev: &CodeEvent, window, cx| {
+            let answers = match ev {
+                CodeEvent::Answered(a) => Some(a.clone()),
+                CodeEvent::Cancelled => None,
+            };
+            if let Some(req) = this.codes.pop_front() {
+                let _ = req.reply.send(answers);
+            }
+            this.code = None;
+            window.focus(&this.focus);
+            cx.notify();
+        })
+        .detach();
+        dialog.read(cx).focus_first(window, cx);
+        self.code = Some(dialog);
+        cx.notify();
+    }
+
+    /// Cancel the login questions of connect `attempt` (cancelled or failed).
+    pub(super) fn dismiss_codes(&mut self, attempt: u64) {
+        if self.codes.front().is_some_and(|r| r.attempt == attempt) {
+            self.code = None;
+        }
+        self.codes.retain(|r| {
+            let hit = r.attempt == attempt;
+            if hit {
+                let _ = r.reply.send(None);
+            }
+            !hit
+        });
     }
 }

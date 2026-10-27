@@ -5,6 +5,7 @@ mod connect;
 mod credentials;
 mod focus;
 mod hosts;
+mod latency;
 mod overlays;
 mod reconnect;
 mod sessions;
@@ -30,10 +31,11 @@ use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
 use ssh_core::secrets::{self, Kind, Secret, Store};
-use ssh_core::session::{Connection, Credentials};
+use ssh_core::session::{AuthPrompt, Connection, Credentials, Options, Question};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
+use crate::dialogs::code::{CodeDialog, CodeEvent};
 use crate::dialogs::host_form::{FormEvent, HostForm};
 use crate::dialogs::quick_connect::{QuickConnect as QuickDialog, QuickEvent};
 use crate::dialogs::unlock::{UnlockDialog, UnlockEvent, UnlockMode};
@@ -74,6 +76,8 @@ actions!(
 pub struct SelectTab(pub usize);
 
 struct TrustRequest {
+    /// `Pending::id` of the connect asking, so cancelling it closes this question.
+    attempt: u64,
     host: String,
     port: u16,
     fingerprint: String,
@@ -87,7 +91,27 @@ struct TrustRequest {
 /// user answers in the UI. `prompting` is set meanwhile, so the connect timeout pauses
 /// while the user reads the fingerprint.
 struct GuiPrompt {
+    attempt: u64,
     tx: UnboundedSender<TrustRequest>,
+    prompting: Arc<AtomicBool>,
+}
+
+/// Questions a server asks during login (a one-time code), waiting for the user.
+struct CodeRequest {
+    /// `Pending::id` of the connect asking (it may be for a host behind the one asking).
+    attempt: u64,
+    /// Name of the saved host asking.
+    host: String,
+    text: String,
+    questions: Vec<Question>,
+    reply: std::sync::mpsc::SyncSender<Option<Vec<String>>>,
+}
+
+/// Asks the user for one-time codes, like `GuiPrompt` asks about host keys: blocks a
+/// worker until answered, with the connect timeout paused meanwhile.
+struct GuiAsk {
+    attempt: u64,
+    tx: UnboundedSender<CodeRequest>,
     prompting: Arc<AtomicBool>,
 }
 
@@ -161,8 +185,9 @@ enum Open {
     Sftp,
     /// Connect a host and attach it to one pane of an open SFTP tab.
     SftpSource(gpui::WeakEntity<SftpView>, SftpSide),
-    /// Reconnect a terminal whose connection dropped (attempt number).
-    Reattach(gpui::WeakEntity<TerminalView>, u32),
+    /// Reconnect a terminal whose connection dropped (attempt number). True when the user
+    /// asked for it; only then may login questions (a one-time code) be put to them.
+    Reattach(gpui::WeakEntity<TerminalView>, u32, bool),
     /// Connect a host and open a shell for it as a new pane of the terminal tab with this id.
     SplitShell(u64),
 }
@@ -238,6 +263,12 @@ pub struct Workspace {
     /// servers at once asks about each of them in turn.
     trust: VecDeque<TrustRequest>,
     trust_tx: UnboundedSender<TrustRequest>,
+    /// Login questions, one shown at a time in `code`.
+    codes: VecDeque<CodeRequest>,
+    code: Option<Entity<CodeDialog>>,
+    code_tx: UnboundedSender<CodeRequest>,
+    /// Round trip in ms to the server of the terminal in front (`latency`).
+    latency: Option<u32>,
     status: Option<(SharedString, bool)>,
     /// Bumped by every `set_status`, so a hide timer only clears the message it was set for.
     status_seq: u64,
@@ -301,6 +332,20 @@ impl Workspace {
             None::<()>
         })
         .detach();
+        Self::watch_latency(window, cx);
+        let (code_tx, mut code_rx) = unbounded_channel::<CodeRequest>();
+        cx.spawn_in(window, async move |this, cx| {
+            while let Some(req) = code_rx.recv().await {
+                this.update(cx, |t, cx| {
+                    // Shown by the next render.
+                    t.codes.push_back(req);
+                    cx.notify();
+                })
+                .ok()?;
+            }
+            None::<()>
+        })
+        .detach();
         Self {
             cfg,
             quick: HashMap::new(),
@@ -331,6 +376,10 @@ impl Workspace {
             form: None,
             trust: VecDeque::new(),
             trust_tx,
+            codes: VecDeque::new(),
+            code: None,
+            code_tx,
+            latency: None,
             status,
             status_seq: 0,
             status_timer: 0,
@@ -482,6 +531,9 @@ impl Focusable for Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.hide_status_later(cx);
+        if self.code.is_none() && !self.codes.is_empty() {
+            self.show_code(window, cx);
+        }
         // Remember which split pane has focus, for the tab title and for re-selecting the tab.
         if self.page == Page::Tab
             && let Some(Tab {

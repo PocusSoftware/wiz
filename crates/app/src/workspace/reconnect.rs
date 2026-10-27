@@ -125,7 +125,7 @@ impl Workspace {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
             }
             this.update_in(cx, |this, window, cx| {
-                this.try_reattach(view, attempt, window, cx)
+                this.try_reattach(view, attempt, manual, window, cx)
             })
             .ok();
         })
@@ -190,6 +190,7 @@ impl Workspace {
         &mut self,
         view: gpui::WeakEntity<TerminalView>,
         attempt: u32,
+        manual: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -218,6 +219,12 @@ impl Workspace {
             v.set_notice(Some("Reconnecting...".into()), false, cx)
         })
         .ok();
-        self.connect(host, creds, Open::Reattach(view, attempt), window, cx);
+        self.connect(
+            host,
+            creds,
+            Open::Reattach(view, attempt, manual),
+            window,
+            cx,
+        );
     }
 }

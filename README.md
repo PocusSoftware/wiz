@@ -3,12 +3,12 @@
 A fast SSH client for macOS and Windows in Rust (terminal, SFTP, Docker). Frontend: GPUI. Backend in `crates/core`.
 
 ## Status
-- Done: password, key (ed25519/RSA, encrypted), ssh-agent and keyboard-interactive auth, Keychain secrets,
+- Done: password, key (ed25519/RSA, encrypted), ssh-agent and keyboard-interactive auth with one-time codes, jump hosts, Keychain secrets,
   known_hosts verification (TOFU, hard fail on changed key, OpenSSH host key rotation), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
   (remote over SSH, local via bollard).
 - SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop, conflict prompts, rsync hint for big transfers.
-- Todo: jump hosts, startup time measurement.
+- Todo: startup time measurement.
 
 ## Test
 ```sh
@@ -52,6 +52,15 @@ Settings, Credentials picks where passwords and key passphrases are kept:
 
 The file is unlocked on first use (connecting, adding or editing a host) and stays unlocked until Wiz quits or you press "Lock now". Switching stores moves every saved secret across. The master password can't be recovered: forget it and the saved passwords are gone (the hosts stay).
 
+
+## Jump hosts
+"Jump host" in the add/edit form names another saved host to connect through, like `ssh -J`. That host can have a jump host of its own (up to 5 in a row). The target's name is resolved by the jump host, so internal names work. A jump host already open in another tab is used as it is. Editing a jump host's address keeps the hosts that use it pointing at it; deleting it makes them connect directly, and the status line says which. The copied rsync command is not offered for hosts behind a jump host.
+
+## One-time codes
+When a server asks for more than the saved password or key (a one-time code, `AuthenticationMethods publickey,keyboard-interactive`), Wiz shows its questions in a dialog. The saved password answers only the first hidden password question, never a code question. The connect timeout pauses while the dialog is open. Automatic reconnects don't ask: they stop with "the server asks for a code", and Enter in the terminal retries and asks.
+
+## Latency
+The tab bar shows the round trip to the server of the terminal in front, measured every 3 seconds (yellow from 150 ms). Behind a jump host it covers the whole way. Typing can't feel faster than this number.
 
 ## SSH agent
 Hosts set to "SSH agent" log in with the keys in an ssh-agent, offered one by one; a key the server refuses or the agent declines (a cancelled Touch ID prompt) moves on to the next. Nothing is stored for them, so they connect while the secrets file is locked. Key file hosts ask the agent first too, but only for their own key, then read the file: a key already loaded with `ssh-add` needs no passphrase. Wiz uses `SSH_AUTH_SOCK` (the system agent, also for apps started from the Dock). Other agents, like 1Password or Secretive, need their socket under Settings, Passwords. Agent certificates aren't used yet.
