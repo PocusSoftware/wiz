@@ -48,3 +48,17 @@ fn reset_restores_defaults_and_closes_the_prompt(cx: &mut TestAppContext) {
     });
     assert_eq!(prefs::get().max_splits(), 4);
 }
+
+#[test]
+fn every_shortcut_is_in_one_section_and_keys_split_into_caps() {
+    use super::shortcuts::{GROUPS, keycaps};
+    let mut grouped: Vec<_> = GROUPS.iter().flat_map(|g| g.1.iter().copied()).collect();
+    let mut all: Vec<_> = crate::shortcuts::COMMANDS.iter().map(|c| c.0).collect();
+    grouped.sort_unstable();
+    all.sort_unstable();
+    assert_eq!(grouped, all);
+
+    assert_eq!(keycaps("⇧⌘D"), ["⇧", "⌘", "D"]);
+    assert_eq!(keycaps("Ctrl+Shift+D"), ["Ctrl", "Shift", "D"]);
+    assert_eq!(keycaps("Ctrl++"), ["Ctrl", "+"]);
+}
