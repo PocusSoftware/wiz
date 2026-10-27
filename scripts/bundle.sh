@@ -10,6 +10,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp target/release/wiz "$APP/Contents/MacOS/wiz"
 cp crates/app/assets/brand/Wiz.icns "$APP/Contents/Resources/Wiz.icns"
+# The fonts are compiled into the binary; the OFL wants its text shipped with every copy.
+cp crates/app/assets/fonts/*-OFL.txt "$APP/Contents/Resources/"
 VERSION=$(scripts/version.sh)
 # Build number: commits on the current branch, so every bundle gets a higher one.
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)

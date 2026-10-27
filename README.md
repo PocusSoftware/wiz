@@ -86,3 +86,6 @@ The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scrip
 
 ## Hide sensitive information
 Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.
+
+## License
+Wiz is MIT licensed. The bundled fonts are not: IBM Plex Sans and JetBrains Mono are under the SIL Open Font License 1.1 (texts in `crates/app/assets/fonts/`). `scripts/bundle.sh` copies both texts into `Wiz.app/Contents/Resources`; a Windows build ships them next to `Wiz.exe`.
