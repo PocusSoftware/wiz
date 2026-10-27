@@ -91,6 +91,9 @@ pub struct Settings {
     pub block_quit: Option<bool>,
     /// Give up connecting after this many seconds (0 waits forever).
     pub connect_timeout_secs: Option<u32>,
+    // Experimental
+    /// Most terminals in one split tab.
+    pub max_splits: Option<u32>,
     // Keyboard
     /// Shortcuts the user changed: command id to keystrokes like "cmd-shift-d".
     pub shortcuts: Option<BTreeMap<String, String>>,
@@ -144,6 +147,7 @@ getters! {
     auto_reconnect: bool = true;
     close_on_exit: bool = true;
     connect_timeout_secs: u32 = 15;
+    max_splits: u32 = 4;
     shortcuts: BTreeMap<String, String> = BTreeMap::new();
     secret_store: String = "keychain".into();
     agent_socket: String = String::new();

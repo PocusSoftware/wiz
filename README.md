@@ -30,12 +30,13 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 | Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
 | Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |
+| Experimental | `max_splits` (terminals per split tab, default 4) |
 | Credentials | `secret_store` (`keychain` or `file`), `agent_socket` (empty for `SSH_AUTH_SOCK`, or the OpenSSH agent pipe on Windows) |
 
 The eye button in the title bar flips `hide_sensitive`.
 
 ## Split terminals
-⌘D opens another shell on the same server in the current tab, up to 4. Two sit side by side, a third and fourth go below them as a 2x2 grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged. ⌘] and ⌘[ move between the panes.
+⌘D opens another shell on the same server in the current tab, up to 4 (`max_splits` under Experimental raises it). Two sit side by side, a third and fourth go below them as a 2x2 grid, more grow the grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged. ⌘] and ⌘[ move between the panes.
 
 To put another server in the split, click the split button or press ⇧⌘D and pick a saved host. To join two open tabs, open the menu of the tab you want to move (right-click, or ⇧⌘M for the open tab) and pick "Merge into" the other one. Both work from the keyboard (Tab or the arrow keys move in the menu, Enter picks, Escape closes). All shortcuts above can be changed under Shortcuts in Settings: select the shortcut, press Enter, type the new keys (hold Cmd, Ctrl or Option).
 

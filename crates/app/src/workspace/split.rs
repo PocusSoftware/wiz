@@ -31,8 +31,10 @@ impl Render for DraggedPane {
     }
 }
 
-/// Most terminals in one tab.
-pub(super) const MAX_PANES: usize = 4;
+/// Most terminals in one tab (Experimental setting).
+pub(super) fn max_panes() -> usize {
+    crate::prefs::get().max_splits() as usize
+}
 
 /// Smallest usable pane (header included). Splitting is refused when another pane
 /// would not get at least this much room.
@@ -43,35 +45,40 @@ const MIN_PANE_H: f32 = 150.;
 const MIN_PANE: f32 = 0.12;
 
 /// Columns of pane indices for `n` panes in a `w` x `h` area, or `None` when they can't all
-/// get a usable size. Two panes sit side by side, a third goes below the first, a fourth
-/// below the second (a 2x2 grid), so existing panes never jump around. When the window is
-/// too short for a grid but wide enough, panes go side by side instead (or stacked when it
-/// is tall and narrow).
+/// get a usable size. Two panes sit side by side, more go in a grid that fills its columns
+/// from the left (a third goes below the first, a fourth below the second), so existing
+/// panes never jump around. When the window is too short for a grid but wide enough, panes
+/// go side by side instead (or stacked when it is tall and narrow).
 pub(super) fn layout(n: usize, w: f32, h: f32) -> Option<Vec<Vec<usize>>> {
     let cols_fit = |k: usize| w / k as f32 >= MIN_PANE_W;
     let rows_fit = |k: usize| h / k as f32 >= MIN_PANE_H;
     let side_by_side = || (0..n).map(|i| vec![i]).collect();
     let stacked = || vec![(0..n).collect()];
+    let cols = grid_columns(n);
     match n {
         0 | 1 => Some(vec![vec![0]]),
         2 if cols_fit(2) => Some(side_by_side()),
-        2 if rows_fit(2) => Some(stacked()),
-        3 | 4 if cols_fit(2) && rows_fit(2) => Some(grid_layout(n)),
-        3 | 4 if cols_fit(n) => Some(side_by_side()),
-        3 | 4 if rows_fit(n) => Some(stacked()),
+        _ if n > 2 && cols_fit(cols) && rows_fit(n.div_ceil(cols)) => Some(grid_layout(n)),
+        _ if cols_fit(n) => Some(side_by_side()),
+        _ if rows_fit(n) => Some(stacked()),
         _ => None,
     }
+}
+
+/// Columns of the grid for `n` panes: 2 up to four panes, then as square as it gets.
+fn grid_columns(n: usize) -> usize {
+    (1..=n).find(|c| c * c >= n).unwrap_or(1)
 }
 
 /// The grid arrangement, also used when a window shrinks below what fits: panes are never
 /// dropped, they just get small.
 pub(super) fn grid_layout(n: usize) -> Vec<Vec<usize>> {
-    match n {
-        0 | 1 => vec![vec![0]],
-        2 => vec![vec![0], vec![1]],
-        3 => vec![vec![0, 2], vec![1]],
-        _ => vec![vec![0, 2], vec![1, 3]],
+    let mut cols = vec![Vec::new(); grid_columns(n).max(1)];
+    for i in 0..n.max(1) {
+        let k = i % cols.len();
+        cols[k].push(i);
     }
+    cols
 }
 
 impl Workspace {
@@ -130,8 +137,11 @@ impl Workspace {
         };
         let n = t.panes.len() + extra;
         let area = self.area(window);
-        if n > MAX_PANES {
-            self.set_status(format!("A tab holds at most {MAX_PANES} terminals."), true);
+        if n > max_panes() {
+            self.set_status(
+                format!("A tab holds at most {} terminals.", max_panes()),
+                true,
+            );
         } else if layout(n, area.0, area.1).is_none() {
             self.set_status(
                 "The window is too small for another terminal. Make it bigger or close a pane.",

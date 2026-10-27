@@ -68,7 +68,7 @@ impl Workspace {
                     // A tab that filled up while connecting gets a tab of its own instead.
                     if let Some(ix) = target
                         && let TabKind::Terminal(t) = &mut this.tabs[ix].kind
-                        && t.panes.len() < split::MAX_PANES
+                        && t.panes.len() < split::max_panes()
                     {
                         t.panes.push(pane);
                         t.focused = t.panes.len() - 1;

@@ -43,10 +43,11 @@ pub enum Category {
     Files,
     LogsDocker,
     TerminalNetwork,
+    Experimental,
 }
 
 impl Category {
-    pub const ALL: [Category; 7] = [
+    pub const ALL: [Category; 8] = [
         Category::Appearance,
         Category::Privacy,
         Category::Passwords,
@@ -54,6 +55,7 @@ impl Category {
         Category::Files,
         Category::LogsDocker,
         Category::TerminalNetwork,
+        Category::Experimental,
     ];
 
     pub fn name(self) -> &'static str {
@@ -65,6 +67,7 @@ impl Category {
             Category::Files => "Files (SFTP)",
             Category::LogsDocker => "Logs and Docker",
             Category::TerminalNetwork => "Terminal and network",
+            Category::Experimental => "Experimental",
         }
     }
 }

@@ -70,6 +70,8 @@ impl SettingsView {
                 .child(self.toggle("n-exit", "Close terminal when the shell exits", "Typing exit or pressing Ctrl+D closes the tab, or the pane of a split.", s.close_on_exit(), |s, v| s.close_on_exit = Some(v), cx))
                 .child(self.toggle("n-quit", "Block quitting with open sessions", &format!("Quit ({} or the window close button) is refused while a terminal, files or Docker tab on a server is open.", crate::platform::QUIT_KEYS), s.block_quit(), |s, v| s.block_quit = Some(v), cx))
                 .child(self.stepper("n-timeout", "Connect timeout", "Give up on a connection that takes longer than this. 0 turns it off and waits until you cancel. Time spent on the host key prompt doesn't count.", s.connect_timeout_secs(), (0, 300, 5), "s", |s, v| s.connect_timeout_secs = Some(v), cx)),
+            Category::Experimental => d
+                .child(self.stepper("x-splits", "Terminals per tab", "Most split terminals in one tab. Panes go in a grid and get small quickly, and each one is its own connection. Tabs already open keep their panes.", s.max_splits(), (2, 16, 1), "terminals", |s, v| s.max_splits = Some(v), cx)),
         }
     }
 }

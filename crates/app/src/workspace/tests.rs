@@ -25,6 +25,12 @@ fn split_layout_fits_the_window() {
     assert_eq!(layout(2, 500., 250.), None);
     assert_eq!(layout(4, 900., 250.), None);
     assert_eq!(layout(1, 100., 100.), Some(vec![vec![0]]));
+    // More than four panes grow the grid.
+    assert_eq!(
+        layout(6, 1400., 800.),
+        Some(vec![vec![0, 3], vec![1, 4], vec![2, 5]])
+    );
+    assert_eq!(grid_layout(5), vec![vec![0, 3], vec![1, 4], vec![2]]);
 }
 
 // ---------- UI flows, driven headless through gpui's test platform ----------
