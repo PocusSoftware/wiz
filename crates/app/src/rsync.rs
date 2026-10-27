@@ -141,7 +141,8 @@ fn inline(src: &Endpoint, names: &[String], dst: &Endpoint) -> String {
             Where::Remote { port: dp, .. },
         ) => {
             // Run rsync on the source server, pushing to the destination. -A forwards your
-            // local ssh-agent so the source server can authenticate to the destination.
+            // local ssh-agent so the source server can authenticate to the destination. -t gives
+            // the inner ssh a terminal for the host key and password prompts.
             let list: Vec<String> = names.iter().map(|n| q(&join(&src.dir, n))).collect();
             let dest = match &dst.at {
                 Where::Remote { user, host, .. } => {
@@ -160,7 +161,7 @@ fn inline(src: &Endpoint, names: &[String], dst: &Endpoint) -> String {
             } else {
                 format!(" -p {sp}")
             };
-            format!("ssh -A{port} {su}@{sh} {}", q(&inner))
+            format!("ssh -t -A{port} {su}@{sh} {}", q(&inner))
         }
     }
 }

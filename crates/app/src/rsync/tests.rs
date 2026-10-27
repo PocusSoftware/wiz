@@ -107,6 +107,6 @@ fn server_to_server_runs_on_source() {
         dir: "/b".into(),
     };
     let c = command(&src, &["x".into()], &dst);
-    assert!(c.starts_with("ssh -A -p 2223 u@h 'rsync -avzP "), "{c}");
+    assert!(c.starts_with("ssh -t -A -p 2223 u@h 'rsync -avzP "), "{c}");
     assert!(c.contains("d@dh:/b/"), "{c}");
 }
