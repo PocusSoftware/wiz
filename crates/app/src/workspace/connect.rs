@@ -107,7 +107,8 @@ impl Workspace {
             p.queued.push(what);
             return;
         }
-        if creds.is_none() && !secrets::ready() {
+        // Agent hosts keep nothing in the secret store, so a locked file doesn't matter.
+        if creds.is_none() && host.auth != AuthMethod::Agent && !secrets::ready() {
             if let Open::Reattach(v, _) = &what {
                 // Don't pop a dialog up on its own during an automatic reconnect.
                 v.update(cx, |v, cx| {

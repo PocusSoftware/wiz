@@ -4,6 +4,7 @@ use super::*;
 
 const OLD: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIATKfzAVZWdpymfMMyAiA5xW1xvcBk/YozBypJWkgcYF";
+const RSA: &str = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQDnSiLCVJqHnzK4G+PwM8mB8kervkVqIbKYQRBTbSWOfWL6CbjB82qac05p3X8jJOnbcgISzmp71YcwRdJu7lMVr+4l/NMNadl1JWY9+VH+1Ryohj/XMiY63o3tZMQgwL3fpvUV8kk2Ru8PKaNj+LyTL0EVuD0CFdYnPCfRqZi4fw==";
 const NEW: &str =
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkaoUjGg2CaG300B1xs1rNSxHnhuRp64WA9JOvEdD7W";
 
@@ -94,4 +95,18 @@ fn new_host_is_remembered_owner_only() {
             .mode();
         assert_eq!(mode & 0o777, 0o600);
     }
+}
+
+#[test]
+fn only_keys_of_new_algorithms_are_unknown() {
+    let dir = tempfile::tempdir().unwrap();
+    let v = verifier(dir.path(), false);
+    let old = PublicKey::from_openssh(OLD).unwrap();
+    let other_ed25519 = PublicKey::from_openssh(NEW).unwrap();
+    let rsa = PublicKey::from_openssh(RSA).unwrap();
+    // Known: left out. Same algorithm but another key: left out, never a quiet replacement.
+    let unknown = v.unknown("h.example", 22, vec![old, other_ed25519, rsa.clone()]);
+    assert_eq!(unknown, std::slice::from_ref(&rsa));
+    v.learn_proven("h.example", 22, unknown).unwrap();
+    assert!(v.unknown("h.example", 22, vec![rsa]).is_empty());
 }

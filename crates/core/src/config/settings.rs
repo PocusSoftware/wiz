@@ -98,6 +98,8 @@ pub struct Settings {
     /// Where passwords and passphrases are kept: `keychain` or `file` (encrypted
     /// `secrets.toml`, unlocked with a master password).
     pub secret_store: Option<String>,
+    /// Socket (a pipe on Windows) of the ssh-agent for agent hosts, empty for the default.
+    pub agent_socket: Option<String>,
 }
 
 macro_rules! getters {
@@ -144,6 +146,7 @@ getters! {
     connect_timeout_secs: u32 = 15;
     shortcuts: BTreeMap<String, String> = BTreeMap::new();
     secret_store: String = "keychain".into();
+    agent_socket: String = String::new();
 }
 
 impl Settings {

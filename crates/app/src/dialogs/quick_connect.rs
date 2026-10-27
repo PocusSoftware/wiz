@@ -1,8 +1,6 @@
 //! Quick connect: open a shell on `user@host:port` without adding a host first. The
 //! credentials stay in memory for the session unless "Save as host" is ticked.
 
-use std::path::PathBuf;
-
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     Render, SharedString, Window, div, prelude::*, px,
@@ -38,15 +36,6 @@ pub struct QuickConnect {
     save: bool,
     error: Option<SharedString>,
     focus: FocusHandle,
-}
-
-fn expand(p: &str) -> PathBuf {
-    match p.strip_prefix("~/") {
-        Some(rest) => std::env::home_dir()
-            .map(|h| h.join(rest))
-            .unwrap_or(PathBuf::from(p)),
-        None => PathBuf::from(p),
-    }
 }
 
 impl QuickConnect {
@@ -100,7 +89,7 @@ impl QuickConnect {
                     .find(|p| p.is_file())
                     .ok_or("No key in ~/.ssh (id_ed25519, id_ecdsa, id_rsa). Pick one.")?
             } else {
-                expand(&typed)
+                ssh_core::config::expand_home(&typed)
             };
             if !path.is_file() {
                 return Err("Private key file not found.".into());

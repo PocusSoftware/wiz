@@ -162,6 +162,43 @@ async fn key_auth_ed25519_and_encrypted_rsa() {
 }
 
 #[tokio::test]
+async fn proven_host_keys_are_remembered() {
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let v = verifier(&d, Arc::new(TrustAll));
+    let _c = Connection::connect(
+        &host(2222, AuthMethod::Password),
+        &Credentials::Password(Secret::new("hunter2").unwrap()),
+        v.clone(),
+    )
+    .await
+    .unwrap();
+    // After login OpenSSH announces its other host keys; once proven they are remembered,
+    // one line per algorithm, next to the key the connection was checked with.
+    let algorithms = || {
+        let text = std::fs::read_to_string(&v.known_hosts).unwrap_or_default();
+        let mut a: Vec<String> = text
+            .lines()
+            .filter_map(|l| l.split(' ').nth(1).map(String::from))
+            .collect();
+        a.sort();
+        a.dedup();
+        a
+    };
+    for _ in 0..50 {
+        if algorithms().len() > 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let found = algorithms();
+    assert!(found.len() > 1, "{found:?}");
+    let text = std::fs::read_to_string(&v.known_hosts).unwrap();
+    let keys = text.lines().filter(|l| !l.is_empty()).count();
+    assert_eq!(keys, found.len(), "one key per algorithm: {text}");
+}
+
+#[tokio::test]
 async fn host_key_policy() {
     gate!();
     let d = tempfile::tempdir().unwrap();

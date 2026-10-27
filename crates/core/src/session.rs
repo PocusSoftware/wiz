@@ -1,17 +1,20 @@
 //! SSH connections: connect and authenticate, run commands, open shells and SFTP.
 
-use std::sync::Arc;
+mod agent;
+
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use russh::client::{self, KeyboardInteractiveAuthResponse};
-use russh::keys::{PrivateKeyWithHashAlg, load_secret_key};
+use russh::keys::{PrivateKeyWithHashAlg, PublicKey, load_secret_key};
 use russh::{ChannelMsg, Disconnect};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::config::{AuthMethod, Host};
 use crate::hostkey::HostKeyVerifier;
 use crate::secrets::{self, Kind, Secret};
 use crate::{Error, Result};
+pub use agent::set_socket as set_agent_socket;
 
 #[derive(Clone)]
 pub enum Credentials {
@@ -20,6 +23,8 @@ pub enum Credentials {
         path: std::path::PathBuf,
         passphrase: Option<Secret>,
     },
+    /// Keys from the ssh-agent; nothing is stored.
+    Agent,
 }
 
 impl Credentials {
@@ -34,6 +39,7 @@ impl Credentials {
                 path: path.clone(),
                 passphrase: secrets::get(Kind::KeyPassphrase, &account)?,
             }),
+            AuthMethod::Agent => Ok(Credentials::Agent),
         }
     }
 }
@@ -42,6 +48,8 @@ struct Handler {
     host: String,
     port: u16,
     verifier: HostKeyVerifier,
+    /// Takes the host keys the server announces after login (`hostkeys-00@openssh.com`).
+    announced: Option<oneshot::Sender<Vec<PublicKey>>>,
 }
 
 impl client::Handler for Handler {
@@ -63,10 +71,54 @@ impl client::Handler for Handler {
             .map_err(|e| Error::Remote(e.to_string()))??;
         Ok(true)
     }
+
+    /// Hand the keys on: proving them needs the session handle, and must not be awaited here.
+    async fn openssh_ext_host_keys_announced(
+        &mut self,
+        keys: Vec<PublicKey>,
+        _: &mut client::Session,
+    ) -> Result<()> {
+        if let Some(tx) = self.announced.take() {
+            let _ = tx.send(keys);
+        }
+        Ok(())
+    }
+}
+
+/// Remember the other host keys the server proves it holds, so that when it later switches
+/// to one of them (say from RSA to ed25519) that is not reported as a changed key. Only keys
+/// of an algorithm not yet known for the host are added, never a replacement. Holds the
+/// connection only while proving, so a closed tab is never kept open by this.
+async fn learn_announced(
+    handle: Weak<client::Handle<Handler>>,
+    announced: oneshot::Receiver<Vec<PublicKey>>,
+    verifier: HostKeyVerifier,
+    host: String,
+    port: u16,
+) {
+    let Ok(keys) = announced.await else {
+        return;
+    };
+    let (v, h) = (verifier.clone(), host.clone());
+    let Ok(new) = tokio::task::spawn_blocking(move || v.unknown(&h, port, keys)).await else {
+        return;
+    };
+    if new.is_empty() {
+        return;
+    }
+    let Some(handle) = handle.upgrade() else {
+        return;
+    };
+    let proven = tokio::time::timeout(Duration::from_secs(10), handle.hostkeys_prove(new.clone()));
+    if !matches!(proven.await, Ok(Ok(()))) {
+        return;
+    }
+    drop(handle);
+    let _ = tokio::task::spawn_blocking(move || verifier.learn_proven(&host, port, new)).await;
 }
 
 pub struct Connection {
-    handle: client::Handle<Handler>,
+    handle: Arc<client::Handle<Handler>>,
     /// Address connected to, to look for FTP when the server has no SFTP.
     host: String,
 }
@@ -107,13 +159,23 @@ impl Connection {
             nodelay: true,
             ..Default::default()
         });
+        let (announced, announced_rx) = oneshot::channel();
         let handler = Handler {
             host: host.host.clone(),
             port: host.port,
-            verifier,
+            verifier: verifier.clone(),
+            announced: Some(announced),
         };
         let mut handle = client::connect(config, (host.host.as_str(), host.port), handler).await?;
         authenticate(&mut handle, &host.user, creds).await?;
+        let handle = Arc::new(handle);
+        tokio::spawn(learn_announced(
+            Arc::downgrade(&handle),
+            announced_rx,
+            verifier,
+            host.host.clone(),
+            host.port,
+        ));
         Ok(Self {
             handle,
             host: host.host.clone(),
@@ -342,7 +404,21 @@ async fn authenticate(
                 }
             }
         }
+        Credentials::Agent => {
+            let mut agent = agent::open(handle).await?;
+            let keys = agent::keys(&mut agent).await?;
+            if agent::login(handle, user, keys, &mut agent).await? {
+                Ok(())
+            } else {
+                Err(Error::AuthFailed)
+            }
+        }
         Credentials::Key { path, passphrase } => {
+            // The agent may hold this key already (unlocked, or behind Touch ID). Use it then,
+            // and fall back to the file when it isn't there or declines.
+            if agent::login_with_key_of(handle, user, path).await {
+                return Ok(());
+            }
             let passphrase = passphrase.as_ref().map(Secret::reveal);
             let key =
                 load_secret_key(path, passphrase.as_deref().map(String::as_str)).map_err(|e| {

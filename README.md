@@ -3,12 +3,12 @@
 A fast SSH client for macOS and Windows in Rust (terminal, SFTP, Docker). Frontend: GPUI. Backend in `crates/core`.
 
 ## Status
-- Done: password, key (ed25519/RSA, encrypted) and keyboard-interactive auth, Keychain secrets,
-  known_hosts verification (TOFU, hard fail on changed key), PTY shell with resize,
+- Done: password, key (ed25519/RSA, encrypted), ssh-agent and keyboard-interactive auth, Keychain secrets,
+  known_hosts verification (TOFU, hard fail on changed key, OpenSSH host key rotation), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
   (remote over SSH, local via bollard).
 - SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop, conflict prompts, rsync hint for big transfers.
-- Todo: ssh-agent, jump hosts, startup time measurement.
+- Todo: jump hosts, startup time measurement.
 
 ## Test
 ```sh
@@ -30,7 +30,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 | Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
 | Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |
-| Credentials | `secret_store` (`keychain` or `file`) |
+| Credentials | `secret_store` (`keychain` or `file`), `agent_socket` (empty for `SSH_AUTH_SOCK`, or the OpenSSH agent pipe on Windows) |
 
 The eye button in the title bar flips `hide_sensitive`.
 
@@ -52,6 +52,12 @@ Settings, Credentials picks where passwords and key passphrases are kept:
 
 The file is unlocked on first use (connecting, adding or editing a host) and stays unlocked until Wiz quits or you press "Lock now". Switching stores moves every saved secret across. The master password can't be recovered: forget it and the saved passwords are gone (the hosts stay).
 
+
+## SSH agent
+Hosts set to "SSH agent" log in with the keys in an ssh-agent, offered one by one; a key the server refuses or the agent declines (a cancelled Touch ID prompt) moves on to the next. Nothing is stored for them, so they connect while the secrets file is locked. Key file hosts ask the agent first too, but only for their own key, then read the file: a key already loaded with `ssh-add` needs no passphrase. Wiz uses `SSH_AUTH_SOCK` (the system agent, also for apps started from the Dock). Other agents, like 1Password or Secretive, need their socket under Settings, Passwords. Agent certificates aren't used yet.
+
+## Host keys
+On first contact Wiz asks whether to trust the host's key, and asks again with both fingerprints if it ever changes. After login OpenSSH servers announce their other host keys; Wiz asks the server to prove it holds them and remembers those of new key types, so a later switch (say from RSA to ed25519) isn't reported as a change. A different key for a type already known is never taken this way.
 ## Notes
 - Startup: `SSHC_TIMING=1 target/release/wiz` prints launch milestones (about 170-195 ms to first render warm).
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.

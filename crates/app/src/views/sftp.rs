@@ -104,7 +104,8 @@ impl Source {
                         ssh_core::config::AuthMethod::Key { path } => {
                             Some(path.to_string_lossy().into_owned())
                         }
-                        ssh_core::config::AuthMethod::Password => None,
+                        ssh_core::config::AuthMethod::Password
+                        | ssh_core::config::AuthMethod::Agent => None,
                     },
                 },
             },

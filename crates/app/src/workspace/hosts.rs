@@ -129,7 +129,7 @@ impl Workspace {
         let connecting = self.pending.iter().any(|p| p.account == account);
         let kind_icon = match h.auth {
             AuthMethod::Password => "server",
-            AuthMethod::Key { .. } => "key",
+            AuthMethod::Key { .. } | AuthMethod::Agent => "key",
         };
         let dot = if live {
             GREEN

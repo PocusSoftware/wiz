@@ -22,6 +22,9 @@ pub const MODIFIER_HINT: &str = "Cmd, Ctrl or Option";
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "⌘Q";
 
+/// Placeholder of the agent socket setting: what an empty one uses.
+pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
+pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add). For 1Password: ~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock";
 pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
 
 /// Shortcuts that cannot be rebound: quit, the tab bar's Ctrl+Tab and Cmd+1 to Cmd+9.

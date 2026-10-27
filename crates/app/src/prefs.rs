@@ -14,6 +14,10 @@ fn apply(s: &Settings) {
     theme::set_oled(s.oled_black());
     theme::set_accent(theme::parse_hex(&s.accent_color()).unwrap_or(theme::DEFAULT_ACCENT));
     ssh_core::secrets::set_store(ssh_core::secrets::Store::from_setting(&s.secret_store()));
+    let socket = s.agent_socket();
+    ssh_core::session::set_agent_socket(
+        (!socket.is_empty()).then(|| ssh_core::config::expand_home(&socket)),
+    );
 }
 
 pub fn init(s: Settings) {

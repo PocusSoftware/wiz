@@ -132,7 +132,7 @@ impl Workspace {
                             passphrase: Some(p),
                             ..
                         } => secrets::set(Kind::KeyPassphrase, &account, &p.reveal()),
-                        Credentials::Key { .. } => Ok(()),
+                        Credentials::Key { .. } | Credentials::Agent => Ok(()),
                     };
                     match r {
                         Ok(()) => {

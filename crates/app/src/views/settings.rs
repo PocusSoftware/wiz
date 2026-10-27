@@ -78,6 +78,7 @@ pub struct SettingsView {
     extra_mask: Entity<TextInput>,
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
+    agent_socket: Entity<TextInput>,
     /// The accent color as #RRGGBB.
     accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
@@ -110,6 +111,7 @@ impl SettingsView {
             extra_mask: make("project-name, client-name", cx),
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
+            agent_socket: make(crate::platform::AGENT_DEFAULT, cx),
             accent: make("#f05a29", cx),
             editors: crate::platform::installed_editors(),
             error: None,
@@ -123,6 +125,7 @@ impl SettingsView {
             &this.extra_mask,
             &this.patterns,
             &this.editor,
+            &this.agent_socket,
             &this.accent,
         ] {
             cx.subscribe(input, |t, _, _: &InputEvent, cx| t.sync_inputs(cx))
@@ -144,6 +147,8 @@ impl SettingsView {
         self.patterns.update(cx, |i, _| i.set_value(&pats));
         let editor = s.editor_app();
         self.editor.update(cx, |i, _| i.set_value(&editor));
+        let socket = s.agent_socket();
+        self.agent_socket.update(cx, |i, _| i.set_value(&socket));
         let accent = s.accent_color();
         self.accent.update(cx, |i, _| i.set_value(&accent));
     }
@@ -154,6 +159,7 @@ impl SettingsView {
         let extra = split_list(self.extra_mask.read(cx).value());
         let pats = split_list(self.patterns.read(cx).value());
         let editor = self.editor.read(cx).value().trim().to_string();
+        let socket = self.agent_socket.read(cx).value().trim().to_string();
         // Half-typed colors wait until they are complete.
         let accent = parse_hex(self.accent.read(cx).value());
         self.apply(cx, move |s| {
@@ -162,6 +168,7 @@ impl SettingsView {
             s.extra_mask = Some(extra.clone());
             s.secret_file_patterns = Some(pats.clone());
             s.editor_app = Some(editor);
+            s.agent_socket = Some(socket);
             if let Some(rgb) = accent {
                 s.accent_color = Some(format!("#{rgb:06x}"));
             }
@@ -415,7 +422,7 @@ impl SettingsView {
                 controls,
             ));
         }
-        d
+        d.child(self.text("SSH agent", crate::platform::AGENT_HINT, &self.agent_socket))
     }
 
     fn text(&self, label: &str, desc: &str, input: &Entity<TextInput>) -> gpui::Div {

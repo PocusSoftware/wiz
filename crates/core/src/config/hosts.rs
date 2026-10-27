@@ -14,6 +14,8 @@ pub enum AuthMethod {
     Password,
     /// Private key file. Passphrase (if any) stored in the secret store.
     Key { path: PathBuf },
+    /// Keys held by an ssh-agent (1Password, Secretive, a YubiKey, `ssh-add`).
+    Agent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

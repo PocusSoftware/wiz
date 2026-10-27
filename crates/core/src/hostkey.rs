@@ -82,6 +82,28 @@ impl HostKeyVerifier {
         }
     }
 
+    /// The keys among `keys` of an algorithm with no remembered key for the host yet. A key
+    /// already known, or a different key for a known algorithm, is left out.
+    pub fn unknown(&self, host: &str, port: u16, keys: Vec<PublicKey>) -> Vec<PublicKey> {
+        keys.into_iter()
+            .filter(|k| {
+                matches!(
+                    known_hosts::check_known_hosts_path(host, port, k, &self.known_hosts),
+                    Ok(false)
+                )
+            })
+            .collect()
+    }
+
+    /// Remember `keys` the server proved it holds. Checked again first, so a parallel
+    /// connection to the same host doesn't add them twice.
+    pub fn learn_proven(&self, host: &str, port: u16, keys: Vec<PublicKey>) -> Result<()> {
+        for k in self.unknown(host, port, keys) {
+            self.learn(host, port, &k)?;
+        }
+        Ok(())
+    }
+
     /// Remember `key` for the host, in an owner-only file (russh creates it world-readable).
     fn learn(&self, host: &str, port: u16, key: &PublicKey) -> Result<()> {
         known_hosts::learn_known_hosts_path(host, port, key, &self.known_hosts)?;

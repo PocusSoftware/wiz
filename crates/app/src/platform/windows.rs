@@ -31,6 +31,9 @@ pub const MODIFIER_HINT: &str = "Ctrl or Alt";
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
 
+/// Placeholder of the agent socket setting: what an empty one uses.
+pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
+pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent; 1Password uses that pipe too when its agent is on.";
 pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
 
 /// Plain Ctrl+D, Ctrl+W and Ctrl+K mean something to the shell, so app shortcuts add Shift,
