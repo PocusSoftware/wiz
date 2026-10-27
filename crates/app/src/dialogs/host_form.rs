@@ -146,7 +146,7 @@ impl HostForm {
                 return Err("Choose a private key file.".into());
             }
             let p = match p.strip_prefix("~/") {
-                Some(rest) => dirs::home_dir()
+                Some(rest) => std::env::home_dir()
                     .map(|h| h.join(rest))
                     .unwrap_or(PathBuf::from(&p)),
                 None => PathBuf::from(&p),

@@ -42,7 +42,7 @@ pub struct QuickConnect {
 
 fn expand(p: &str) -> PathBuf {
     match p.strip_prefix("~/") {
-        Some(rest) => dirs::home_dir()
+        Some(rest) => std::env::home_dir()
             .map(|h| h.join(rest))
             .unwrap_or(PathBuf::from(p)),
         None => PathBuf::from(p),
@@ -91,7 +91,9 @@ impl QuickConnect {
         let (auth, creds) = if self.key_mode {
             let typed = self.key_path.read(cx).value().trim().to_string();
             let path = if typed.is_empty() {
-                let ssh = dirs::home_dir().map(|h| h.join(".ssh")).unwrap_or_default();
+                let ssh = std::env::home_dir()
+                    .map(|h| h.join(".ssh"))
+                    .unwrap_or_default();
                 DEFAULT_KEYS
                     .iter()
                     .map(|k| ssh.join(k))

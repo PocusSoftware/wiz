@@ -14,7 +14,6 @@ workspace = true
 [dependencies]
 alacritty_terminal = "0.26"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-dirs = "7.0.0"
 gpui = "0.2.2"
 ssh-core = { path = "../core" }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }

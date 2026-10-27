@@ -209,7 +209,7 @@ const KNOWN_EDITORS: &[&str] = &[
 
 /// Known editors found in the Applications folders.
 pub fn installed_editors() -> Vec<&'static str> {
-    let user = dirs::home_dir().map(|h| h.join("Applications"));
+    let user = std::env::home_dir().map(|h| h.join("Applications"));
     KNOWN_EDITORS
         .iter()
         .copied()
