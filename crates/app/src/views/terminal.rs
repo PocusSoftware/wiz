@@ -256,7 +256,7 @@ impl TerminalView {
         }
     }
 
-    fn paste(&mut self, text: &str, cx: &mut Context<Self>) {
+    pub fn paste(&mut self, text: &str, cx: &mut Context<Self>) {
         let mut out = Vec::new();
         let bracketed = self.term.term.mode().contains(TermMode::BRACKETED_PASTE);
         if bracketed {

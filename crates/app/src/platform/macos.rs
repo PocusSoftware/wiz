@@ -58,6 +58,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
         "prev_tab" => "cmd-shift-[",
         "focus_tabs" => "cmd-l",
         "quick_connect" => "cmd-k",
+        "snippets" => "cmd-j",
         "new_host" => "cmd-n",
         "settings" => "cmd-,",
         "close_tab" => "cmd-w",

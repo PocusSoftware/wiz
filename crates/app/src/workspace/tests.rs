@@ -147,6 +147,14 @@ fn quick_connect_dialog_validates_input(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn snippets_need_a_terminal_in_front(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.dispatch_action(Snippets);
+    assert!(root.read_with(cx, |r, _| r.snippet_picker.is_none() && r.status.is_some()));
+}
+
+#[gpui::test]
 fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {

@@ -21,7 +21,9 @@ use gpui::{
     App, Application, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size,
 };
 
-use workspace::{CloseTab, NewHost, OpenSettings, QuickConnect, Quit, SplitPane, Workspace};
+use workspace::{
+    CloseTab, NewHost, OpenSettings, QuickConnect, Quit, Snippets, SplitPane, Workspace,
+};
 
 /// "0.1.0 (abc1234)": the workspace version plus the commit it was built from, when known.
 pub fn version() -> String {
@@ -88,6 +90,7 @@ fn main() {
                     MenuItem::action("Settings...", OpenSettings),
                     MenuItem::action("New Host", NewHost),
                     MenuItem::action("Quick Connect...", QuickConnect),
+                    MenuItem::action("Snippets...", Snippets),
                     MenuItem::action("Split Terminal", SplitPane),
                     MenuItem::action("Close Tab", CloseTab),
                     MenuItem::separator(),

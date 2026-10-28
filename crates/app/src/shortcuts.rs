@@ -9,7 +9,7 @@ use gpui::{App, KeyBinding, Keystroke};
 use crate::platform;
 use crate::workspace::{
     CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
-    SplitMenu, SplitPane, TabMenu,
+    Snippets, SplitMenu, SplitPane, TabMenu,
 };
 
 /// Commands the user can rebind: id (the key in `settings.toml`) and the name shown.
@@ -23,6 +23,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("prev_tab", "Previous tab"),
     ("focus_tabs", "Focus the tab bar"),
     ("quick_connect", "Quick connect"),
+    ("snippets", "Snippets"),
     ("new_host", "New host"),
     ("settings", "Settings"),
     ("close_tab", "Close tab or pane"),
@@ -70,6 +71,7 @@ fn binding(id: &str, keys: &str) -> Option<KeyBinding> {
         "prev_tab" => KeyBinding::new(keys, PrevTab, None),
         "focus_tabs" => KeyBinding::new(keys, FocusTabs, None),
         "quick_connect" => KeyBinding::new(keys, QuickConnect, None),
+        "snippets" => KeyBinding::new(keys, Snippets, None),
         "new_host" => KeyBinding::new(keys, NewHost, None),
         "settings" => KeyBinding::new(keys, OpenSettings, None),
         "close_tab" => KeyBinding::new(keys, CloseTab, None),

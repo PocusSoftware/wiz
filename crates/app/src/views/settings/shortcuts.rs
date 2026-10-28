@@ -18,7 +18,10 @@ pub(super) const GROUPS: &[(&str, &[&str])] = &[
             "close_tab",
         ],
     ),
-    ("App", &["quick_connect", "new_host", "settings"]),
+    (
+        "App",
+        &["quick_connect", "snippets", "new_host", "settings"],
+    ),
 ];
 
 /// A shortcut as one cap per key: "⇧⌘D" gives ⇧ ⌘ D, "Ctrl+Shift+D" gives Ctrl Shift D.

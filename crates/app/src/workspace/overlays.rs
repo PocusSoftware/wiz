@@ -5,6 +5,8 @@
 use gpui::{MouseButton, MouseDownEvent};
 use ssh_core::config::WindowControls;
 
+use crate::dialogs::snippets::SnippetEvent;
+
 use super::*;
 
 /// What a click outside a dialog does.
@@ -158,6 +160,16 @@ impl Workspace {
                 }))),
             )
         });
+        let snippets = self.snippet_picker.clone().map(|f| {
+            let cancel = f.clone();
+            overlay(
+                "snippets",
+                f.into_any_element(),
+                Some(Box::new(cx.listener(move |_, _, _, cx| {
+                    cancel.update(cx, |_, cx| cx.emit(SnippetEvent::Cancelled))
+                }))),
+            )
+        });
         // No dismissing by a click outside: that would cancel the login by accident.
         let code = self
             .code
@@ -302,6 +314,7 @@ impl Workspace {
             trust_dialog.map(IntoElement::into_any_element),
             form.map(IntoElement::into_any_element),
             quick_form.map(IntoElement::into_any_element),
+            snippets.map(IntoElement::into_any_element),
             unlock.map(IntoElement::into_any_element),
             code.map(IntoElement::into_any_element),
             confirm_dialog.map(IntoElement::into_any_element),

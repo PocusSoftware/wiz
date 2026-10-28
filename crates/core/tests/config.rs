@@ -209,3 +209,35 @@ fn parse_targets() {
     assert!(p("-i key h").is_err());
     assert!(p("h:22 -p 23").is_err());
 }
+
+#[test]
+fn snippets_roundtrip_and_validate() {
+    use ssh_core::config::{Snippet, Snippets};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("snippets.toml");
+    assert!(Snippets::load(&path).unwrap().items.is_empty());
+
+    let s = Snippets {
+        items: vec![Snippet {
+            name: "Disk".into(),
+            command: "df -h\ndu -sh *".into(),
+        }],
+    };
+    s.save(&path).unwrap();
+    assert_eq!(Snippets::load(&path).unwrap().items, s.items);
+
+    let check = |name: &str, command: &str| {
+        Snippet {
+            name: name.into(),
+            command: command.into(),
+        }
+        .validate()
+    };
+    assert!(check("Disk", "df -h\n\tdu").is_ok());
+    assert!(check(" ", "ls").is_err());
+    assert!(check("a\nb", "ls").is_err());
+    assert!(check("Disk", "  ").is_err());
+    // Ctrl+C and Escape would act as keystrokes in the shell, not text.
+    assert!(check("Disk", "ls\x03").is_err());
+    assert!(check("Disk", "ls\x1b[A").is_err());
+}

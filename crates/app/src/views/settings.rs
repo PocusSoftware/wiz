@@ -4,6 +4,7 @@ mod accent;
 mod nav;
 mod pages;
 mod shortcuts;
+mod snippets;
 #[cfg(test)]
 mod tests;
 
@@ -11,10 +12,11 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
     KeyDownEvent, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{Settings, WindowControls};
+use ssh_core::config::{Settings, Snippet, WindowControls};
 use ssh_core::secrets::{self, Store};
 
 use crate::prefs;
+use crate::privacy;
 use crate::theme::*;
 use crate::widgets::input::{InputEvent, TextInput};
 use crate::widgets::{button, checkbox, icon_button, keyboard, primary_button, tip};
@@ -40,6 +42,7 @@ pub enum Category {
     Privacy,
     Passwords,
     Shortcuts,
+    Snippets,
     Files,
     LogsDocker,
     TerminalNetwork,
@@ -47,11 +50,12 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 8] = [
+    pub const ALL: [Category; 9] = [
         Category::Appearance,
         Category::Privacy,
         Category::Passwords,
         Category::Shortcuts,
+        Category::Snippets,
         Category::Files,
         Category::LogsDocker,
         Category::TerminalNetwork,
@@ -64,6 +68,7 @@ impl Category {
             Category::Privacy => "Privacy",
             Category::Passwords => "Passwords",
             Category::Shortcuts => "Shortcuts",
+            Category::Snippets => "Snippets",
             Category::Files => "Files (SFTP)",
             Category::LogsDocker => "Logs and Docker",
             Category::TerminalNetwork => "Terminal and network",
@@ -97,6 +102,11 @@ pub struct SettingsView {
     recording: Option<(&'static str, gpui::Subscription)>,
     /// Why the last typed shortcut was refused.
     shortcut_note: Option<SharedString>,
+    snippets: Vec<Snippet>,
+    snippet_name: Entity<TextInput>,
+    snippet_command: Entity<TextInput>,
+    /// Index of the snippet the form is editing, `None` when it adds a new one.
+    editing: Option<usize>,
 }
 
 fn split_list(s: &str) -> Vec<String> {
@@ -111,7 +121,7 @@ impl SettingsView {
         let make = |placeholder: &str, cx: &mut Context<Self>| {
             cx.new(|cx| TextInput::new(placeholder, false, cx))
         };
-        let this = Self {
+        let mut this = Self {
             focus: cx.focus_handle(),
             category: Category::Appearance,
             ui_font: make("IBM Plex Sans", cx),
@@ -128,8 +138,13 @@ impl SettingsView {
             error: None,
             recording: None,
             shortcut_note: None,
+            snippets: Vec::new(),
+            snippet_name: make("Disk usage", cx),
+            snippet_command: make("df -h", cx),
+            editing: None,
         };
         this.load_inputs(cx);
+        this.load_snippets();
         cx.subscribe(&this.shortcut_search, |_, _, _: &InputEvent, cx| {
             cx.notify()
         })

@@ -9,6 +9,7 @@ mod latency;
 mod overlays;
 mod reconnect;
 mod sessions;
+mod snippets;
 mod split;
 mod tab_menu;
 mod tabs;
@@ -38,6 +39,7 @@ use tokio::sync::oneshot;
 use crate::dialogs::code::{CodeDialog, CodeEvent};
 use crate::dialogs::host_form::{FormEvent, HostForm};
 use crate::dialogs::quick_connect::{QuickConnect as QuickDialog, QuickEvent};
+use crate::dialogs::snippets::SnippetPicker;
 use crate::dialogs::unlock::{UnlockDialog, UnlockEvent, UnlockMode};
 use crate::privacy;
 use crate::runtime;
@@ -64,6 +66,7 @@ actions!(
         SplitMenu,
         TabMenu,
         QuickConnect,
+        Snippets,
         FocusTabs,
         NextPane,
         PrevPane
@@ -222,6 +225,7 @@ pub struct Workspace {
     /// for them, so a dropped terminal can reconnect.
     quick: HashMap<String, (Host, Credentials)>,
     quick_form: Option<Entity<QuickDialog>>,
+    snippet_picker: Option<Entity<SnippetPicker>>,
     /// Master password dialog, and what to do once it succeeds.
     unlock: Option<Entity<UnlockDialog>>,
     after_unlock: Option<AfterUnlock>,
@@ -350,6 +354,7 @@ impl Workspace {
             cfg,
             quick: HashMap::new(),
             quick_form: None,
+            snippet_picker: None,
             unlock: None,
             after_unlock: None,
             cfg_path,
@@ -638,6 +643,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|t, a: &SelectTab, w, cx| t.select_tab(a.0, w, cx)))
             .on_action(cx.listener(|t, _: &NewHost, w, cx| t.open_form(None, w, cx)))
             .on_action(cx.listener(|t, _: &QuickConnect, w, cx| t.open_quick(w, cx)))
+            .on_action(cx.listener(|t, _: &Snippets, w, cx| t.open_snippets(w, cx)))
             .on_action(cx.listener(|t, _: &OpenSettings, w, cx| t.toggle_settings(w, cx)))
             .on_action(cx.listener(|t, _: &FocusTabs, w, cx| t.focus_tabs(w, cx)))
             .on_action(cx.listener(|t, _: &FocusNext, w, cx| t.move_focus(false, w, cx)))

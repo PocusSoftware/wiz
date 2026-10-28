@@ -46,6 +46,9 @@ Everything works without a mouse. Tab and Shift+Tab, or the arrow keys, move bet
 ## Quick connect
 ⌘K, the arrow button in the title bar, or the card on the hosts page. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.
 
+## Snippets
+Save commands you type often under Settings, Snippets (stored in `snippets.toml` next to `hosts.toml`). ⌘J (Ctrl+Shift+J on Windows) opens a picker over the terminal in front: type to filter, arrows and Enter to pick. The command is pasted without Enter, so you can read it before running it. Multi-line commands go in the file by hand.
+
 ## Credentials: Keychain or encrypted file
 Settings, Credentials picks where passwords and key passphrases are kept:
 - Keychain (default): macOS Keychain.
@@ -75,7 +78,7 @@ On first contact Wiz asks whether to trust the host's key, and asks again with b
 
 ## macOS and Windows
 macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
-- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+S split with another server, Ctrl+Shift+M tab menu, Ctrl+Shift+K quick connect, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
+- Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+S split with another server, Ctrl+Shift+M tab menu, Ctrl+Shift+K quick connect, Ctrl+Shift+J snippets, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
 - Missing on purpose: the Keychain (passwords always live in the encrypted secrets file), rsync transfers and the rsync hint (files go over SFTP), and the installed-editor picks (the editor setting takes a program name or path; empty opens Notepad, never the file's default app).
 - Build on Windows with `cargo build --release -p ssh-app` (gives `target\release\wiz.exe`), or run the "Windows build" workflow (`gh workflow run windows.yml`), which tests on Windows and uploads `Wiz.exe` as an artifact. Release builds compile GPUI's shaders with `fxc.exe` from the Windows SDK. From a Mac, `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu` checks the Windows side (needs `brew install mingw-w64` and `rustup target add x86_64-pc-windows-gnu`).
 
@@ -86,7 +89,7 @@ macOS is the main platform. Everything that differs lives in `crates/app/src/pla
 - SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).
 
 ## Data locations
-Hosts, known hosts and settings live in `~/Library/Application Support/software.pocus.wiz/` on macOS and `%APPDATA%\software.pocus.wiz\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
+Hosts, snippets, known hosts and settings live in `~/Library/Application Support/software.pocus.wiz/` on macOS and `%APPDATA%\software.pocus.wiz\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
 
 ## Versioning
 The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scripts/version.sh` prints it, `scripts/version.sh 0.2.0` sets it; then commit and tag `v0.2.0`. The app shows the version and build commit at the bottom of Settings, and `scripts/bundle.sh` writes it into `Info.plist` (build number = commit count).

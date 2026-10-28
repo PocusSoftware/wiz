@@ -16,6 +16,7 @@ impl Workspace {
             || self.code.is_some()
             || self.form.is_some()
             || self.quick_form.is_some()
+            || self.snippet_picker.is_some()
             || self.unlock.is_some()
             || self.confirm.is_some()
             || self.confirm_delete.is_some()

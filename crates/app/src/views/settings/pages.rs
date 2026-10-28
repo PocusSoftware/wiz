@@ -48,6 +48,7 @@ impl SettingsView {
             }
             Category::Passwords => d.child(self.credentials(cx)),
             Category::Shortcuts => d.child(self.shortcut_rows(cx)),
+            Category::Snippets => d.child(self.snippet_rows(cx)),
             Category::Files => d
                 .child(self.toggle("f-dot", "Show dotfiles by default", "Initial state of the eye button in each pane.", s.show_dotfiles(), |s, v| s.show_dotfiles = Some(v), cx))
                 .child(self.choice("f-limit", "Transfer speed limit", "For SFTP and rsync transfers. Changes apply to running transfers too.", s.transfer_limit_kbps(), &[0, 128, 256, 512, 1024, 2048, 5120, 10240, 25600, 51200, 102400], |v| match v {

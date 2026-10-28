@@ -68,6 +68,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
         "prev_pane" => "alt-left",
         "focus_tabs" => "ctrl-shift-l",
         "quick_connect" => "ctrl-shift-k",
+        "snippets" => "ctrl-shift-j",
         "new_host" => "ctrl-shift-n",
         "settings" => "ctrl-,",
         "close_tab" => "ctrl-shift-w",
