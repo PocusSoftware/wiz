@@ -250,6 +250,20 @@ impl TerminalView {
         self.term.link_at(pt.line.0, pt.column.0)
     }
 
+    /// Copies the selection to the clipboard; false when nothing is selected.
+    fn copy_selection(&self, cx: &mut Context<Self>) -> bool {
+        let Some(s) = self
+            .term
+            .term
+            .selection_to_string()
+            .filter(|s| !s.is_empty())
+        else {
+            return false;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(s));
+        true
+    }
+
     fn paste_clipboard(&mut self, cx: &mut Context<Self>) {
         if let Some(t) = cx.read_from_clipboard().and_then(|c| c.text()) {
             self.paste(&t, cx);
@@ -331,6 +345,19 @@ impl Render for TerminalView {
                     this.term.term.selection = Some(Selection::new(ty, p, side));
                     this.selecting = true;
                     cx.notify();
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                    window.focus(&this.focus);
+                    // Right click copies a selection, otherwise pastes.
+                    if this.copy_selection(cx) {
+                        this.term.term.selection = None;
+                        cx.notify();
+                    } else {
+                        this.paste_clipboard(cx);
+                    }
                 }),
             )
             .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {

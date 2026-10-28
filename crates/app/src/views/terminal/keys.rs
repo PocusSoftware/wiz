@@ -108,9 +108,7 @@ impl TerminalView {
         if let Some(variant) = crate::platform::terminal_chord(*m) {
             match (k.key.as_str(), variant) {
                 ("c", false) => {
-                    if let Some(s) = self.term.term.selection_to_string() {
-                        cx.write_to_clipboard(ClipboardItem::new_string(s));
-                    }
+                    self.copy_selection(cx);
                     cx.stop_propagation();
                 }
                 ("a", false) => {
