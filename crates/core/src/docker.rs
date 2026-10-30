@@ -96,6 +96,7 @@ impl Local {
         let opts = LogsOptionsBuilder::default()
             .stdout(true)
             .stderr(true)
+            .timestamps(true)
             .tail(&tail.to_string())
             .build();
         let mut stream = self.docker.logs(id, Some(opts));
@@ -198,7 +199,7 @@ impl<'a> Remote<'a> {
         let id = check_ref(id)?;
         let out = self
             .conn
-            .exec(&format!("docker logs --tail {tail} {id} 2>&1"))
+            .exec(&format!("docker logs --timestamps --tail {tail} {id} 2>&1"))
             .await?;
         Ok(out.stdout_str())
     }

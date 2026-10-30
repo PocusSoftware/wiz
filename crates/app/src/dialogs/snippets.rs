@@ -12,7 +12,7 @@ use ssh_core::config::{Snippet, Snippets};
 use crate::privacy;
 use crate::theme::*;
 use crate::widgets::input::{InputEvent, TextInput};
-use crate::widgets::{icon_button, keyboard};
+use crate::widgets::{button, icon_button, keyboard, primary_button};
 
 pub enum SnippetEvent {
     /// The command to paste (without Enter, so it can be read first).
@@ -28,6 +28,10 @@ pub struct SnippetPicker {
     /// Row highlighted among the matches.
     selected: usize,
     error: Option<SharedString>,
+    /// Showing the form to add a snippet instead of the list.
+    adding: bool,
+    name: Entity<TextInput>,
+    command: Entity<TextInput>,
     focus: FocusHandle,
 }
 
@@ -61,11 +65,16 @@ impl SnippetPicker {
             cx.notify();
         })
         .detach();
+        let name = cx.new(|cx| TextInput::new("Name", false, cx));
+        let command = cx.new(|cx| TextInput::new("Command", false, cx));
         Self {
             items,
             filter,
             selected: 0,
             error,
+            adding: false,
+            name,
+            command,
             focus: cx.focus_handle(),
         }
     }
@@ -82,6 +91,46 @@ impl SnippetPicker {
         if let Some(&i) = self.matches(cx).get(row) {
             cx.emit(SnippetEvent::Paste(self.items[i].command.clone()));
         }
+    }
+
+    fn start_adding(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.adding = true;
+        self.error = None;
+        window.focus(&self.name.focus_handle(cx));
+        cx.notify();
+    }
+
+    fn stop_adding(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.adding = false;
+        self.error = None;
+        window.focus(&self.filter.focus_handle(cx));
+        cx.notify();
+    }
+
+    /// Save the typed snippet and go back to the list.
+    fn save_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let snippet = Snippet {
+            name: self.name.read(cx).value().trim().to_string(),
+            command: self.command.read(cx).value().trim().to_string(),
+        };
+        if let Err(e) = snippet.validate() {
+            self.error = Some(e.into());
+            cx.notify();
+            return;
+        }
+        let mut list = Snippets {
+            items: self.items.clone(),
+        };
+        list.items.push(snippet);
+        if let Err(e) = Snippets::default_path().and_then(|p| list.save(&p)) {
+            self.error = Some(format!("Could not save snippets: {e}").into());
+            cx.notify();
+            return;
+        }
+        self.items = list.items;
+        self.name.update(cx, |i, _| i.set_value(""));
+        self.command.update(cx, |i, _| i.set_value(""));
+        self.stop_adding(window, cx);
     }
 
     fn step(&mut self, down: bool, cx: &mut Context<Self>) {
@@ -104,6 +153,7 @@ impl Focusable for SnippetPicker {
 impl Render for SnippetPicker {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let matches = self.matches(cx);
+        let adding = self.adding;
         let selected = self.selected.min(matches.len().saturating_sub(1));
         let rows = matches.iter().enumerate().map(|(row, &i)| {
             let s = &self.items[i];
@@ -141,12 +191,14 @@ impl Render for SnippetPicker {
         div()
             .id("snippet-picker")
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
-                match ev.keystroke.key.as_str() {
-                    "enter" => t.paste(t.selected, cx),
-                    "down" => t.step(true, cx),
-                    "up" => t.step(false, cx),
-                    "escape" => cx.emit(SnippetEvent::Cancelled),
+            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, window, cx| {
+                match (t.adding, ev.keystroke.key.as_str()) {
+                    (true, "enter") => t.save_new(window, cx),
+                    (true, "escape") => t.stop_adding(window, cx),
+                    (false, "enter") => t.paste(t.selected, cx),
+                    (false, "down") => t.step(true, cx),
+                    (false, "up") => t.step(false, cx),
+                    (false, "escape") => cx.emit(SnippetEvent::Cancelled),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -166,15 +218,39 @@ impl Render for SnippetPicker {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_sm().child("Snippets"))
+                    .child(div().text_sm().child(if adding {
+                        "New snippet"
+                    } else {
+                        "Snippets"
+                    }))
                     .child(
                         icon_button("snip-close", "x", "Close (Esc)", MUTED)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(SnippetEvent::Cancelled))),
                     ),
             )
-            .child(self.filter.clone())
-            .child(
+            .when(adding, |d| {
+                d.child(self.name.clone())
+                    .child(self.command.clone())
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(
+                                button("snip-new-cancel", "Cancel").on_click(cx.listener(
+                                    |t, _, window, cx| t.stop_adding(window, cx),
+                                )),
+                            )
+                            .child(
+                                primary_button("snip-new-save", "Save").on_click(cx.listener(
+                                    |t, _, window, cx| t.save_new(window, cx),
+                                )),
+                            ),
+                    )
+            })
+            .when(!adding, |d| d.child(self.filter.clone()))
+            .when(!adding, |d| d.child(
                 div()
                     .id("snippet-list")
                     .max_h(px(280.))
@@ -194,12 +270,20 @@ impl Render for SnippetPicker {
                                 }),
                         )
                     }),
-            )
+            ))
+            .when(!adding, |d| {
+                d.child(
+                    button("snip-new", "New snippet")
+                        .on_click(cx.listener(|t, _, window, cx| t.start_adding(window, cx))),
+                )
+            })
             .when_some(self.error.clone(), |d, e| {
                 d.child(div().text_xs().text_color(c(RED)).child(e))
             })
-            .child(div().text_xs().text_color(c(PLACEHOLDER)).child(
-                "Enter pastes the command. It is not run until you press Enter in the terminal.",
-            ))
+            .when(!adding, |d| {
+                d.child(div().text_xs().text_color(c(PLACEHOLDER)).child(
+                    "Enter pastes the command. It is not run until you press Enter in the terminal.",
+                ))
+            })
     }
 }

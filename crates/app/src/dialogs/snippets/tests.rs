@@ -49,3 +49,25 @@ fn picker_pastes_the_chosen_command_without_enter(cx: &mut gpui::TestAppContext)
     });
     assert_eq!(*pasted.borrow(), vec!["journalctl -f".to_string()]);
 }
+
+#[gpui::test]
+fn picker_saves_a_new_snippet(cx: &mut gpui::TestAppContext) {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = tempfile::tempdir().unwrap();
+    // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
+    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+
+    let (picker, cx) = cx.add_window_view(|_, cx| SnippetPicker::new(cx));
+    picker.update_in(cx, |p, window, cx| {
+        p.start_adding(window, cx);
+        p.name.update(cx, |i, _| i.set_value("Disk usage"));
+        p.command.update(cx, |i, _| i.set_value("df -h"));
+        p.save_new(window, cx);
+        assert!(!p.adding);
+        assert_eq!(p.items, vec![snip("Disk usage", "df -h")]);
+    });
+    let saved = Snippets::load(&Snippets::default_path().unwrap()).unwrap();
+    assert_eq!(saved.items, vec![snip("Disk usage", "df -h")]);
+}
