@@ -63,6 +63,36 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
+/// Chars in a compacted timestamp prefix, `[HH:MM:SS]`.
+const TS_LEN: usize = 10;
+
+/// Turn Docker's leading RFC 3339 timestamp into `[HH:MM:SS] `, or keep the line as is.
+fn compact_timestamp(line: &str) -> String {
+    let Some((stamp, rest)) = line.split_once(' ') else {
+        return line.to_string();
+    };
+    let time = stamp
+        .split_once('T')
+        .and_then(|(_, t)| t.get(..8))
+        .filter(|t| {
+            t.bytes().enumerate().all(|(i, b)| {
+                matches!(i, 2 | 5) == (b == b':') && (b == b':' || b.is_ascii_digit())
+            })
+        });
+    match time {
+        Some(t) if stamp.ends_with('Z') => format!("[{t}] {rest}"),
+        _ => line.to_string(),
+    }
+}
+
+/// Length of the `[HH:MM:SS]` prefix `compact_timestamp` made, or 0.
+fn timestamp_len(line: &str) -> usize {
+    match line.as_bytes() {
+        [b'[', _, _, b':', _, _, b':', _, _, b']', b' ', ..] => TS_LEN,
+        _ => 0,
+    }
+}
+
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '-'
 }
@@ -111,7 +141,10 @@ impl LogView {
             this.update(cx, |t, cx| {
                 match r {
                     Ok(text) => {
-                        let lines: Vec<String> = text.lines().map(strip_ansi).collect();
+                        let lines: Vec<String> = text
+                            .lines()
+                            .map(|l| compact_timestamp(&strip_ansi(l)))
+                            .collect();
                         t.error = None;
                         if lines != t.lines {
                             t.lines = lines;
@@ -264,6 +297,19 @@ impl LogView {
                     let e = if ix == l1 { c1 } else { chars.len() + 1 };
                     Some((s.min(chars.len()), e.min(chars.len() + 1).max(s)))
                 });
+                let ts = timestamp_len(&line);
+                // A run of the line's chars, with the timestamp part greyed out.
+                let seg = |from: usize, to: usize| {
+                    let cut = ts.clamp(from, to);
+                    div()
+                        .flex()
+                        .child(
+                            div()
+                                .text_color(c(PLACEHOLDER))
+                                .child(chars[from..cut].iter().collect::<String>()),
+                        )
+                        .child(chars[cut..to].iter().collect::<String>())
+                };
                 let mut row = div()
                     .id(("log", ix))
                     .w_full()
@@ -288,20 +334,16 @@ impl LogView {
                 row = match hl {
                     Some((s, e)) if e > s || chars.is_empty() => {
                         let end = e.min(chars.len());
-                        row.child(chars[..s].iter().collect::<String>())
+                        row.child(seg(0, s))
                             .child(
-                                div()
+                                seg(s, end)
                                     .bg(accent_alpha(0.4))
                                     // A selected line break shows as a trailing space.
-                                    .child(format!(
-                                        "{}{}",
-                                        chars[s..end].iter().collect::<String>(),
-                                        if e > chars.len() { " " } else { "" }
-                                    )),
+                                    .child(if e > chars.len() { " " } else { "" }),
                             )
-                            .child(chars[end..].iter().collect::<String>())
+                            .child(seg(end, chars.len()))
                     }
-                    _ => row.child(line),
+                    _ => row.child(seg(0, chars.len())),
                 };
                 row
             })
