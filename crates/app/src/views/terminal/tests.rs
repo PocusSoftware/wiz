@@ -1,7 +1,8 @@
 //! Tests for `terminal`.
 
-use gpui::Modifiers;
+use gpui::{Modifiers, px};
 
+use super::autoscroll_lines;
 use super::keys::key_bytes;
 
 fn alt() -> Modifiers {
@@ -49,4 +50,14 @@ fn space_bar() {
     };
     assert_eq!(key_bytes("space", None, ctrl, false).unwrap(), b"\0");
     assert_eq!(key_bytes("space", None, alt(), false).unwrap(), b"\x1b ");
+}
+
+#[test]
+fn autoscroll_follows_the_mouse_past_the_edges() {
+    let (top, height, cell) = (px(100.), px(400.), px(20.));
+    assert_eq!(autoscroll_lines(px(300.), top, height, cell), 0);
+    assert_eq!(autoscroll_lines(px(90.), top, height, cell), 1);
+    assert_eq!(autoscroll_lines(px(510.), top, height, cell), -1);
+    assert_eq!(autoscroll_lines(px(-500.), top, height, cell), 5);
+    assert_eq!(autoscroll_lines(px(900.), top, height, cell), -5);
 }

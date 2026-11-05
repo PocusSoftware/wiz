@@ -63,6 +63,23 @@ pub struct TerminalView {
     selecting: bool,
 }
 
+/// How often a drag past the top or bottom edge scrolls.
+const AUTOSCROLL_EVERY: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// Lines to scroll while dragging a selection at height `y` over a grid starting at `top`
+/// and `height` tall: positive scrolls up into history, farther out scrolls faster.
+fn autoscroll_lines(y: Pixels, top: Pixels, height: Pixels, cell_h: Pixels) -> i32 {
+    let past = if y < top {
+        top - y
+    } else if y > top + height {
+        top + height - y
+    } else {
+        return 0;
+    };
+    let lines = (past / cell_h).abs().ceil().min(5.) as i32;
+    if past > px(0.) { lines } else { -lines }
+}
+
 pub enum TerminalEvent {
     TitleChanged,
     /// The shell ended, with its exit status if the server sent one: either it exited, or the
@@ -245,6 +262,50 @@ impl TerminalView {
         (GridPoint::new(Line(row as i32 - off), Column(col)), side)
     }
 
+    /// While a selection drag is held, scroll when the mouse is above or below the grid and
+    /// extend the selection. Mouse move events stop at the edge, so this polls the position.
+    fn autoscroll_selection(&self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor().timer(AUTOSCROLL_EVERY).await;
+                let Ok(true) = this.update_in(cx, |t, window, cx| {
+                    if !t.selecting {
+                        return false;
+                    }
+                    let pos = window.mouse_position();
+                    let height = t.cell_h * t.rows as f32;
+                    let lines = autoscroll_lines(pos.y, t.origin.y, height, t.cell_h);
+                    if lines != 0 {
+                        t.term.term.scroll_display(Scroll::Delta(lines));
+                        let (p, side) = t.grid_point(pos);
+                        if let Some(sel) = t.term.term.selection.as_mut() {
+                            sel.update(p, side);
+                        }
+                        cx.notify();
+                    }
+                    true
+                }) else {
+                    return;
+                };
+            }
+        })
+        .detach();
+    }
+
+    /// The left button went up: stop selecting and drop an empty selection (a plain click).
+    fn end_selection(&mut self, cx: &mut Context<Self>) {
+        self.selecting = false;
+        if self
+            .term
+            .term
+            .selection_to_string()
+            .is_none_or(|s| s.is_empty())
+        {
+            self.term.term.selection = None;
+        }
+        cx.notify();
+    }
+
     fn link_under(&self, p: Point<Pixels>) -> Option<Link> {
         let (pt, _) = self.grid_point(p);
         self.term.link_at(pt.line.0, pt.column.0)
@@ -344,6 +405,7 @@ impl Render for TerminalView {
                     };
                     this.term.term.selection = Some(Selection::new(ty, p, side));
                     this.selecting = true;
+                    this.autoscroll_selection(window, cx);
                     cx.notify();
                 }),
             )
@@ -380,19 +442,11 @@ impl Render for TerminalView {
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| {
-                    this.selecting = false;
-                    // A plain click leaves an empty selection behind.
-                    if this
-                        .term
-                        .term
-                        .selection_to_string()
-                        .is_none_or(|s| s.is_empty())
-                    {
-                        this.term.term.selection = None;
-                    }
-                    cx.notify();
-                }),
+                cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_selection(cx)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_selection(cx)),
             )
             .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
                 let lines = (ev.delta.pixel_delta(this.cell_h).y / this.cell_h).round() as i32;
