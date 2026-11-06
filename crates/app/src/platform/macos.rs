@@ -19,6 +19,9 @@ pub const RSYNC: bool = true;
 /// Modifiers a shortcut must hold, for settings text.
 pub const MODIFIER_HINT: &str = "Cmd, Ctrl or Option";
 
+/// How gpui spells keystrokes here (`cmd-` rather than `ctrl-`).
+pub const OS: gpui::OperatingSystem = gpui::OperatingSystem::Mac;
+
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "⌘Q";
 
@@ -27,6 +30,11 @@ pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
 pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add). For 1Password: ~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock";
 pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
 
+/// Cmd+1 to Cmd+9, which pick a tab. Literals because gpui only builds bindings from `&'static str`.
+const DIGITS: [&str; 9] = [
+    "cmd-1", "cmd-2", "cmd-3", "cmd-4", "cmd-5", "cmd-6", "cmd-7", "cmd-8", "cmd-9",
+];
+
 /// Shortcuts that cannot be rebound: quit, the tab bar's Ctrl+Tab and Cmd+1 to Cmd+9.
 pub fn fixed_bindings() -> Vec<KeyBinding> {
     let mut keys = vec![
@@ -34,16 +42,18 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
     ];
-    keys.extend((1..=9).map(|n| KeyBinding::new(&format!("cmd-{n}"), SelectTab(n - 1), None)));
+    keys.extend(
+        DIGITS
+            .into_iter()
+            .enumerate()
+            .map(|(n, k)| KeyBinding::new(k, SelectTab(n), None)),
+    );
     keys
 }
 
 /// Whether `keys` is one of `fixed_bindings`.
 pub fn is_fixed(keys: &str) -> bool {
-    matches!(keys, "cmd-q" | "ctrl-tab" | "ctrl-shift-tab")
-        || keys
-            .strip_prefix("cmd-")
-            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+    matches!(keys, "cmd-q" | "ctrl-tab" | "ctrl-shift-tab") || DIGITS.contains(&keys)
 }
 
 /// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`).
@@ -68,7 +78,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
 
 /// Keystrokes written the Mac way: "cmd-shift-d" is "⇧⌘D".
 pub fn format_keys(keys: &str) -> String {
-    let Ok(k) = gpui::Keystroke::parse(keys) else {
+    let Ok(k) = gpui::Keystroke::parse_with_os(keys, OS) else {
         return keys.to_string();
     };
     let m = k.modifiers;

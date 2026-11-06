@@ -23,7 +23,7 @@ impl Workspace {
             cx.notify();
         })
         .detach();
-        picker.read(cx).focus_first(window, cx);
+        picker.update(cx, |d, cx| d.focus_first(window, cx));
         self.snippet_picker = Some(picker);
         cx.notify();
     }

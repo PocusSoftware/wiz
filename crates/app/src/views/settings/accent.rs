@@ -3,7 +3,7 @@
 use std::{cell::Cell, rc::Rc};
 
 use gpui::{
-    AnchoredPositionMode, Bounds, Corner, MouseButton, MouseDownEvent, MouseMoveEvent,
+    Anchor, AnchoredPositionMode, Bounds, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, Pixels, Point, anchored, canvas, deferred, linear_color_stop, linear_gradient,
     point,
 };
@@ -119,7 +119,7 @@ impl SettingsView {
                                 anchored()
                                     .position_mode(AnchoredPositionMode::Local)
                                     .position(point(px(20.), px(26.)))
-                                    .anchor(Corner::TopRight)
+                                    .anchor(Anchor::TopRight)
                                     .snap_to_window_with_margin(px(8.))
                                     .child(self.picker_panel(cx)),
                             ))

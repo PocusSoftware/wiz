@@ -64,7 +64,10 @@ fn open_root(cx: &mut TestAppContext) -> (Entity<Workspace>, &mut VisualTestCont
     cx.executor().allow_parking();
     let (root, cx) = cx.add_window_view(Workspace::new);
     cx.simulate_resize(size(px(1400.), px(900.)));
-    cx.update(|w, cx| w.focus(&root.focus_handle(cx)));
+    cx.update(|w, cx| {
+        let h = root.focus_handle(cx);
+        w.focus(&h, cx);
+    });
     cx.run_until_parked();
     (root, cx)
 }
@@ -346,9 +349,9 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     type_text(cx, "masterpass1");
     cx.simulate_keystrokes("enter");
     wait(cx, &root, "the form", |r, _| r.form.is_some());
-    root.update_in(cx, |r, w, _| {
+    root.update_in(cx, |r, w, cx| {
         r.form = None;
-        w.focus(&r.focus);
+        w.focus(&r.focus, cx);
     });
 
     // Change the master password.
@@ -712,7 +715,7 @@ fn one_click_presses_one_button(cx: &mut TestAppContext) {
 fn press(cx: &mut VisualTestContext, key: &str) {
     cx.simulate_keystrokes(key);
     cx.simulate_event(gpui::KeyUpEvent {
-        keystroke: gpui::Keystroke::parse(key).unwrap(),
+        keystroke: gpui::Keystroke::parse_with_os(key, crate::platform::OS).unwrap(),
     });
 }
 

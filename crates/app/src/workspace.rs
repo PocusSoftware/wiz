@@ -326,7 +326,7 @@ impl Workspace {
                     // It comes from the network, not from a key or click: take focus so
                     // Tab and Escape reach it, unless another dialog is in front.
                     if !t.modal_open() {
-                        window.focus(&t.modal_focus);
+                        window.focus(&t.modal_focus, cx);
                     }
                     t.trust.push_back(req);
                     cx.notify();
@@ -432,18 +432,20 @@ impl Workspace {
         .detach();
     }
 
-    /// Hosts and users to mask: saved hosts and quick connect hosts.
-    fn refresh_tokens(&self) {
+    /// Hosts and users to mask: saved hosts and quick connect hosts. Views drawn from
+    /// the last frame do not see the new list, so every window is drawn again.
+    fn refresh_tokens(&self, cx: &mut App) {
         refresh_privacy_tokens(
             self.cfg
                 .hosts
                 .iter()
                 .chain(self.quick.values().map(|(h, _)| h)),
         );
+        cx.refresh_windows();
     }
 
-    fn save_config(&mut self) {
-        self.refresh_tokens();
+    fn save_config(&mut self, cx: &mut App) {
+        self.refresh_tokens(cx);
         if let Err(e) = self.cfg.save(&self.cfg_path) {
             self.set_status(format!("Could not save hosts: {e}"), true);
         }
@@ -498,26 +500,16 @@ impl Workspace {
         }
     }
 
-    /// Settings changed somewhere: repaint every page (they read the live settings) and
-    /// re-filter file lists.
+    /// Settings changed somewhere: re-filter file lists and draw every window again, since
+    /// views read the live settings (theme, privacy) outside of any entity.
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         crate::shortcuts::apply(cx);
         for tab in &self.tabs {
-            match &tab.kind {
-                TabKind::Terminal(t) => {
-                    for p in &t.panes {
-                        p.view.update(cx, |_, cx| cx.notify());
-                    }
-                }
-                TabKind::Docker(v) => v.update(cx, |_, cx| cx.notify()),
-                TabKind::Sftp(v) => v.update(cx, SftpView::settings_changed),
-                TabKind::Logs(v) => v.update(cx, |_, cx| cx.notify()),
+            if let TabKind::Sftp(v) = &tab.kind {
+                v.update(cx, SftpView::settings_changed);
             }
         }
-        if let Some(v) = &self.settings {
-            v.update(cx, |_, cx| cx.notify());
-        }
-        cx.notify();
+        cx.refresh_windows();
     }
 
     /// Quick switch for the privacy master setting.

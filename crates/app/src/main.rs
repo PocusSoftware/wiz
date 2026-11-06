@@ -17,9 +17,7 @@ mod views;
 mod widgets;
 mod workspace;
 
-use gpui::{
-    App, Application, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size,
-};
+use gpui::{App, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size};
 
 use workspace::{
     CloseTab, NewHost, OpenSettings, QuickConnect, Quit, Snippets, SplitPane, Workspace,
@@ -53,7 +51,7 @@ fn main() {
     }
     START.get_or_init(std::time::Instant::now);
     mark("main");
-    Application::new()
+    gpui_platform::application()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
             mark("app run");
@@ -96,8 +94,9 @@ fn main() {
                     MenuItem::separator(),
                     MenuItem::action("Quit", Quit),
                 ],
+                disabled: false,
             }]);
-            cx.on_window_closed(|cx| {
+            cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }

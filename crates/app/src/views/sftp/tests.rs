@@ -43,7 +43,7 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
         view.read_with(cx, |v, _| v.pane(side).focus.clone())
     };
     let (left, right) = (pane(cx, Side::Left), pane(cx, Side::Right));
-    cx.update(|w, _| w.focus(&left));
+    cx.update(|w, cx| w.focus(&left, cx));
     cx.run_until_parked();
     // The arrows switch panes.
     cx.simulate_keystrokes("right");
@@ -51,7 +51,7 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("left");
     assert!(cx.update(|w, _| left.is_focused(w)));
     // From a button in the pane, the keys are not for the file list.
-    cx.update(|w, _| w.focus_next());
+    cx.update(Window::focus_next);
     let on_button = |cx: &mut gpui::VisualTestContext| {
         cx.update(|w, cx| !left.is_focused(w) && left.contains_focused(w, cx))
     };
@@ -60,7 +60,7 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
     assert!(on_button(cx));
     assert!(view.read_with(cx, |v, _| v.prompt.is_none()));
     // A click on a button in the other pane makes that pane the one keys go to.
-    cx.update(|w, _| w.focus(&right));
+    cx.update(|w, cx| w.focus(&right, cx));
     cx.simulate_click(point(px(20.), px(11.)), Modifiers::default());
     assert!(cx.update(|w, _| left.is_focused(w)));
 }

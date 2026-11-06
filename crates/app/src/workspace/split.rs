@@ -116,7 +116,7 @@ impl Workspace {
         let n = t.panes.len();
         let cur = Self::focused_pane(t, window, cx);
         let next = (if back { cur + n - 1 } else { cur + 1 }) % n;
-        t.panes[next].view.read(cx).focus(window);
+        window.focus(&t.panes[next].view.focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -419,7 +419,7 @@ impl Workspace {
                     .text_color(c(if focused { TEXT } else { PLACEHOLDER }))
                     .cursor_pointer()
                     .on_click(cx.listener(move |_, _, w, cx| {
-                        w.focus(&pane.focus_handle(cx));
+                        w.focus(&pane.focus_handle(cx), cx);
                         cx.notify();
                     }))
                     // Drag the header onto another pane to swap the two.
@@ -483,7 +483,7 @@ impl Workspace {
             let col_share = t.cols.get(ci).copied().unwrap_or(0.);
             let mut column = div()
                 .flex_basis(gpui::relative(col_share))
-                .flex_shrink()
+                .flex_shrink(1.)
                 .min_w_0()
                 .h_full()
                 .flex()
@@ -502,7 +502,7 @@ impl Workspace {
                     column = column.child(
                         self.pane(tab_ix, i, &p.view, i == t.focused, cx)
                             .flex_basis(gpui::relative(share))
-                            .flex_shrink()
+                            .flex_shrink(1.)
                             .min_h_0(),
                     );
                 }

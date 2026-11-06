@@ -120,8 +120,8 @@ impl HostForm {
         }
     }
 
-    pub fn focus_first(&self, window: &mut Window, cx: &gpui::App) {
-        window.focus(&self.name.focus_handle(cx));
+    pub fn focus_first(&self, window: &mut Window, cx: &mut gpui::App) {
+        window.focus(&self.name.focus_handle(cx), cx);
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
@@ -281,12 +281,10 @@ impl HostForm {
                 && let Some(p) = paths.first()
             {
                 let s = p.to_string_lossy().to_string();
-                input
-                    .update(cx, |t, cx| {
-                        t.set_value(&s);
-                        cx.notify();
-                    })
-                    .ok();
+                input.update(cx, |t, cx| {
+                    t.set_value(&s);
+                    cx.notify();
+                });
             }
         })
         .detach();

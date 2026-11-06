@@ -281,6 +281,8 @@ pub(super) fn paint_grid(
             let _ = shaped.paint(
                 point(bounds.origin.x + cw * run.col as f32, y),
                 ch,
+                gpui::TextAlign::Left,
+                None,
                 window,
                 cx,
             );

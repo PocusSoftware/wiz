@@ -56,8 +56,8 @@ impl QuickConnect {
         }
     }
 
-    pub fn focus_first(&self, window: &mut Window, cx: &gpui::App) {
-        window.focus(&self.target.focus_handle(cx));
+    pub fn focus_first(&self, window: &mut Window, cx: &mut gpui::App) {
+        window.focus(&self.target.focus_handle(cx), cx);
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {

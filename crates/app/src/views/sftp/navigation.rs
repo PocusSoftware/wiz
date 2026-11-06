@@ -165,8 +165,8 @@ impl SftpView {
         self.active = side;
         let cur = self.pane(side).cursor;
         match k.key.as_str() {
-            "up" if m.secondary() => self.up(side, cx),
-            "down" if m.secondary() => self.open_dir(side, cur, cx),
+            "up" if m.secondary(cx) => self.up(side, cx),
+            "down" if m.secondary(cx) => self.open_dir(side, cur, cx),
             "up" => self.move_cursor(side, -1, m.shift),
             "down" => self.move_cursor(side, 1, m.shift),
             "pageup" => self.move_cursor(side, -15, m.shift),
@@ -174,10 +174,10 @@ impl SftpView {
             "home" => self.move_cursor(side, isize::MIN / 2, m.shift),
             "end" => self.move_cursor(side, isize::MAX / 2, m.shift),
             "enter" => self.open_dir(side, cur, cx),
-            "backspace" if m.secondary() => self.ask_delete(side, window, cx),
+            "backspace" if m.secondary(cx) => self.ask_delete(side, window, cx),
             "backspace" => self.up(side, cx),
             "delete" => self.ask_delete(side, window, cx),
-            "left" if m.secondary() => self.back(side, cx),
+            "left" if m.secondary(cx) => self.back(side, cx),
             // Tab goes on to the buttons, so the arrows switch panes.
             dir @ ("left" | "right") if !m.modified() => {
                 let to = if dir == "left" {
@@ -186,19 +186,19 @@ impl SftpView {
                     Side::Right
                 };
                 self.active = to;
-                window.focus(&self.pane(to).focus);
+                window.focus(&self.pane(to).focus, cx);
             }
             "escape" => {
                 self.pane_mut(side).selected.clear();
             }
             "f2" => self.ask_rename(side, window, cx),
             "f5" => self.begin_transfer(side, cx),
-            "r" if m.secondary() => self.refresh(side, cx),
-            "a" if m.secondary() => {
+            "r" if m.secondary(cx) => self.refresh(side, cx),
+            "a" if m.secondary(cx) => {
                 let p = self.pane_mut(side);
                 p.selected = p.entries.iter().map(|e| e.name.clone()).collect();
             }
-            "n" if m.secondary() && m.shift => self.ask_new_folder(side, window, cx),
+            "n" if m.secondary(cx) && m.shift => self.ask_new_folder(side, window, cx),
             _ => {
                 // Type-ahead: jump to the first name starting with what was typed.
                 match &k.key_char {

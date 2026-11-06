@@ -46,16 +46,16 @@ impl Workspace {
                         }
                         _ => this.cfg.hosts.push(host.clone()),
                     }
-                    this.save_config();
+                    this.save_config(cx);
                 }
                 FormEvent::Cancelled => {}
             }
             this.form = None;
-            window.focus(&this.focus);
+            window.focus(&this.focus, cx);
             cx.notify();
         })
         .detach();
-        form.read(cx).focus_first(window, cx);
+        form.update(cx, |d, cx| d.focus_first(window, cx));
         self.form = Some(form);
         cx.notify();
     }
@@ -63,7 +63,7 @@ impl Workspace {
     fn ask_delete_host(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.confirm_delete = Some(ix);
         // Take keyboard focus so Enter and Esc reach the dialog.
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 
@@ -134,14 +134,14 @@ impl Workspace {
                 false,
             );
         }
-        self.save_config();
+        self.save_config(cx);
         cx.notify();
     }
 
     fn toggle_pin(&mut self, ix: usize, cx: &mut Context<Self>) {
         if let Some(h) = self.cfg.hosts.get_mut(ix) {
             h.pinned = !h.pinned;
-            self.save_config();
+            self.save_config(cx);
             cx.notify();
         }
     }

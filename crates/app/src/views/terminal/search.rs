@@ -15,14 +15,14 @@ impl TerminalView {
             });
         }
         if let Some(s) = &self.search {
-            window.focus(&s.input.focus_handle(cx));
+            window.focus(&s.input.focus_handle(cx), cx);
         }
         cx.notify();
     }
 
     fn close_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search = None;
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 

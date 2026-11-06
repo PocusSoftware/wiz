@@ -59,9 +59,9 @@ impl CodeDialog {
         }
     }
 
-    pub fn focus_first(&self, window: &mut Window, cx: &gpui::App) {
+    pub fn focus_first(&self, window: &mut Window, cx: &mut gpui::App) {
         if let Some((_, input)) = self.fields.first() {
-            window.focus(&input.focus_handle(cx));
+            window.focus(&input.focus_handle(cx), cx);
         }
     }
 

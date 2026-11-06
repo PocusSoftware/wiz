@@ -15,8 +15,8 @@ use alacritty_terminal::vte::ansi::{Color, NamedColor};
 use gpui::{
     BorderStyle, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, FontWeight, Hsla,
     IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, Render, ScrollWheelEvent, SharedString, StrikethroughStyle, TextRun, UnderlineStyle,
-    Window, canvas, div, fill, font, outline, point, prelude::*, px, size,
+    Point, Render, ScrollEvent, SharedString, StrikethroughStyle, TextRun, UnderlineStyle, Window,
+    canvas, div, fill, font, outline, point, prelude::*, px, size,
 };
 use ssh_core::secrets::Secret;
 use ssh_core::session::{Shell, ShellEvent, ShellInput};
@@ -188,10 +188,6 @@ impl TerminalView {
 
     pub fn title(&self) -> Option<SharedString> {
         self.title.clone()
-    }
-
-    pub fn focus(&self, window: &mut Window) {
-        window.focus(&self.focus);
     }
 
     fn on_event(&mut self, ev: ShellEvent, cx: &mut Context<Self>) {
@@ -389,7 +385,7 @@ impl Render for TerminalView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, ev: &MouseDownEvent, window, cx| {
-                    window.focus(&this.focus);
+                    window.focus(&this.focus, cx);
                     // Cmd-click (Ctrl-click on Windows) opens a link instead of selecting.
                     if crate::platform::link_click(ev.modifiers)
                         && let Some(l) = this.link_under(ev.position)
@@ -412,7 +408,7 @@ impl Render for TerminalView {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, _: &MouseDownEvent, window, cx| {
-                    window.focus(&this.focus);
+                    window.focus(&this.focus, cx);
                     // Right click copies a selection, otherwise pastes.
                     if this.copy_selection(cx) {
                         this.term.term.selection = None;
@@ -448,7 +444,7 @@ impl Render for TerminalView {
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_selection(cx)),
             )
-            .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| {
                 let lines = (ev.delta.pixel_delta(this.cell_h).y / this.cell_h).round() as i32;
                 if lines == 0 {
                     return;

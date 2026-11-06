@@ -31,7 +31,7 @@ impl Workspace {
             move |this, _, ev: &UnlockEvent, window, cx| {
                 this.unlock = None;
                 let then = this.after_unlock.take();
-                window.focus(&this.focus);
+                window.focus(&this.focus, cx);
                 if let UnlockEvent::Done = ev {
                     if mode == UnlockMode::Change {
                         this.set_status("Master password changed.", false);
@@ -44,7 +44,7 @@ impl Workspace {
             },
         )
         .detach();
-        dialog.read(cx).focus_first(window, cx);
+        dialog.update(cx, |d, cx| d.focus_first(window, cx));
         self.unlock = Some(dialog);
         cx.notify();
     }
@@ -99,14 +99,14 @@ impl Workspace {
         let dialog = cx.new(QuickDialog::new);
         cx.subscribe_in(&dialog, window, |this, _, ev: &QuickEvent, window, cx| {
             this.quick_form = None;
-            window.focus(&this.focus);
+            window.focus(&this.focus, cx);
             if let QuickEvent::Connect { host, creds, save } = ev {
                 this.quick_connect((**host).clone(), creds.clone(), *save, window, cx);
             }
             cx.notify();
         })
         .detach();
-        dialog.read(cx).focus_first(window, cx);
+        dialog.update(cx, |d, cx| d.focus_first(window, cx));
         self.quick_form = Some(dialog);
         cx.notify();
     }
@@ -137,7 +137,7 @@ impl Workspace {
                     match r {
                         Ok(()) => {
                             this.cfg.hosts.push(host.clone());
-                            this.save_config();
+                            this.save_config(cx);
                         }
                         Err(e) => {
                             // Still connect, as an unsaved quick host.
@@ -146,7 +146,7 @@ impl Workspace {
                                 true,
                             );
                             this.quick.insert(account, (host.clone(), creds.clone()));
-                            this.refresh_tokens();
+                            this.refresh_tokens(cx);
                         }
                     }
                     this.connect(host, Some(creds), Open::Shell, window, cx);
@@ -158,7 +158,7 @@ impl Workspace {
         }
         if !saved {
             self.quick.insert(account, (host.clone(), creds.clone()));
-            self.refresh_tokens();
+            self.refresh_tokens(cx);
         } else if save {
             self.set_status("A saved host already uses this user, host and port.", false);
         }

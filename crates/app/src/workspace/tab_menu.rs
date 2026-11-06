@@ -34,7 +34,7 @@ impl Workspace {
     ) {
         self.tab_menu = Some((id, at));
         // Take keyboard focus from the terminal so Escape reaches the menu.
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 
@@ -115,7 +115,7 @@ impl Workspace {
             i
         });
         let focus = input.read(cx).focus_handle(cx);
-        window.focus(&focus);
+        window.focus(&focus, cx);
         // Clicking anywhere else keeps the name, like Enter.
         let blur = cx.on_blur(&focus, window, |t, w, cx| t.finish_rename(true, w, cx));
         self.renaming = Some((id, input, blur));
@@ -201,7 +201,7 @@ impl Workspace {
         }
         self.split_menu =
             Some(at.unwrap_or_else(|| point(window.viewport_size().width, px(MENU_TOP))));
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 

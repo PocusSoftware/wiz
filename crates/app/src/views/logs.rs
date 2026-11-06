@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use gpui::{
     Bounds, ClipboardItem, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollStrategy, ScrollWheelEvent,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollEvent, ScrollStrategy,
     SharedString, UniformListScrollHandle, Window, canvas, div, font, prelude::*, px, uniform_list,
 };
 use ssh_core::docker::Backend;
@@ -211,7 +211,7 @@ impl LogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         let col = self.col_at(line, ev.position.x);
         let chars: Vec<char> = self.lines[line].chars().collect();
         match ev.click_count {
@@ -250,7 +250,7 @@ impl LogView {
 
     fn on_key(&mut self, ev: &KeyDownEvent, cx: &mut Context<Self>) {
         let k = &ev.keystroke;
-        if !k.modifiers.secondary() {
+        if !k.modifiers.secondary(cx) {
             cx.propagate();
             return;
         }
@@ -388,7 +388,7 @@ impl Render for LogView {
                 cx.listener(|t, _: &MouseUpEvent, _, _| t.dragging = false),
             )
             // Scrolling up means "let me read": stop following.
-            .on_scroll_wheel(cx.listener(|t, ev: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|t, ev: &ScrollEvent, _, cx| {
                 if t.auto && ev.delta.pixel_delta(px(ROW_H)).y > px(0.) {
                     t.auto = false;
                     cx.notify();
@@ -464,7 +464,7 @@ impl Render for LogView {
                             count,
                             cx.processor(|t: &mut LogView, range, _, cx| t.rows(range, cx)),
                         )
-                        .track_scroll(self.scroll.clone())
+                        .track_scroll(&self.scroll)
                         .size_full(),
                     ),
             )

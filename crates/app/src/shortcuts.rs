@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod tests;
 
-use gpui::{App, KeyBinding, Keystroke};
+use gpui::{Action, App, KeyBinding, Keystroke};
 
 use crate::platform;
 use crate::workspace::{
@@ -46,7 +46,8 @@ pub fn label(id: &str) -> String {
 
 /// Whether `keys` is a single keystroke that gpui can bind.
 pub fn is_valid(keys: &str) -> bool {
-    Keystroke::parse(keys).is_ok_and(|k| !k.key.is_empty() && k.unparse() == keys)
+    Keystroke::parse_with_os(keys, platform::OS)
+        .is_ok_and(|k| !k.key.is_empty() && k.unparse(platform::OS) == keys)
 }
 
 /// What already uses `keys` (a command, apart from `except`, or a built-in shortcut).
@@ -60,23 +61,24 @@ pub fn taken_by(keys: &str, except: &str) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
-fn binding(id: &str, keys: &str) -> Option<KeyBinding> {
-    Some(match id {
-        "split" => KeyBinding::new(keys, SplitPane, None),
-        "split_menu" => KeyBinding::new(keys, SplitMenu, None),
-        "tab_menu" => KeyBinding::new(keys, TabMenu, None),
-        "next_pane" => KeyBinding::new(keys, NextPane, None),
-        "prev_pane" => KeyBinding::new(keys, PrevPane, None),
-        "next_tab" => KeyBinding::new(keys, NextTab, None),
-        "prev_tab" => KeyBinding::new(keys, PrevTab, None),
-        "focus_tabs" => KeyBinding::new(keys, FocusTabs, None),
-        "quick_connect" => KeyBinding::new(keys, QuickConnect, None),
-        "snippets" => KeyBinding::new(keys, Snippets, None),
-        "new_host" => KeyBinding::new(keys, NewHost, None),
-        "settings" => KeyBinding::new(keys, OpenSettings, None),
-        "close_tab" => KeyBinding::new(keys, CloseTab, None),
+fn binding(id: &str, keys: &str, cx: &App) -> Option<KeyBinding> {
+    let action: Box<dyn Action> = match id {
+        "split" => Box::new(SplitPane),
+        "split_menu" => Box::new(SplitMenu),
+        "tab_menu" => Box::new(TabMenu),
+        "next_pane" => Box::new(NextPane),
+        "prev_pane" => Box::new(PrevPane),
+        "next_tab" => Box::new(NextTab),
+        "prev_tab" => Box::new(PrevTab),
+        "focus_tabs" => Box::new(FocusTabs),
+        "quick_connect" => Box::new(QuickConnect),
+        "snippets" => Box::new(Snippets),
+        "new_host" => Box::new(NewHost),
+        "settings" => Box::new(OpenSettings),
+        "close_tab" => Box::new(CloseTab),
         _ => return None,
-    })
+    };
+    KeyBinding::load(keys, action, None, false, None, cx).ok()
 }
 
 /// The keystrokes each command is bound to. A saved keystroke that does not parse or is
@@ -103,5 +105,10 @@ fn resolved() -> Vec<(&'static str, String)> {
 pub fn apply(cx: &mut App) {
     cx.clear_key_bindings();
     cx.bind_keys(platform::fixed_bindings());
-    cx.bind_keys(resolved().iter().filter_map(|(id, keys)| binding(id, keys)));
+    // Built before binding, since parsing them reads `cx`.
+    let commands: Vec<KeyBinding> = resolved()
+        .iter()
+        .filter_map(|(id, keys)| binding(id, keys, cx))
+        .collect();
+    cx.bind_keys(commands);
 }

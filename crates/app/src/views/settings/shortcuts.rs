@@ -255,7 +255,7 @@ impl SettingsView {
             cx.notify();
             return;
         }
-        let keys = k.unparse();
+        let keys = k.unparse(crate::platform::OS);
         if let Some(other) = shortcuts::taken_by(&keys, id) {
             self.shortcut_note = Some(
                 format!(

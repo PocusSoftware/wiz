@@ -13,14 +13,17 @@ fn with_settings(s: Settings) -> std::sync::MutexGuard<'static, ()> {
     guard
 }
 
-#[test]
-fn every_command_has_a_binding_and_a_default() {
+#[gpui::test]
+fn every_command_has_a_binding_and_a_default(cx: &mut gpui::TestAppContext) {
     let _g = with_settings(Settings::default());
     for (id, _) in COMMANDS {
         let keys = platform::default_shortcut(id);
         if let Some(keys) = keys {
             assert!(is_valid(keys), "{id}: {keys}");
-            assert!(binding(id, keys).is_some(), "{id} has no action");
+            assert!(
+                cx.update(|cx| binding(id, keys, cx)).is_some(),
+                "{id} has no action"
+            );
         }
     }
 }

@@ -28,6 +28,9 @@ pub const RSYNC: bool = false;
 /// Modifiers a shortcut must hold, for settings text.
 pub const MODIFIER_HINT: &str = "Ctrl or Alt";
 
+/// How gpui spells keystrokes here.
+pub const OS: gpui::OperatingSystem = gpui::OperatingSystem::Windows;
+
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
 
@@ -35,6 +38,11 @@ pub const QUIT_KEYS: &str = "Alt+F4";
 pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
 pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent; 1Password uses that pipe too when its agent is on.";
 pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
+
+/// Ctrl+1 to Ctrl+9, which pick a tab. Literals because gpui only builds bindings from `&'static str`.
+const DIGITS: [&str; 9] = [
+    "ctrl-1", "ctrl-2", "ctrl-3", "ctrl-4", "ctrl-5", "ctrl-6", "ctrl-7", "ctrl-8", "ctrl-9",
+];
 
 /// Plain Ctrl+D, Ctrl+W and Ctrl+K mean something to the shell, so app shortcuts add Shift,
 /// like Windows Terminal. Ctrl+Tab and Ctrl+1 to Ctrl+9 switch tabs, so Ctrl+2 (NUL) and
@@ -44,16 +52,18 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
     ];
-    keys.extend((1..=9).map(|n| KeyBinding::new(&format!("ctrl-{n}"), SelectTab(n - 1), None)));
+    keys.extend(
+        DIGITS
+            .into_iter()
+            .enumerate()
+            .map(|(n, k)| KeyBinding::new(k, SelectTab(n), None)),
+    );
     keys
 }
 
 /// Whether `keys` is one of `fixed_bindings`.
 pub fn is_fixed(keys: &str) -> bool {
-    matches!(keys, "ctrl-tab" | "ctrl-shift-tab")
-        || keys
-            .strip_prefix("ctrl-")
-            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+    matches!(keys, "ctrl-tab" | "ctrl-shift-tab") || DIGITS.contains(&keys)
 }
 
 /// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`). Tabs switch
@@ -78,7 +88,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
 
 /// Keystrokes written the Windows way: "ctrl-shift-d" is "Ctrl+Shift+D".
 pub fn format_keys(keys: &str) -> String {
-    let Ok(k) = gpui::Keystroke::parse(keys) else {
+    let Ok(k) = gpui::Keystroke::parse_with_os(keys, OS) else {
         return keys.to_string();
     };
     let m = k.modifiers;

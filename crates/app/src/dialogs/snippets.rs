@@ -79,8 +79,8 @@ impl SnippetPicker {
         }
     }
 
-    pub fn focus_first(&self, window: &mut Window, cx: &gpui::App) {
-        window.focus(&self.filter.focus_handle(cx));
+    pub fn focus_first(&self, window: &mut Window, cx: &mut gpui::App) {
+        window.focus(&self.filter.focus_handle(cx), cx);
     }
 
     fn matches(&self, cx: &gpui::App) -> Vec<usize> {
@@ -96,14 +96,14 @@ impl SnippetPicker {
     fn start_adding(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.adding = true;
         self.error = None;
-        window.focus(&self.name.focus_handle(cx));
+        window.focus(&self.name.focus_handle(cx), cx);
         cx.notify();
     }
 
     fn stop_adding(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.adding = false;
         self.error = None;
-        window.focus(&self.filter.focus_handle(cx));
+        window.focus(&self.filter.focus_handle(cx), cx);
         cx.notify();
     }
 

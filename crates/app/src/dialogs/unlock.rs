@@ -60,8 +60,8 @@ impl UnlockDialog {
         }
     }
 
-    pub fn focus_first(&self, window: &mut Window, cx: &gpui::App) {
-        window.focus(&self.password.focus_handle(cx));
+    pub fn focus_first(&self, window: &mut Window, cx: &mut gpui::App) {
+        window.focus(&self.password.focus_handle(cx), cx);
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {

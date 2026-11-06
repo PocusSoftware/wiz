@@ -249,15 +249,15 @@ impl TextInput {
         let m = &k.modifiers;
         let shift = m.shift;
         match k.key.as_str() {
-            "a" if m.secondary() => self.select_all(),
-            "c" if m.secondary() => {
+            "a" if m.secondary(cx) => self.select_all(),
+            "c" if m.secondary(cx) => {
                 if self.has_selection() && !self.masked {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         self.selected_text().to_string(),
                     ));
                 }
             }
-            "x" if m.secondary() => {
+            "x" if m.secondary(cx) => {
                 if self.has_selection() && !self.masked {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         self.selected_text().to_string(),
@@ -265,12 +265,12 @@ impl TextInput {
                     self.delete_selection();
                 }
             }
-            "v" if m.secondary() => {
+            "v" if m.secondary(cx) => {
                 if let Some(t) = cx.read_from_clipboard().and_then(|c| c.text()) {
                     self.insert(&t.replace(['\n', '\r'], ""));
                 }
             }
-            "backspace" if m.secondary() => {
+            "backspace" if m.secondary(cx) => {
                 if !self.delete_selection() {
                     let end = self.cursor;
                     self.text.drain(..end);
@@ -300,8 +300,8 @@ impl TextInput {
                     self.text.drain(self.cursor..n);
                 }
             }
-            "left" if m.secondary() => self.move_to(0, shift),
-            "right" if m.secondary() => self.move_to(self.text.len(), shift),
+            "left" if m.secondary(cx) => self.move_to(0, shift),
+            "right" if m.secondary(cx) => self.move_to(self.text.len(), shift),
             "left" if m.alt => self.move_to(self.word_start(self.cursor), shift),
             "right" if m.alt => self.move_to(self.word_end(self.cursor), shift),
             "left" => {
@@ -346,7 +346,7 @@ impl TextInput {
 
     fn on_mouse_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let was_focused = self.focus.is_focused(window);
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         if self.hidden_view(was_focused) {
             // The text was masked, so there is nothing to aim at: just reveal and edit.
             self.move_to(self.text.len(), false);

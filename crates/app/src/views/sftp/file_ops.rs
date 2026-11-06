@@ -20,14 +20,14 @@ impl SftpView {
         self.prompt_input.update(cx, |i, _| i.set_value(initial));
         self.prompt = Some(prompt);
         if focus_input {
-            window.focus(&self.prompt_input.focus_handle(cx));
+            window.focus(&self.prompt_input.focus_handle(cx), cx);
         }
         cx.notify();
     }
 
     fn close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.prompt = None;
-        window.focus(&self.pane(self.active).focus);
+        window.focus(&self.pane(self.active).focus, cx);
         cx.notify();
     }
 
@@ -67,7 +67,7 @@ impl SftpView {
             Some(Prompt::Delete(side, names)) => self.fs_op(side, FsOp::Delete(names), cx),
             _ => {}
         }
-        window.focus(&self.pane(self.active).focus);
+        window.focus(&self.pane(self.active).focus, cx);
         cx.notify();
     }
 

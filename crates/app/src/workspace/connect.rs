@@ -430,11 +430,11 @@ impl Workspace {
                 let _ = req.reply.send(answers);
             }
             this.code = None;
-            window.focus(&this.focus);
+            window.focus(&this.focus, cx);
             cx.notify();
         })
         .detach();
-        dialog.read(cx).focus_first(window, cx);
+        dialog.update(cx, |d, cx| d.focus_first(window, cx));
         self.code = Some(dialog);
         cx.notify();
     }

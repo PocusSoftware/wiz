@@ -73,15 +73,15 @@ impl SftpView {
                         cx.listener(move |t, ev: &MouseDownEvent, window, cx| {
                             t.active = side;
                             t.menu = None;
-                            window.focus(&t.pane(side).focus);
+                            window.focus(&t.pane(side).focus, cx);
                             let m = ev.modifiers;
                             let already = t.pane(side).selected.iter().len() > 1
                                 && t.pane(side)
                                     .entries
                                     .get(ix)
                                     .is_some_and(|e| t.pane(side).selected.contains(&e.name));
-                            if !(already && !m.shift && !m.secondary()) {
-                                t.select_row(side, ix, m.shift, m.secondary());
+                            if !(already && !m.shift && !m.secondary(cx)) {
+                                t.select_row(side, ix, m.shift, m.secondary(cx));
                             }
                             cx.notify();
                         }),
@@ -212,13 +212,13 @@ impl SftpView {
                 match ev.keystroke.key.as_str() {
                     "enter" => {
                         t.submit_path(side, cx);
-                        window.focus(&t.pane(side).focus);
+                        window.focus(&t.pane(side).focus, cx);
                         cx.stop_propagation();
                     }
                     "escape" => {
                         let cur = t.pane(side).path.clone();
                         t.pane(side).input.update(cx, |i, _| i.set_value(&cur));
-                        window.focus(&t.pane(side).focus);
+                        window.focus(&t.pane(side).focus, cx);
                         cx.stop_propagation();
                         cx.notify();
                     }
@@ -293,7 +293,7 @@ impl SftpView {
             count,
             cx.processor(move |t: &mut SftpView, range, _, cx| t.render_rows(side, range, cx)),
         )
-        .track_scroll(p.scroll.clone())
+        .track_scroll(&p.scroll)
         .flex_1()
         .min_h_0();
 
@@ -323,7 +323,7 @@ impl SftpView {
             // makes it the one the keys go to.
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |t, _, w, _| w.focus(&t.pane(side).focus)),
+                cx.listener(move |t, _, w, cx| w.focus(&t.pane(side).focus, cx)),
             )
             .relative()
             .flex_1()

@@ -29,9 +29,9 @@ impl Workspace {
         let modal = self.modal_open();
         for _ in 0..MAX_STEPS {
             if back {
-                window.focus_prev();
+                window.focus_prev(cx);
             } else {
-                window.focus_next();
+                window.focus_next(cx);
             }
             if !modal || self.modal_focus.contains_focused(window, cx) {
                 break;
@@ -43,12 +43,12 @@ impl Workspace {
     /// Focus a place on the tab strip: 0 is the hosts tab, then the tabs in order.
     pub(super) fn focus_strip(&mut self, pos: usize, window: &mut Window, cx: &mut Context<Self>) {
         match pos.checked_sub(1) {
-            None => window.focus(&self.home_focus),
+            None => window.focus(&self.home_focus, cx),
             Some(ix) => {
                 let Some(tab) = self.tabs.get(ix) else {
                     return;
                 };
-                window.focus(&tab.focus);
+                window.focus(&tab.focus, cx);
                 self.tab_scroll.scroll_to_item(ix);
             }
         }
@@ -121,7 +121,7 @@ impl Workspace {
                     return;
                 };
                 self.open_tab_menu(id, menu_at, window, cx);
-                window.focus(&self.modal_focus);
+                window.focus(&self.modal_focus, cx);
             }
             _ => return,
         }

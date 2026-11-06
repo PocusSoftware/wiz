@@ -45,18 +45,18 @@ impl Workspace {
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => {
                 if let Some(p) = t.panes.get(t.focused).or(t.panes.first()) {
-                    p.view.read(cx).focus(window)
+                    window.focus(&p.view.focus_handle(cx), cx)
                 }
             }
             TabKind::Sftp(v) => {
                 let h = v.read(cx).focus_handle(cx);
-                window.focus(&h)
+                window.focus(&h, cx)
             }
             TabKind::Logs(v) => {
                 let h = v.read(cx).focus_handle(cx);
-                window.focus(&h)
+                window.focus(&h, cx)
             }
-            _ => window.focus(&self.focus),
+            _ => window.focus(&self.focus, cx),
         }
         cx.notify();
     }
@@ -68,8 +68,8 @@ impl Workspace {
             self.epoch += 1;
         }
         match (page, &self.settings) {
-            (Page::Settings, Some(v)) => window.focus(&v.read(cx).focus_handle(cx)),
-            _ => window.focus(&self.focus),
+            (Page::Settings, Some(v)) => window.focus(&v.read(cx).focus_handle(cx), cx),
+            _ => window.focus(&self.focus, cx),
         }
         cx.notify();
     }
@@ -127,7 +127,7 @@ impl Workspace {
         if Self::holds_session(tab, cx) && crate::prefs::get().confirm_close() {
             self.confirm = Some((tab.id, pane));
             // Take keyboard focus from the terminal so Enter and Esc reach the dialog.
-            window.focus(&self.focus);
+            window.focus(&self.focus, cx);
             cx.notify();
             return;
         }
@@ -152,7 +152,7 @@ impl Workspace {
             .count();
         if open > 0 && crate::prefs::get().block_quit() {
             self.quit_notice = Some(open);
-            window.focus(&self.focus);
+            window.focus(&self.focus, cx);
             cx.notify();
         } else {
             cx.quit();
@@ -402,7 +402,7 @@ impl Workspace {
                     .flex()
                     .h_full()
                     .min_w_0()
-                    .flex_shrink()
+                    .flex_shrink(1.)
                     .overflow_x_scroll()
                     .track_scroll(&self.tab_scroll)
                     .children(tabs),
