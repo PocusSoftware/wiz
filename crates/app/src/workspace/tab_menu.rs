@@ -1,6 +1,6 @@
 //! Rearranging tabs: the right-click menu (pin, rename, duplicate, close) and dragging.
 
-use gpui::{Div, ElementId, MouseButton, Point, anchored, point};
+use gpui::{Anchor, Div, ElementId, MouseButton, Point, anchored, point};
 
 use super::*;
 
@@ -19,6 +19,8 @@ impl Render for DraggedTab {
 
 /// Width of the menu.
 const MENU_W: f32 = 180.;
+/// Width of the split menu, which also shows each host's address.
+const SPLIT_MENU_W: f32 = 280.;
 
 /// Where a menu opened from the keyboard starts: just under the tab bar.
 const MENU_TOP: f32 = 34.;
@@ -199,8 +201,9 @@ impl Workspace {
         if self.page != Page::Tab || !is_terminal {
             return;
         }
-        self.split_menu =
-            Some(at.unwrap_or_else(|| point(window.viewport_size().width, px(MENU_TOP))));
+        // Under the tab bar, its right edge at the button, so it never covers the bar.
+        let x = at.map_or(window.viewport_size().width - px(4.), |p| p.x);
+        self.split_menu = Some(point(x, px(MENU_TOP)));
         window.focus(&self.focus, cx);
         cx.notify();
     }
@@ -221,16 +224,19 @@ impl Workspace {
             .child(text.into())
     }
 
-    /// `items` in a menu at `at`, drawn over everything. A click anywhere else closes it.
+    /// `items` in a menu `width` wide with its `corner` at `at`, drawn over everything. A
+    /// click anywhere else closes it.
     fn menu_overlay(
         &self,
         key: usize,
         at: Point<Pixels>,
-        items: Vec<gpui::Stateful<Div>>,
+        corner: Anchor,
+        width: f32,
+        items: impl IntoIterator<Item = impl IntoElement>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let menu = div()
-            .w(px(MENU_W))
+            .w(px(width))
             .p_1()
             .flex()
             .flex_col()
@@ -257,6 +263,7 @@ impl Workspace {
             // Anchored keeps the menu inside the window, flipping it up near the bottom.
             .child(
                 anchored()
+                    .anchor(corner)
                     .position(at)
                     .snap_to_window_with_margin(px(4.))
                     .child(fade_in(
@@ -321,27 +328,82 @@ impl Workspace {
                 }
             },
         )));
-        Some(self.menu_overlay(id as usize, at, items, cx))
+        Some(self.menu_overlay(id as usize, at, Anchor::TopLeft, MENU_W, items, cx))
     }
 
     /// Where the next pane opens: the same server, or any saved host.
     fn split_menu_view(&self, at: Point<Pixels>, cx: &mut Context<Self>) -> AnyElement {
-        let mut items = vec![
-            Self::menu_item("sm-same", "Same server").on_click(cx.listener(|t, _, w, cx| {
-                t.close_tab_menu(w, cx);
-                t.split(w, cx);
-            })),
-        ];
-        for (ix, h) in self.cfg.hosts.iter().enumerate() {
+        let same = Self::split_row(
+            "sm-same",
+            "columns",
+            "Same server",
+            crate::shortcuts::label("split"),
+        )
+        .on_click(cx.listener(|t, _, w, cx| {
+            t.close_tab_menu(w, cx);
+            t.split(w, cx);
+        }));
+        let mut items = vec![same.into_any_element()];
+        if !self.cfg.hosts.is_empty() {
             items.push(
-                Self::menu_item(("sm-host", ix), h.name.clone()).on_click(cx.listener(
-                    move |t, _, w, cx| {
-                        t.close_tab_menu(w, cx);
-                        t.split_with(ix, w, cx);
-                    },
-                )),
+                div()
+                    .my_1()
+                    .h(px(1.))
+                    .bg(c(BORDER_VARIANT))
+                    .into_any_element(),
+            );
+            items.push(
+                div()
+                    .px_2()
+                    .pb_1()
+                    .text_xs()
+                    .text_color(c(PLACEHOLDER))
+                    .child("Other host")
+                    .into_any_element(),
             );
         }
-        self.menu_overlay(usize::MAX, at, items, cx)
+        for (ix, h) in self.cfg.hosts.iter().enumerate() {
+            let addr = privacy::redact(&format!("{}@{}", h.user, h.host)).into_owned();
+            items.push(
+                Self::split_row(("sm-host", ix), "server", h.name.clone(), addr)
+                    .on_click(cx.listener(move |t, _, w, cx| {
+                        t.close_tab_menu(w, cx);
+                        t.split_with(ix, w, cx);
+                    }))
+                    .into_any_element(),
+            );
+        }
+        self.menu_overlay(usize::MAX, at, Anchor::TopRight, SPLIT_MENU_W, items, cx)
+    }
+
+    /// A split menu row: icon, name, and a muted note on the right.
+    fn split_row(
+        id: impl Into<ElementId>,
+        icon_name: &str,
+        text: impl Into<SharedString>,
+        note: impl Into<SharedString>,
+    ) -> gpui::Stateful<Div> {
+        keyboard(div().id(id))
+            .focus(|s| s.bg(c(HOVER)))
+            .h(px(28.))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded(px(2.))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(HOVER)))
+            .whitespace_nowrap()
+            .child(icon(icon_name, 14., MUTED))
+            .child(div().flex_1().min_w_0().truncate().child(text.into()))
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .max_w(px(120.))
+                    .truncate()
+                    .text_xs()
+                    .text_color(c(PLACEHOLDER))
+                    .child(note.into()),
+            )
     }
 }

@@ -912,6 +912,15 @@ fn tabs_merge_into_one_split_from_the_menu(cx: &mut TestAppContext) {
     assert!(root.read_with(cx, |r, _| r.split_menu.is_some()));
     cx.simulate_keystrokes("escape");
     assert!(root.read_with(cx, |r, _| r.split_menu.is_none()));
+    // Clicked in the tab bar, it opens under the bar at the button, clear of the window
+    // buttons next to it.
+    root.update_in(cx, |r, w, cx| {
+        r.open_split_menu(Some(gpui::point(px(900.), px(12.))), w, cx)
+    });
+    let at = root.read_with(cx, |r, _| r.split_menu).unwrap();
+    assert_eq!(at.x, px(900.));
+    assert!(at.y >= px(TITLEBAR_H), "{at:?}");
+    cx.simulate_keystrokes("escape");
 
     // Merging moves the second tab's pane into the first and closes the second.
     root.update_in(cx, |r, w, cx| r.merge_tab(second, first, w, cx));

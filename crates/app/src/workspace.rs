@@ -724,8 +724,9 @@ impl Render for Workspace {
                     }),
             )
             .children(overlays)
-            .children(tab_menu)
             .child(Self::window_controls())
+            // Menus open next to the window buttons, so they go above them.
+            .children(tab_menu)
     }
 }
 
