@@ -43,6 +43,25 @@ fn settings_defaults_and_roundtrip() {
 }
 
 #[test]
+fn gray_theme_is_the_default_and_old_files_keep_their_look() {
+    let colorful = |text: &str| Settings::parse(text).unwrap().colorful();
+    assert!(!Settings::default().colorful());
+    assert!(!colorful(""));
+    // From before `colorful`: monochrome icons decide, else a picked accent means color.
+    assert!(!colorful(
+        "monochrome_icons = true\naccent_color = \"#ffffff\""
+    ));
+    assert!(colorful("monochrome_icons = false"));
+    assert!(colorful("accent_color = \"#3e63dd\""));
+    // Once written, `colorful` wins.
+    assert!(!colorful("colorful = false\naccent_color = \"#3e63dd\""));
+    assert!(colorful("colorful = true\nmonochrome_icons = true"));
+    // The old key is not written back.
+    let s = Settings::parse("monochrome_icons = true").unwrap();
+    assert!(!toml::to_string(&s).unwrap().contains("monochrome"));
+}
+
+#[test]
 fn roundtrip() {
     let cfg = Config {
         hosts: vec![

@@ -68,11 +68,18 @@ pub(super) fn rgb_to_hsv(rgb: u32) -> (f32, f32, f32) {
 }
 
 impl SettingsView {
+    /// The accent picker. It shows the saved accent, which the gray theme does not use, so
+    /// it is dimmed until colorful is on.
     pub(super) fn accent_row(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let current = accent();
+        let s = prefs::get();
+        let current = parse_hex(&s.accent_color()).unwrap_or(DEFAULT_ACCENT);
         Self::row(
             "Accent color",
-            "Buttons, the active tab, the cursor and focus. Pick one or type any #RRGGBB.",
+            if s.colorful() {
+                "Buttons, the active tab, the cursor and focus. Pick one or type any #RRGGBB."
+            } else {
+                "Used when Colorful is on. Pick one or type any #RRGGBB."
+            },
             div()
                 .flex()
                 .items_center()
@@ -127,6 +134,8 @@ impl SettingsView {
                 )
                 .child(div().ml_1().w(px(90.)).child(self.accent.clone())),
         )
+        // Dimmed, not disabled, like the privacy options: it can be set up while off.
+        .when(!s.colorful(), |d| d.opacity(0.45))
     }
 
     fn picker_panel(&self, cx: &mut Context<Self>) -> gpui::Div {

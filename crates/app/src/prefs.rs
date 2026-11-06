@@ -12,8 +12,14 @@ static PREFS: RwLock<Option<Arc<Settings>>> = RwLock::new(None);
 fn apply(s: &Settings) {
     privacy::configure(s);
     theme::set_oled(s.oled_black());
-    theme::set_monochrome_icons(s.monochrome_icons());
-    theme::set_accent(theme::parse_hex(&s.accent_color()).unwrap_or(theme::DEFAULT_ACCENT));
+    let colorful = s.colorful();
+    theme::set_monochrome(!colorful);
+    // The picked accent is kept for when colorful is turned on again.
+    theme::set_accent(if colorful {
+        theme::parse_hex(&s.accent_color()).unwrap_or(theme::DEFAULT_ACCENT)
+    } else {
+        theme::GRAY_ACCENT
+    });
     ssh_core::secrets::set_store(ssh_core::secrets::Store::from_setting(&s.secret_store()));
     let socket = s.agent_socket();
     ssh_core::session::set_agent_socket(

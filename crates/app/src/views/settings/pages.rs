@@ -9,13 +9,13 @@ impl SettingsView {
         let d = div().flex().flex_col();
         match self.category {
             Category::Appearance => d
+                .child(self.toggle("a-colorful", "Colorful", "The accent color, and red, green and yellow icons and status dots. Off is the gray theme.", s.colorful(), |s, v| s.colorful = Some(v), cx))
                 .child(self.accent_row(cx))
                 .child(self.toggle("a-oled", "OLED black", "Pure black behind the window and terminals, so OLED screens switch those pixels off.", s.oled_black(), |s, v| s.oled_black = Some(v), cx))
                 .child(Self::row("Window buttons", "Which end of the tab bar has minimize, maximize and close.", div().flex().gap_1().children([("Left", WindowControls::Left), ("Right", WindowControls::Right)].map(|(name, side)| {
                     if s.window_controls() == side { primary_button(name, name) } else { button(name, name) }
                         .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.window_controls = Some(side))))
                 }))))
-                .child(self.toggle("a-mono", "Monochrome icons", "Icons and status dots in gray and white instead of red, green and the accent color.", s.monochrome_icons(), |s, v| s.monochrome_icons = Some(v), cx))
                 .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
                 .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                 .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))

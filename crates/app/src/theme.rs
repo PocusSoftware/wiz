@@ -35,17 +35,19 @@ pub const YELLOW: u32 = 0xe3b341;
 
 pub const TITLEBAR_H: f32 = 30.0;
 
-/// Orange, the accent unless settings.toml picks another (`accent_color`).
+/// Orange, the colorful accent unless settings.toml picks another (`accent_color`).
 pub const DEFAULT_ACCENT: u32 = 0xf05a29;
 /// The default's hand-picked shades: for text and icons, and for the terminal selection.
 const DEFAULT_ACCENT_TEXT: u32 = 0xf87c49;
 const DEFAULT_SELECTION: u32 = 0x4a2a1e;
+/// The accent of the gray theme (`colorful` off): near white, so buttons get dark text.
+pub const GRAY_ACCENT: u32 = 0xe8e8eb;
 
 static BG: AtomicU32 = AtomicU32::new(DARK_BG);
 static ACCENT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT);
 static ACCENT_TEXT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT_TEXT);
 static SELECTION: AtomicU32 = AtomicU32::new(DEFAULT_SELECTION);
-static MONOCHROME_ICONS: AtomicBool = AtomicBool::new(false);
+static MONOCHROME: AtomicBool = AtomicBool::new(false);
 
 /// Use `rgb` (0xRRGGBB) as the accent. Other colors than the default get their shades
 /// mixed: lighter for text, dark for the terminal selection.
@@ -66,16 +68,16 @@ pub fn set_oled(on: bool) {
     BG.store(if on { 0x000000 } else { DARK_BG }, Ordering::Relaxed);
 }
 
-/// Draw icons without color (the monochrome setting).
-pub fn set_monochrome_icons(on: bool) {
-    MONOCHROME_ICONS.store(on, Ordering::Relaxed);
+/// Draw icons and status dots without color (the gray theme).
+pub fn set_monochrome(on: bool) {
+    MONOCHROME.store(on, Ordering::Relaxed);
 }
 
-/// The color an icon is drawn in: as asked, or gray and white when icons are monochrome.
+/// The color an icon is drawn in: as asked, or gray and white in the gray theme.
 /// Colored icons turn white (the accent) or gray (red, green, yellow), so an active tab
 /// still stands out from the others.
 pub fn icon_color(color: u32) -> u32 {
-    if !MONOCHROME_ICONS.load(Ordering::Relaxed) {
+    if !MONOCHROME.load(Ordering::Relaxed) {
         return color;
     }
     match color {
@@ -85,10 +87,10 @@ pub fn icon_color(color: u32) -> u32 {
     }
 }
 
-/// The color of a status dot: as asked, or shades of gray when icons are monochrome.
+/// The color of a status dot: as asked, or shades of gray in the gray theme.
 /// Live (green) turns white and connecting (yellow) gray, so they stay apart.
 pub fn dot_color(color: u32) -> u32 {
-    if !MONOCHROME_ICONS.load(Ordering::Relaxed) {
+    if !MONOCHROME.load(Ordering::Relaxed) {
         return color;
     }
     match color {

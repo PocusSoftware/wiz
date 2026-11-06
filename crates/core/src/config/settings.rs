@@ -41,12 +41,15 @@ pub struct Settings {
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
     pub animations: Option<bool>,
-    /// Color of buttons, the active tab, the cursor and focus, as "#RRGGBB".
+    /// The accent color and colored icons and status dots. Off is the gray and white theme.
+    pub colorful: Option<bool>,
+    /// Color of buttons, the active tab, the cursor and focus when colorful, as "#RRGGBB".
     pub accent_color: Option<String>,
     pub window_controls: Option<WindowControls>,
     /// Pure black window and terminal background for OLED screens.
     pub oled_black: Option<bool>,
-    /// Draw icons in gray and white instead of red, green and the accent.
+    /// The setting `colorful` replaced (inverted). Only read, to carry it over.
+    #[serde(skip_serializing)]
     pub monochrome_icons: Option<bool>,
     /// Show the round trip to the server of the focused terminal in the tab bar.
     pub show_latency: Option<bool>,
@@ -124,10 +127,10 @@ macro_rules! getters {
 getters! {
     terminal_font_size: f32 = 13.0;
     animations: bool = true;
+    colorful: bool = false;
     accent_color: String = "#f05a29".into();
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
-    monochrome_icons: bool = false;
     show_latency: bool = false;
     show_split_button: bool = true;
     show_quick_connect_button: bool = true;
@@ -169,7 +172,12 @@ getters! {
 impl Settings {
     /// Write to `settings.toml` (atomic rename, creates the folder).
     pub fn save(&self) -> Result<()> {
-        let s = toml::to_string_pretty(self).map_err(|e| Error::Config(e.to_string()))?;
+        // Always written, so `parse` only carries over files from before the setting.
+        let out = Self {
+            colorful: Some(self.colorful()),
+            ..self.clone()
+        };
+        let s = toml::to_string_pretty(&out).map_err(|e| Error::Config(e.to_string()))?;
         crate::write_private(&crate::config_dir()?.join("settings.toml"), s.as_bytes())
     }
 
@@ -180,7 +188,21 @@ impl Settings {
         let path = dir.join("settings.toml");
         std::fs::read_to_string(path)
             .ok()
-            .and_then(|s| toml::from_str(&s).ok())
+            .and_then(|s| Self::parse(&s))
             .unwrap_or_default()
+    }
+
+    /// Read `settings.toml` text. Files from before the gray theme was the default keep
+    /// their look: `monochrome_icons` decides, and otherwise a picked accent means colorful.
+    pub fn parse(text: &str) -> Option<Self> {
+        let mut s: Self = toml::from_str(text).ok()?;
+        if s.colorful.is_none() {
+            s.colorful = match s.monochrome_icons {
+                Some(mono) => Some(!mono),
+                None => s.accent_color.is_some().then_some(true),
+            };
+        }
+        s.monochrome_icons = None;
+        Some(s)
     }
 }
