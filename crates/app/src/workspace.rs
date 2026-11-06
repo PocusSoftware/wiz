@@ -684,7 +684,7 @@ impl Render for Workspace {
                             .border_t_1()
                             .border_color(c(BORDER_VARIANT))
                             .text_color(c(MUTED))
-                            .child(div().size(px(7.)).bg(c(YELLOW)))
+                            .child(div().size(px(7.)).bg(c(dot_color(YELLOW))))
                             .child(
                                 div().flex_1().child(
                                     privacy::redact(&format!("Connecting to {}...", p.name))

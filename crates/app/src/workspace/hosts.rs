@@ -196,7 +196,7 @@ impl Workspace {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(h.name.clone()),
                     )
-                    .child(div().size(px(7.)).bg(c(dot))),
+                    .child(div().size(px(7.)).bg(c(dot_color(dot)))),
             )
             .child(
                 div().text_color(c(MUTED)).truncate().child(

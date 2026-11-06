@@ -222,7 +222,7 @@ impl Render for DockerView {
                         .size(px(6.))
                         .flex_none()
                         .rounded(px(1.))
-                        .bg(c(if running { GREEN } else { ACTIVE })),
+                        .bg(c(dot_color(if running { GREEN } else { ACTIVE }))),
                 )
                 .child(
                     // Double click opens the logs. Only here, so quick clicks on the

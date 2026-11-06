@@ -46,6 +46,19 @@ fn monochrome_icons_drop_color() {
 }
 
 #[test]
+fn monochrome_status_dots_stay_apart() {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert_eq!(dot_color(GREEN), GREEN);
+    set_monochrome_icons(true);
+    assert_eq!(dot_color(GREEN), TEXT);
+    assert_eq!(dot_color(YELLOW), MUTED);
+    assert_eq!(dot_color(ACTIVE), ACTIVE);
+    set_monochrome_icons(false);
+}
+
+#[test]
 fn oled_black() {
     let _g = crate::testing::GLOBALS
         .lock()

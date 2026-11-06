@@ -85,6 +85,19 @@ pub fn icon_color(color: u32) -> u32 {
     }
 }
 
+/// The color of a status dot: as asked, or shades of gray when icons are monochrome.
+/// Live (green) turns white and connecting (yellow) gray, so they stay apart.
+pub fn dot_color(color: u32) -> u32 {
+    if !MONOCHROME_ICONS.load(Ordering::Relaxed) {
+        return color;
+    }
+    match color {
+        GREEN => TEXT,
+        YELLOW => MUTED,
+        c => c,
+    }
+}
+
 /// The window and terminal background.
 pub fn bg() -> u32 {
     BG.load(Ordering::Relaxed)
