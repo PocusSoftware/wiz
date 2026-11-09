@@ -77,6 +77,7 @@ impl HostForm {
         let user = cx.new(|cx| TextInput::new("root", false, cx));
         let jump = cx.new(|cx| TextInput::new("Optional, name of a saved host", false, cx));
         // Host, user and port are bullets unless the field is being edited.
+        name.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         port.update(cx, |t, _| t.set_hide_mode(Hide::Port));

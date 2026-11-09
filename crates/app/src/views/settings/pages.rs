@@ -36,7 +36,7 @@ impl SettingsView {
                     .child(Self::group("What to mask"))
                     .child(self.toggle("p-hosts", "Hostnames", "Saved hosts' addresses, wherever they appear.", s.mask_hosts(), |s, v| s.mask_hosts = Some(v), cx))
                     .child(self.toggle("p-users", "Usernames", "Saved users and your macOS user.", s.mask_users(), |s, v| s.mask_users = Some(v), cx))
-                    .child(self.toggle("p-local-host", "Local hostname", "The name of this computer, like in a shell prompt.", s.mask_local_hostname(), |s, v| s.mask_local_hostname = Some(v), cx))
+                    .child(self.toggle("p-names", "Host names", "The names you gave saved hosts, like in the list and tab titles.", s.mask_names(), |s, v| s.mask_names = Some(v), cx))
                     .child(self.toggle("p-v4", "IPv4 addresses", "Any address like 10.0.0.5, even unsaved ones.", s.mask_ipv4(), |s, v| s.mask_ipv4 = Some(v), cx))
                     .child(self.toggle("p-v6", "IPv6 addresses", "Full and compressed forms, ::1, zone ids (fe80::1%en0).", s.mask_ipv6(), |s, v| s.mask_ipv6 = Some(v), cx))
                     .child(self.toggle("p-ports", "Ports", "After addresses and saved hosts (host:2222), ssh -p 2222, Port 22, PORT=3000.", s.mask_ports(), |s, v| s.mask_ports = Some(v), cx))

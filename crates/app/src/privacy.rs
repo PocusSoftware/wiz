@@ -25,11 +25,11 @@ struct Config {
     secrets: bool,
     hosts: bool,
     users: bool,
-    local_host: bool,
+    names: bool,
     files: bool,
     host_tokens: Vec<Vec<char>>,
     user_tokens: Vec<Vec<char>>,
-    local_host_tokens: Vec<Vec<char>>,
+    name_tokens: Vec<Vec<char>>,
     extra: Vec<Vec<char>>,
     patterns: Vec<String>,
 }
@@ -43,11 +43,11 @@ impl Config {
             secrets: true,
             hosts: true,
             users: true,
-            local_host: false,
+            names: false,
             files: true,
             host_tokens: Vec::new(),
             user_tokens: Vec::new(),
-            local_host_tokens: Vec::new(),
+            name_tokens: Vec::new(),
             extra: Vec::new(),
             patterns: Vec::new(),
         }
@@ -68,7 +68,7 @@ pub fn configure(s: &Settings) {
     c.secrets = s.mask_secrets();
     c.hosts = s.mask_hosts();
     c.users = s.mask_users();
-    c.local_host = s.mask_local_hostname();
+    c.names = s.mask_names();
     c.files = s.hide_secret_files();
     c.extra = tokens(s.extra_mask());
     c.patterns = s.secret_file_patterns();
@@ -87,13 +87,12 @@ fn tokens(items: impl IntoIterator<Item = String>) -> Vec<Vec<char>> {
     v
 }
 
-/// Hostnames and usernames from the saved hosts (plus the local user) to mask, and this
-/// computer's own name.
-pub fn set_known(hosts: Vec<String>, users: Vec<String>, local_host: Option<String>) {
+/// Hostnames, usernames and names of the saved hosts (plus the local user) to mask.
+pub fn set_known(hosts: Vec<String>, users: Vec<String>, names: Vec<String>) {
     let mut c = CONFIG.write().unwrap();
     c.host_tokens = tokens(hosts);
     c.user_tokens = tokens(users);
-    c.local_host_tokens = tokens(local_host);
+    c.name_tokens = tokens(names);
 }
 
 fn is_word(c: char) -> bool {
@@ -405,7 +404,7 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
             let lists = [
                 (cfg.hosts, true, &cfg.host_tokens),
                 (cfg.users, false, &cfg.user_tokens),
-                (cfg.local_host, false, &cfg.local_host_tokens),
+                (cfg.names, false, &cfg.name_tokens),
                 (true, false, &cfg.extra),
             ];
             for (on, is_addr, list) in lists {

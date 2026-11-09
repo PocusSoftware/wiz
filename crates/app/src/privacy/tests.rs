@@ -18,7 +18,7 @@ fn setup(f: impl FnOnce(&mut Settings)) {
     set_known(
         vec!["my-server.example.com".into(), "ab".into()],
         vec!["tester".into()],
-        Some("my-mac".into()),
+        vec!["rekade".into()],
     );
 }
 
@@ -119,10 +119,10 @@ fn privacy_engine() {
     assert_eq!(redact("PASSWORD=hunter2"), "PASSWORD=hunter2");
     setup(|s| s.mask_users = Some(false));
     assert_eq!(redact("tester"), "tester");
-    // The computer's own name is off by default.
-    assert_eq!(redact("my-mac"), "my-mac");
-    setup(|s| s.mask_local_hostname = Some(true));
-    assert_eq!(redact("my-mac"), b(6));
+    // Host names are off by default.
+    assert_eq!(redact("rekade"), "rekade");
+    setup(|s| s.mask_names = Some(true));
+    assert_eq!(redact("rekade"), b(6));
     setup(|s| s.mask_hosts = Some(false));
     assert_eq!(redact("my-server.example.com"), "my-server.example.com");
     assert_eq!(
