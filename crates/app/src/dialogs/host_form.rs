@@ -13,7 +13,7 @@ use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::secrets::{self, Kind};
 
 use crate::theme::*;
-use crate::widgets::input::{Hide, TextInput};
+use crate::widgets::input::{Hide, InputEvent, TextInput};
 use crate::widgets::{button, icon_button, label, primary_button};
 
 /// How the host logs in, as picked in the form.
@@ -55,6 +55,8 @@ pub struct HostForm {
     /// Logo picked by hand, `None` for the one found when connecting.
     logo: Option<&'static str>,
     logo_open: bool,
+    /// Narrows the open logo list.
+    logo_search: Entity<TextInput>,
     error: Option<SharedString>,
     focus: FocusHandle,
 }
@@ -82,6 +84,9 @@ impl HostForm {
         let key_path = cx.new(|cx| TextInput::new("~/.ssh/id_ed25519", false, cx));
         let passphrase =
             cx.new(|cx| TextInput::new(if editing { "(unchanged)" } else { "optional" }, true, cx));
+        let logo_search = cx.new(|cx| TextInput::new("Search, like ubuntu or rhel", false, cx));
+        cx.subscribe(&logo_search, |_, _, _: &InputEvent, cx| cx.notify())
+            .detach();
         let mut mode = Mode::Password;
         let logo = existing
             .as_ref()
@@ -129,6 +134,7 @@ impl HostForm {
             mode,
             logo,
             logo_open: false,
+            logo_search,
             error: None,
             focus: cx.focus_handle(),
         }
@@ -345,13 +351,16 @@ impl Render for HostForm {
             .track_focus(&self.focus)
             // Tab visits the fields first, then the buttons (tab index 1).
             .tab_group()
-            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|t, ev: &KeyDownEvent, w, cx| {
                 match ev.keystroke.key.as_str() {
-                    "enter" => t.submit(cx),
-                    "escape" if t.logo_open => {
-                        t.logo_open = false;
-                        cx.notify();
+                    // In the logo search, Enter picks the first match.
+                    "enter" if t.logo_open => {
+                        if let Some(pick) = t.first_logo(cx) {
+                            t.close_logos(Some(pick), w, cx);
+                        }
                     }
+                    "enter" => t.submit(cx),
+                    "escape" if t.logo_open => t.close_logos(None, w, cx),
                     "escape" => cx.emit(FormEvent::Cancelled),
                     _ => return,
                 }

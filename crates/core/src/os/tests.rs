@@ -81,3 +81,18 @@ fn slugs_and_ids_are_unique() {
     }
     assert!(logo("windows").is_none());
 }
+
+#[test]
+fn search_finds_names_and_ids() {
+    let found = |q: &str| -> Vec<&str> {
+        LOGOS
+            .iter()
+            .filter(|l| l.matches(q))
+            .map(|l| l.slug)
+            .collect()
+    };
+    assert!(found("pop!").contains(&"popos"));
+    assert_eq!(found("rhel"), ["redhat"]);
+    assert!(found("").len() == LOGOS.len());
+    assert!(found("zzz").is_empty());
+}

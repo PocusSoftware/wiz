@@ -66,6 +66,15 @@ pub struct Logo {
     ids: &'static [&'static str],
 }
 
+impl Logo {
+    /// Whether a search (lowercase) finds this logo by name, slug or os-release ID.
+    pub fn matches(&self, query: &str) -> bool {
+        self.title.to_lowercase().contains(query)
+            || self.slug.contains(query)
+            || self.ids.iter().any(|id| id.contains(query))
+    }
+}
+
 pub const LOGOS: &[Logo] = &[
     Logo {
         slug: "almalinux",

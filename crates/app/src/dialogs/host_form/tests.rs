@@ -65,3 +65,15 @@ fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
     let saved = form.update(cx, HostForm::try_save).unwrap();
     assert_eq!(saved.logo.as_deref(), Some("debian"));
 }
+
+#[gpui::test]
+fn enter_in_logo_search_picks_the_first_match(cx: &mut TestAppContext) {
+    let form = cx.new(|cx| HostForm::new(None, Vec::new(), Vec::new(), cx));
+    form.update(cx, |f, cx| {
+        assert_eq!(f.first_logo(cx), Some(None));
+        f.logo_search.update(cx, |t, _| t.set_value("rhel"));
+        assert_eq!(f.first_logo(cx), Some(Some("redhat")));
+        f.logo_search.update(cx, |t, _| t.set_value("zzz"));
+        assert_eq!(f.first_logo(cx), None);
+    });
+}
