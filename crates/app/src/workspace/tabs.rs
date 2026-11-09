@@ -532,11 +532,12 @@ impl Workspace {
             })
     }
 
-    pub(super) fn content(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// The page under the tab bar. `width` is the window's, for the hosts page layout.
+    pub(super) fn content(&self, width: Pixels, cx: &mut Context<Self>) -> AnyElement {
         match (self.page, &self.settings) {
             (Page::Settings, Some(v)) => return v.clone().into_any_element(),
             (Page::Tab, _) if !self.tabs.is_empty() => {}
-            _ => return self.home_view(cx),
+            _ => return self.home_view(width, cx),
         }
         match self.tabs.get(self.active).map(|t| &t.kind) {
             Some(TabKind::Terminal(t)) if t.panes.len() == 1 => {

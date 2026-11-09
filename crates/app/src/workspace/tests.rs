@@ -1144,3 +1144,28 @@ fn hosts_page_by_keyboard(cx: &mut TestAppContext) {
     );
     assert!(root.read_with(cx, |r, _| home::tabs_of(&r.tabs, "x@y:22").is_empty()));
 }
+
+#[gpui::test]
+fn hosts_page_click_picks_wide_and_opens_narrow(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    root.update(cx, |r, cx| {
+        r.cfg.hosts = vec![named("a", "a", None, false), named("b", "b", None, false)];
+        cx.notify();
+    });
+    cx.run_until_parked();
+    // The second row, below the search field.
+    let row_b = gpui::point(px(100.), px(130.));
+    cx.simulate_click(row_b, gpui::Modifiers::default());
+    let b = root.read_with(cx, |r, _| r.cfg.hosts[1].account());
+    assert_eq!(root.read_with(cx, |r, _| r.selected.clone()), Some(b));
+    assert!(root.read_with(cx, |r, _| r.pending.is_empty() && !r.modal_open()));
+
+    // Narrow, the same click goes straight to connecting.
+    root.update(cx, |r, _| r.selected = None);
+    cx.simulate_resize(size(px(500.), px(900.)));
+    cx.simulate_click(row_b, gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(root.read_with(cx, |r, _| r.selected.is_none()
+        && (!r.pending.is_empty() || r.modal_open() || r.status.is_some())));
+}

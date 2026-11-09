@@ -682,7 +682,9 @@ impl Render for Workspace {
                             .min_h_0()
                             .relative()
                             .child(page_in(
-                                div().size_full().child(self.content(cx)),
+                                div()
+                                    .size_full()
+                                    .child(self.content(window.viewport_size().width, cx)),
                                 ("page", self.epoch as usize),
                             ))
                             // Records the content size, for split layout and divider drags.
