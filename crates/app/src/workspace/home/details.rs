@@ -1,8 +1,6 @@
 //! The right side of the hosts page: what can be opened on the picked host, its open
 //! tabs, and how it connects.
 
-use crate::widgets::{icon_text_button, primary_icon_text_button};
-
 use super::*;
 
 impl Workspace {
@@ -119,16 +117,16 @@ impl Workspace {
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        primary_icon_text_button("d-shell", "terminal", "New terminal").on_click(
+                        action("d-shell", "terminal", "New terminal", true).on_click(
                             cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Shell, w, cx)),
                         ),
                     )
                     .child(
-                        icon_text_button("d-docker", "container", "Docker").on_click(
+                        action("d-docker", "container", "Docker containers", false).on_click(
                             cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Docker, w, cx)),
                         ),
                     )
-                    .child(icon_text_button("d-files", "folder", "Files").on_click(
+                    .child(action("d-files", "folder", "Files (SFTP)", false).on_click(
                         cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Sftp, w, cx)),
                     )),
             )
@@ -226,4 +224,27 @@ impl Workspace {
                 d.child(row("Through", path, color))
             })
     }
+}
+
+/// A big icon button for what can be opened on the host. The terminal, the usual pick,
+/// is filled with the accent.
+fn action(id: &'static str, name: &str, tooltip: &str, main: bool) -> gpui::Stateful<gpui::Div> {
+    let (bg, fg, hover) = if main {
+        (accent(), on_accent(), accent_text())
+    } else {
+        (ACTIVE, TEXT, 0x323235)
+    };
+    keyboard(div().id(id))
+        .size(px(32.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(2.))
+        .border_1()
+        .border_color(c(BORDER))
+        .bg(c(bg))
+        .cursor_pointer()
+        .hover(move |s| s.bg(c(hover)))
+        .tooltip(crate::widgets::tip(tooltip.to_string()))
+        .child(icon(name, 15., fg))
 }

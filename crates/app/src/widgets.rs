@@ -115,14 +115,7 @@ pub fn icon_button(
         .child(icon(name, 13., color))
 }
 
-fn base(
-    id: impl Into<ElementId>,
-    icon_name: Option<&str>,
-    text: &str,
-    bg: u32,
-    fg: u32,
-    hover: u32,
-) -> Stateful<Div> {
+fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> Stateful<Div> {
     keyboard(div().id(id))
         .px_3()
         .h(px(26.))
@@ -137,38 +130,15 @@ fn base(
         .text_color(c(fg))
         .cursor_pointer()
         .hover(move |s| s.bg(c(hover)))
-        .gap(px(6.))
-        .when_some(icon_name, |d, name| d.child(icon(name, 13., fg)))
         .child(text.to_string())
 }
 
 pub fn button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
-    base(id, None, text, ACTIVE, TEXT, 0x323235)
+    base(id, text, ACTIVE, TEXT, 0x323235)
 }
 
 pub fn primary_button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
-    base(id, None, text, accent(), on_accent(), accent_text())
-}
-
-/// `button` with an icon before the text.
-pub fn icon_text_button(id: impl Into<ElementId>, icon_name: &str, text: &str) -> Stateful<Div> {
-    base(id, Some(icon_name), text, ACTIVE, TEXT, 0x323235)
-}
-
-/// `primary_button` with an icon before the text.
-pub fn primary_icon_text_button(
-    id: impl Into<ElementId>,
-    icon_name: &str,
-    text: &str,
-) -> Stateful<Div> {
-    base(
-        id,
-        Some(icon_name),
-        text,
-        accent(),
-        on_accent(),
-        accent_text(),
-    )
+    base(id, text, accent(), on_accent(), accent_text())
 }
 
 pub fn label(text: &str) -> Div {
