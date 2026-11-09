@@ -63,6 +63,8 @@ pub struct Settings {
     pub hide_sensitive: Option<bool>,
     pub mask_hosts: Option<bool>,
     pub mask_users: Option<bool>,
+    /// Mask this computer's own name (shell prompts, `uname -n`).
+    pub mask_local_hostname: Option<bool>,
     pub mask_ipv4: Option<bool>,
     pub mask_ipv6: Option<bool>,
     /// Mask port numbers (`host:2222`, `ssh -p 2222`, `Port 22`).
@@ -141,6 +143,7 @@ getters! {
     hide_sensitive: bool = false;
     mask_hosts: bool = true;
     mask_users: bool = true;
+    mask_local_hostname: bool = false;
     mask_ipv4: bool = true;
     mask_ipv6: bool = true;
     mask_ports: bool = true;

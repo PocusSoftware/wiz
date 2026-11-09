@@ -21,7 +21,7 @@ pub(super) enum Section {
     Other,
 }
 
-/// Whether `h` matches the search: its name, address or group contains `query`, ignoring
+/// Whether `h` matches the search: its name, address, group or a tag contains `query`, ignoring
 /// case. An empty search matches every host.
 pub(super) fn matches(h: &Host, query: &str) -> bool {
     let q = query.trim().to_lowercase();
@@ -29,6 +29,7 @@ pub(super) fn matches(h: &Host, query: &str) -> bool {
         || [Some(&h.name), Some(&h.account()), h.group.as_ref()]
             .into_iter()
             .flatten()
+            .chain(&h.tags)
             .any(|s| s.to_lowercase().contains(&q))
 }
 

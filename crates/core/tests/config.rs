@@ -75,6 +75,7 @@ fn roundtrip() {
                 jump: None,
                 os: None,
                 logo: None,
+                tags: Vec::new(),
                 auth: AuthMethod::Password,
             },
             Host {
@@ -87,6 +88,7 @@ fn roundtrip() {
                 jump: None,
                 os: None,
                 logo: None,
+                tags: Vec::new(),
                 auth: AuthMethod::Key { path: "/k".into() },
             },
         ],
@@ -132,6 +134,7 @@ fn jump_chains() {
         jump: jump.map(|j| format!("u@{j}:22")),
         os: None,
         logo: None,
+        tags: Vec::new(),
         auth: AuthMethod::Agent,
     };
     let mut cfg = Config {
@@ -179,6 +182,7 @@ fn validate() {
         jump: None,
         os: None,
         logo: None,
+        tags: Vec::new(),
         auth: AuthMethod::Password,
     };
     for ok in [

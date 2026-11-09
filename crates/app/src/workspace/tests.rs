@@ -129,6 +129,7 @@ fn test_host(user: &str) -> Host {
         jump: None,
         os: None,
         logo: None,
+        tags: Vec::new(),
         auth: AuthMethod::Password,
     }
 }
@@ -1008,6 +1009,7 @@ fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext)
         jump: Some(bastion.account()),
         os: None,
         logo: None,
+        tags: Vec::new(),
         ..test_host("inner")
     };
     root.update_in(cx, |r, w, cx| {
@@ -1049,7 +1051,7 @@ fn named(name: &str, user: &str, group: Option<&str>, pinned: bool) -> Host {
 #[test]
 fn hosts_page_lists_pinned_then_groups_then_the_rest() {
     use home::{Section, sections};
-    let hosts = vec![
+    let mut hosts = vec![
         named("web", "deploy", None, false),
         named("db", "pg", Some("prod"), false),
         named("box", "root", Some("Lab"), false),
@@ -1078,6 +1080,8 @@ fn hosts_page_lists_pinned_then_groups_then_the_rest() {
         ]
     );
     assert!(sections(&hosts, "nothing").is_empty());
+    hosts[0].tags = vec!["Staging".into()];
+    assert_eq!(sections(&hosts, "stag"), vec![(Section::Other, vec![0])]);
 }
 
 #[test]

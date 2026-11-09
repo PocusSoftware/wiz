@@ -755,10 +755,10 @@ impl Render for Workspace {
     }
 }
 
-/// Hosts and usernames (and the local user) that "hide sensitive information" masks.
+/// Hosts and usernames (and the local user and computer name) that "hide sensitive information" masks.
 fn refresh_privacy_tokens<'a>(hosts: impl Iterator<Item = &'a Host> + Clone) {
     let mut users: Vec<String> = hosts.clone().map(|h| h.user.clone()).collect();
     let hosts = hosts.map(|h| h.host.clone()).collect();
     users.extend(crate::platform::local_user());
-    privacy::set_known(hosts, users);
+    privacy::set_known(hosts, users, crate::platform::local_hostname());
 }

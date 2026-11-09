@@ -327,6 +327,11 @@ pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
 /// What the hosts page calls the computer Wiz runs on.
 pub const THIS_COMPUTER: &str = "This PC";
 
+/// This computer's name, masked by "hide sensitive information".
+pub fn local_hostname() -> Option<String> {
+    std::env::var("COMPUTERNAME").ok()
+}
+
 /// The logged-in user, masked by "hide sensitive information".
 pub fn local_user() -> Option<String> {
     std::env::var("USERNAME").ok()

@@ -40,6 +40,9 @@ pub struct Host {
     /// Logo picked in the host form, shown instead of the detected one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logo: Option<String>,
+    /// Free-form labels, searchable on the hosts page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }

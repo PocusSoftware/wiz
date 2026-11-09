@@ -25,7 +25,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 
 | Area | Keys |
 |---|---|
-| Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_ipv4`, `mask_ipv6`, `mask_ports`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
+| Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_local_hostname` (off), `mask_ipv4`, `mask_ipv6`, `mask_ports`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
 | Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `accent_color` ("#RRGGBB", when colorful), `window_controls` ("left" or "right"), `oled_black`, `show_os_logos` (the OS logo found when connecting; one picked in the host form always shows), `colorful` (off: the gray theme), `animations`, `show_latency` (off), `show_split_button`, `show_quick_connect_button`, `show_privacy_button` |
 | Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
@@ -44,7 +44,7 @@ To put another server in the split, click the split button or press ⇧⌘D and 
 Everything works without a mouse. Tab and Shift+Tab, or the arrow keys, move between controls. Enter or Space presses the focused one. A dialog keeps Tab inside it, fields first, then its buttons. The terminal keeps Tab for the shell, so ⌘L jumps to the tab bar. There Left and Right move between tabs, Home and End go to the ends, Enter selects, Shift+Left and Shift+Right move a tab, Delete closes it, and Shift+F10 opens its menu (Up and Down to pick). In the file panes Left and Right switch between the two lists.
 
 ## Hosts page
-Saved hosts are listed on the left, pinned ones first, then one section per group. The host you pick shows on the right: open a terminal, Docker or files on it, switch to the tabs already open for it, and see how it connects (address, sign-in, jump hosts). Pin, edit and delete are there too. Typing searches by name, address or group, Up and Down pick a host, Enter opens a terminal on it, and Escape clears the search. A double click on a host opens a terminal. Right-click a host for the same actions, or the empty part of the list to add a host. In a narrow window only the list shows, and one click opens it.
+Saved hosts are listed on the left, pinned ones first, then one section per group. The host you pick shows on the right: open a terminal, Docker or files on it, switch to the tabs already open for it, and see how it connects (address, sign-in, jump hosts). Pin, edit and delete are there too. Hosts can carry optional tags (comma separated in the host form). Typing searches by name, address, group or tag, Up and Down pick a host, Enter opens a terminal on it, and Escape clears the search. A double click on a host opens a terminal. Right-click a host for the same actions, or the empty part of the list to add a host. In a narrow window only the list shows, and one click opens it.
 
 ## Quick connect
 ⌘K, the arrow button in the title bar, or type `user@host` in the hosts page search and press Enter when no saved host matches. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.

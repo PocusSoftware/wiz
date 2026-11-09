@@ -43,6 +43,7 @@ pub struct HostForm {
     groups: Vec<String>,
     name: Entity<TextInput>,
     group: Entity<TextInput>,
+    tags: Entity<TextInput>,
     host: Entity<TextInput>,
     port: Entity<TextInput>,
     user: Entity<TextInput>,
@@ -70,6 +71,7 @@ impl HostForm {
     ) -> Self {
         let name = cx.new(|cx| TextInput::new("My server", false, cx));
         let group = cx.new(|cx| TextInput::new("Optional, e.g. Production", false, cx));
+        let tags = cx.new(|cx| TextInput::new("Optional, comma separated", false, cx));
         let host = cx.new(|cx| TextInput::new("example.com or 10.0.0.5", false, cx));
         let port = cx.new(|cx| TextInput::new("22", false, cx));
         let user = cx.new(|cx| TextInput::new("root", false, cx));
@@ -99,6 +101,7 @@ impl HostForm {
                 group.update(cx, |t, _| {
                     t.set_value(h.group.as_deref().unwrap_or_default())
                 });
+                tags.update(cx, |t, _| t.set_value(&h.tags.join(", ")));
                 host.update(cx, |t, _| t.set_value(&h.host));
                 port.update(cx, |t, _| t.set_value(&h.port.to_string()));
                 user.update(cx, |t, _| t.set_value(&h.user));
@@ -124,6 +127,7 @@ impl HostForm {
             groups,
             name,
             group,
+            tags,
             host,
             port,
             user,
@@ -182,6 +186,16 @@ impl HostForm {
                 .cloned()
                 .unwrap_or(g)
         });
+        let mut tags: Vec<String> = Vec::new();
+        for t in get(&self.tags)
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+        {
+            if !tags.iter().any(|e| e.to_lowercase() == t.to_lowercase()) {
+                tags.push(t.to_string());
+            }
+        }
         let name = get(&self.name);
         let jump_name = get(&self.jump);
         let jump = if jump_name.is_empty() {
@@ -230,6 +244,7 @@ impl HostForm {
             jump,
             os,
             logo: self.logo.map(Into::into),
+            tags,
             auth,
         };
         new.validate()?;
@@ -399,6 +414,7 @@ impl Render for HostForm {
                     .child(field("Name", &self.name).flex_1())
                     .child(field("Group", &self.group).flex_1()),
             )
+            .child(field("Tags", &self.tags))
             .child(
                 div()
                     .flex()

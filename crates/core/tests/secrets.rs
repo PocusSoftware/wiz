@@ -37,6 +37,7 @@ fn server() -> Host {
         jump: None,
         os: None,
         logo: None,
+        tags: Vec::new(),
         auth: AuthMethod::Password,
     }
 }

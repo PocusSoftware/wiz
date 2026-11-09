@@ -155,6 +155,7 @@ mod agent_login {
             jump: None,
             os: None,
             logo: None,
+            tags: Vec::new(),
             auth: AuthMethod::Agent,
         };
         let connect = |creds: Credentials| {

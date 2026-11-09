@@ -32,6 +32,7 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
         jump: None,
         os: Some("ubuntu".into()),
         logo: None,
+        tags: Vec::new(),
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
@@ -57,6 +58,7 @@ fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
         jump: None,
         os: None,
         logo: Some("not-a-logo".into()),
+        tags: Vec::new(),
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
@@ -76,4 +78,16 @@ fn enter_in_logo_search_picks_the_first_match(cx: &mut TestAppContext) {
         f.logo_search.update(cx, |t, _| t.set_value("zzz"));
         assert_eq!(f.first_logo(cx), None);
     });
+}
+
+#[gpui::test]
+fn tags_are_split_trimmed_and_deduplicated(cx: &mut TestAppContext) {
+    let form = cx.new(|cx| HostForm::new(None, Vec::new(), Vec::new(), cx));
+    form.update(cx, |f, cx| {
+        f.mode = Mode::Agent;
+        f.host.update(cx, |t, _| t.set_value("example.com"));
+        f.tags.update(cx, |t, _| t.set_value(" db, Web ,,web, eu "));
+    });
+    let saved = form.update(cx, HostForm::try_save).unwrap();
+    assert_eq!(saved.tags, ["db", "Web", "eu"]);
 }

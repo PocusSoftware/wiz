@@ -130,6 +130,7 @@ impl QuickConnect {
             jump: None,
             os: None,
             logo: None,
+            tags: Vec::new(),
             auth,
         };
         host.validate()?;
