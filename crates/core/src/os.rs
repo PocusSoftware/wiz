@@ -7,8 +7,8 @@ mod tests;
 
 use crate::session::Connection;
 
-/// Appliances whose os-release just says Debian or FreeBSD, then the distribution, then the
-/// kernel. The first `ID=` line wins.
+/// Appliances and flavors whose os-release just says Arch, Debian, Ubuntu or FreeBSD, then the
+/// distribution, then the kernel. The first `ID=` line wins.
 const COMMAND: &str = "test -d /etc/pve && echo ID=proxmox; \
 command -v midclt >/dev/null 2>&1 && echo ID=truenas; \
 test -e /etc/unraid-version && echo ID=unraid; \
@@ -16,6 +16,10 @@ test -d /etc/openmediavault && echo ID=openmediavault; \
 test -e /etc/synoinfo.conf && echo ID=synology; \
 test -d /usr/local/opnsense && echo ID=opnsense; \
 grep -qs pfSense /etc/platform && echo ID=pfsense; \
+test -e /etc/mx-version && echo ID=mx; \
+test -d ~/.local/share/omarchy && echo ID=omarchy; \
+grep -qs ^TAILS_ /etc/os-release && echo ID=tails; \
+sed -En 's/^Package: ([klx]ubuntu)-desktop$/ID=\\1/p' /var/lib/dpkg/status 2>/dev/null; \
 cat /etc/os-release 2>/dev/null; uname -s";
 
 /// The logo slug of the server behind `conn`, `None` when it can't be told (Windows, a
@@ -58,11 +62,13 @@ const LOGOS: &[(&str, &str)] = &[
     ("arch", "archlinux"),
     ("archarm", "archlinux"),
     ("artix", "artixlinux"),
+    ("cachyos", "cachyos"),
     ("centos", "centos"),
     ("cos", "googlecontaineroptimizedos"),
     ("darwin", "macos"),
     ("debian", "debian"),
     ("deepin", "deepin"),
+    ("devuan", "devuan"),
     ("elementary", "elementary"),
     ("endeavouros", "endeavouros"),
     ("fedora", "fedora"),
@@ -72,14 +78,18 @@ const LOGOS: &[(&str, &str)] = &[
     ("gentoo", "gentoo"),
     ("haos", "homeassistant"),
     ("kali", "kalilinux"),
+    ("kubuntu", "kubuntu"),
     ("linux", "linux"),
     ("linuxmint", "linuxmint"),
+    ("lubuntu", "lubuntu"),
     ("manjaro", "manjaro"),
     ("manjaro-arm", "manjaro"),
-    ("neon", "kde"),
+    ("mx", "mxlinux"),
+    ("neon", "kdeneon"),
     ("netbsd", "netbsd"),
     ("nixos", "nixos"),
     ("nobara", "nobaralinux"),
+    ("omarchy", "omarchy"),
     ("openbsd", "openbsd"),
     ("openmediavault", "openmediavault"),
     ("opensuse", "opensuse"),
@@ -89,12 +99,14 @@ const LOGOS: &[(&str, &str)] = &[
     ("opensuse-tumbleweed", "opensuse"),
     ("openwrt", "openwrt"),
     ("opnsense", "opnsense"),
+    ("org.gnome.os", "gnome"),
     ("osmc", "osmc"),
     ("parrot", "parrotsecurity"),
     ("pfsense", "pfsense"),
     ("photon", "photon"),
     ("pop", "popos"),
     ("proxmox", "proxmox"),
+    ("qubes", "qubesos"),
     ("rancheros", "rancher"),
     ("raspbian", "raspberrypi"),
     ("rhel", "redhat"),
@@ -107,11 +119,14 @@ const LOGOS: &[(&str, &str)] = &[
     ("steamos", "steamdeck"),
     ("suse", "suse"),
     ("synology", "synology"),
+    ("tails", "tails"),
     ("talos", "talos"),
     ("truenas", "truenas"),
+    ("tuxedo", "tuxedocomputers"),
     ("ubuntu", "ubuntu"),
     ("unraid", "unraid"),
     ("void", "voidlinux"),
+    ("xubuntu", "xubuntu"),
     ("zorin", "zorin"),
 ];
 

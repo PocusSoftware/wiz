@@ -36,6 +36,9 @@ fn unknown_linux_gets_tux() {
 fn appliance_marker_beats_os_release() {
     let out = "ID=proxmox\nPRETTY_NAME=\"Debian GNU/Linux 12\"\nID=debian\nLinux";
     assert_eq!(parse(out), Some("proxmox"));
+    let out = "ID=kubuntu\nNAME=\"Ubuntu\"\nID=ubuntu\nID_LIKE=debian\nLinux";
+    assert_eq!(parse(out), Some("kubuntu"));
+    assert_eq!(parse("ID=mx\nID=debian\nLinux"), Some("mxlinux"));
 }
 
 #[test]
