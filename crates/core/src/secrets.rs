@@ -7,9 +7,9 @@ pub mod keychain;
 mod sealed;
 pub mod vault;
 
-use std::sync::{Mutex, RwLock};
+use std::sync::{Mutex, PoisonError, RwLock};
 
-use crate::{Error, Result};
+use crate::{Error, Result, locked};
 pub use sealed::Secret;
 use vault::Vault;
 
@@ -88,11 +88,11 @@ static STORE: RwLock<Store> = RwLock::new(Store::File);
 static VAULT: Mutex<Option<Vault>> = Mutex::new(None);
 
 pub fn store() -> Store {
-    *STORE.read().unwrap()
+    *STORE.read().unwrap_or_else(PoisonError::into_inner)
 }
 
 pub fn set_store(s: Store) {
-    *STORE.write().unwrap() = s;
+    *STORE.write().unwrap_or_else(PoisonError::into_inner) = s;
 }
 
 /// True when secrets can be read without asking for the master password.
@@ -105,7 +105,7 @@ pub fn ready() -> bool {
 }
 
 pub fn is_unlocked() -> bool {
-    VAULT.lock().unwrap().is_some()
+    locked(&VAULT).is_some()
 }
 
 /// Whether a secrets file has been created yet.
@@ -121,12 +121,12 @@ pub fn unlock(master: &str) -> Result<()> {
     } else {
         Vault::create(&path, master)?
     };
-    *VAULT.lock().unwrap() = Some(v);
+    *locked(&VAULT) = Some(v);
     Ok(())
 }
 
 pub fn lock() {
-    *VAULT.lock().unwrap() = None;
+    *locked(&VAULT) = None;
 }
 
 pub fn change_master(new_master: &str) -> Result<()> {
@@ -134,7 +134,7 @@ pub fn change_master(new_master: &str) -> Result<()> {
 }
 
 fn with_vault<T>(f: impl FnOnce(&mut Vault) -> Result<T>) -> Result<T> {
-    match VAULT.lock().unwrap().as_mut() {
+    match locked(&VAULT).as_mut() {
         Some(v) => f(v),
         None => Err(Error::Locked),
     }

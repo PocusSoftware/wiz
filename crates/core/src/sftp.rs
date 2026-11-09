@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{Error, Result};
+use crate::{Error, Result, locked};
 
 fn e(err: impl std::fmt::Display) -> Error {
     Error::Sftp(err.to_string())
@@ -137,7 +137,7 @@ impl Progress {
         }
     }
     fn set_current(&self, s: &str) {
-        *self.current.lock().unwrap() = s.to_string();
+        *locked(&self.current) = s.to_string();
     }
     /// Count `n` bytes against the speed limit and return how long to wait before sending
     /// more. Paced over one-second windows, so a changed limit applies within a second.
@@ -148,7 +148,7 @@ impl Progress {
             return Duration::ZERO;
         }
         let now = Instant::now();
-        let mut w = self.window.lock().unwrap();
+        let mut w = locked(&self.window);
         let (start, sent) = match *w {
             Some((start, sent)) if now - start < Duration::from_secs(1) => (start, sent + n),
             _ => (now, n),

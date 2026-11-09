@@ -42,8 +42,9 @@ pub fn parse_target(input: &str, default_user: &str) -> Result<(String, String, 
             None if after.is_empty() => (h, None),
             None => return Err("Unexpected text after the IPv6 address.".into()),
         }
-    } else if rest.matches(':').count() == 1 {
-        let (h, p) = rest.split_once(':').unwrap();
+    } else if let Some((h, p)) = rest.split_once(':')
+        && !p.contains(':')
+    {
         (h, Some(p))
     } else {
         // No colon, or a bare IPv6 address.

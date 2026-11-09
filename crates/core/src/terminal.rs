@@ -7,6 +7,8 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::term::{Config, Term};
 use alacritty_terminal::vte::ansi::Processor;
 
+use crate::locked;
+
 struct Size {
     cols: usize,
     rows: usize,
@@ -35,8 +37,8 @@ pub struct Listener {
 impl EventListener for Listener {
     fn send_event(&self, event: Event) {
         match event {
-            Event::PtyWrite(s) => self.replies.lock().unwrap().extend_from_slice(s.as_bytes()),
-            Event::Title(t) => *self.title.lock().unwrap() = Some(t),
+            Event::PtyWrite(s) => locked(&self.replies).extend_from_slice(s.as_bytes()),
+            Event::Title(t) => *locked(&self.title) = Some(t),
             _ => {}
         }
     }
@@ -128,7 +130,7 @@ impl Terminal {
     /// Feed remote output. Returns bytes that must be sent back to the remote.
     pub fn advance(&mut self, bytes: &[u8]) -> Vec<u8> {
         self.parser.advance(&mut self.term, bytes);
-        std::mem::take(&mut *self.listener.replies.lock().unwrap())
+        std::mem::take(&mut *locked(&self.listener.replies))
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
@@ -139,7 +141,7 @@ impl Terminal {
     }
 
     pub fn title(&self) -> Option<String> {
-        self.listener.title.lock().unwrap().clone()
+        locked(&self.listener.title).clone()
     }
 
     /// All occurrences of `query` in scrollback and screen, oldest first. Case-insensitive

@@ -4,7 +4,7 @@ members = ["crates/core", "crates/app"]
 
 [workspace.package]
 edition = "2024"
-version = "0.13.0"
+version = "0.13.1"
 license = "MIT"
 
 # The rules behind these are in AGENTS.md. Warnings count as failures.
@@ -35,6 +35,8 @@ allow_attributes = "warn"
 allow_attributes_without_reason = "warn"
 
 [profile.release]
+# A wrapped integer in the shipped binary is worse than a clean panic.
+overflow-checks = true
 lto = "thin"
 codegen-units = 1
 strip = true

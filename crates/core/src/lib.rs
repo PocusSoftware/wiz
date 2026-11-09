@@ -16,6 +16,13 @@ pub use error::{Error, Result};
 /// Keychain service name and config directory name.
 pub const APP_ID: &str = "software.pocus.wiz";
 
+/// Lock `m`, carrying on with the data if another thread panicked while holding it: every
+/// mutex here guards plain values that stay valid, and a poisoned lock must not take the
+/// app down with it.
+pub(crate) fn locked<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Where hosts, known_hosts and settings live. `SSHC_CONFIG_DIR` overrides it (used by
 /// tests so they never touch real data).
 pub fn config_dir() -> Result<std::path::PathBuf> {
@@ -47,3 +54,6 @@ pub(crate) fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> 
     std::fs::rename(tmp, path)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
