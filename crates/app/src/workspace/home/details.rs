@@ -1,6 +1,8 @@
 //! The right side of the hosts page: what can be opened on the picked host, its open
 //! tabs, and how it connects.
 
+use crate::widgets::{icon_text_button, primary_icon_text_button};
+
 use super::*;
 
 impl Workspace {
@@ -116,13 +118,17 @@ impl Workspace {
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(primary_button("d-shell", "New terminal").on_click(
-                        cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Shell, w, cx)),
-                    ))
-                    .child(button("d-docker", "Docker").on_click(
-                        cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Docker, w, cx)),
-                    ))
-                    .child(button("d-files", "Files").on_click(
+                    .child(
+                        primary_icon_text_button("d-shell", "terminal", "New terminal").on_click(
+                            cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Shell, w, cx)),
+                        ),
+                    )
+                    .child(
+                        icon_text_button("d-docker", "container", "Docker").on_click(
+                            cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Docker, w, cx)),
+                        ),
+                    )
+                    .child(icon_text_button("d-files", "folder", "Files").on_click(
                         cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Sftp, w, cx)),
                     )),
             )
