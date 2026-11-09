@@ -16,6 +16,7 @@ impl SettingsView {
                     if s.window_controls() == side { primary_button(name, name) } else { button(name, name) }
                         .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.window_controls = Some(side))))
                 }))))
+                .child(self.toggle("a-os-logos", "Server logos", "Show each host's operating system logo, like Ubuntu or NixOS, found when connecting.", s.show_os_logos(), |s, v| s.show_os_logos = Some(v), cx))
                 .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
                 .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                 .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))

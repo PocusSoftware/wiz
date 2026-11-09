@@ -154,6 +154,7 @@ async fn login(
         group: None,
         pinned: false,
         jump: None,
+        os: None,
         auth: AuthMethod::Password,
     };
     let verifier = HostKeyVerifier {

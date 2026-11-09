@@ -127,6 +127,7 @@ fn test_host(user: &str) -> Host {
         group: None,
         pinned: false,
         jump: None,
+        os: None,
         auth: AuthMethod::Password,
     }
 }
@@ -1004,6 +1005,7 @@ fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext)
     let inner = Host {
         name: "inner".into(),
         jump: Some(bastion.account()),
+        os: None,
         ..test_host("inner")
     };
     root.update_in(cx, |r, w, cx| {

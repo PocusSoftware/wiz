@@ -34,6 +34,9 @@ pub struct Host {
     /// Account (`user@host:port`) of the saved host to connect through, like `ssh -J`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jump: Option<String>,
+    /// Logo of the operating system found on the last connect (see `os::parse`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
     // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }

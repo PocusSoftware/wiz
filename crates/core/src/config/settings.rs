@@ -48,6 +48,8 @@ pub struct Settings {
     pub window_controls: Option<WindowControls>,
     /// Pure black window and terminal background for OLED screens.
     pub oled_black: Option<bool>,
+    /// Show each saved host's operating system logo on its card, found when connecting.
+    pub show_os_logos: Option<bool>,
     /// The setting `colorful` replaced (inverted). Only read, to carry it over.
     #[serde(skip_serializing)]
     pub monochrome_icons: Option<bool>,
@@ -131,6 +133,7 @@ getters! {
     accent_color: String = "#f05a29".into();
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
+    show_os_logos: bool = true;
     show_latency: bool = false;
     show_split_button: bool = true;
     show_quick_connect_button: bool = true;

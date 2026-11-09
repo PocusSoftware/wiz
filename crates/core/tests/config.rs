@@ -73,6 +73,7 @@ fn roundtrip() {
                 group: Some("prod".into()),
                 pinned: true,
                 jump: None,
+                os: None,
                 auth: AuthMethod::Password,
             },
             Host {
@@ -83,6 +84,7 @@ fn roundtrip() {
                 group: None,
                 pinned: false,
                 jump: None,
+                os: None,
                 auth: AuthMethod::Key { path: "/k".into() },
             },
         ],
@@ -126,6 +128,7 @@ fn jump_chains() {
         group: None,
         pinned: false,
         jump: jump.map(|j| format!("u@{j}:22")),
+        os: None,
         auth: AuthMethod::Agent,
     };
     let mut cfg = Config {
@@ -171,6 +174,7 @@ fn validate() {
         group: None,
         pinned: false,
         jump: None,
+        os: None,
         auth: AuthMethod::Password,
     };
     for ok in [

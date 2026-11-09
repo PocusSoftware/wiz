@@ -281,6 +281,7 @@ impl Workspace {
                 match r {
                     Ok(Some((conn, pw))) if exists => {
                         let conn = Arc::new(conn);
+                        this.detect_os(account.clone(), conn.clone(), cx);
                         this.conns.insert(
                             account,
                             Live {

@@ -30,7 +30,7 @@ impl SftpView {
                 self.launch_editor(side, std::path::Path::new(&path), cx);
                 return;
             }
-            Source::Remote(r) => r.clone(),
+            Source::Remote(r) => (**r).clone(),
         };
         if size > EDIT_MAX {
             self.pane_mut(side).error =

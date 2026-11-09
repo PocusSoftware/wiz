@@ -1,6 +1,9 @@
 //! Icons, brand images and fonts compiled into the binary. Icons are served to gpui by
 //! path, fonts are added to the text system at startup.
 
+#[cfg(test)]
+mod tests;
+
 use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
@@ -50,7 +53,58 @@ icons!(
     "columns",
     "pause",
     "search",
-    "external-link"
+    "external-link",
+    "os/almalinux",
+    "os/alpinelinux",
+    "os/archlinux",
+    "os/artixlinux",
+    "os/asahilinux",
+    "os/centos",
+    "os/debian",
+    "os/deepin",
+    "os/elementary",
+    "os/endeavouros",
+    "os/fedora",
+    "os/freebsd",
+    "os/garudalinux",
+    "os/gentoo",
+    "os/googlecontaineroptimizedos",
+    "os/homeassistant",
+    "os/kalilinux",
+    "os/kde",
+    "os/linux",
+    "os/linuxmint",
+    "os/macos",
+    "os/manjaro",
+    "os/netbsd",
+    "os/nixos",
+    "os/nobaralinux",
+    "os/openbsd",
+    "os/openmediavault",
+    "os/opensuse",
+    "os/openwrt",
+    "os/opnsense",
+    "os/osmc",
+    "os/parrotsecurity",
+    "os/pfsense",
+    "os/photon",
+    "os/popos",
+    "os/proxmox",
+    "os/rancher",
+    "os/raspberrypi",
+    "os/redhat",
+    "os/rockylinux",
+    "os/slackware",
+    "os/solus",
+    "os/steamdeck",
+    "os/suse",
+    "os/synology",
+    "os/talos",
+    "os/truenas",
+    "os/ubuntu",
+    "os/unraid",
+    "os/voidlinux",
+    "os/zorin",
 );
 
 /// Default UI and terminal fonts (SIL Open Font License, texts next to the files), so
@@ -65,7 +119,8 @@ pub const FONTS: &[&[u8]] = &[
     include_bytes!("../assets/fonts/JetBrainsMono-BoldItalic.ttf"),
 ];
 
-/// Icons are compiled into the binary (Lucide, ISC license).
+/// Icons are compiled into the binary (Lucide, ISC license; server OS logos in `os/` from
+/// Simple Icons, CC0, text next to the files).
 pub struct Assets;
 
 impl AssetSource for Assets {

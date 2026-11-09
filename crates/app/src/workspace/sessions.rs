@@ -145,12 +145,12 @@ impl Workspace {
             let r = runtime::spawn(async move { c.open_sftp().await }).await;
             this.update_in(cx, |this, window, cx| match r {
                 Ok(sftp) => {
-                    let remote = SftpSource::Remote(RemoteRef {
+                    let remote = SftpSource::Remote(Box::new(RemoteRef {
                         label: host.name.clone(),
                         host: host.clone(),
                         sftp: Arc::new(sftp),
                         conn: conn.clone(),
-                    });
+                    }));
                     let view = cx.new(|cx| SftpView::new(SftpSource::Local, remote, names, cx));
                     cx.subscribe_in(&view, window, |this, view, ev: &SftpEvent, window, cx| {
                         this.on_sftp_event(view.downgrade(), ev, window, cx)
@@ -184,12 +184,12 @@ impl Workspace {
             let r = runtime::spawn(async move { c.open_sftp().await }).await;
             this.update_in(cx, |this, _, cx| match r {
                 Ok(sftp) => {
-                    let src = SftpSource::Remote(RemoteRef {
+                    let src = SftpSource::Remote(Box::new(RemoteRef {
                         label: host.name.clone(),
                         host: host.clone(),
                         sftp: Arc::new(sftp),
                         conn: conn.clone(),
-                    });
+                    }));
                     view.update(cx, |v, cx| v.set_source(side, src, cx)).ok();
                 }
                 Err(e) => {

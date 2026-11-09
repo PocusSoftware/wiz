@@ -194,6 +194,12 @@ impl HostForm {
             }
             Mode::Agent => AuthMethod::Agent,
         };
+        // A new address may be another server: its logo is found again on connect.
+        let os = self
+            .old
+            .as_ref()
+            .filter(|o| o.host == host)
+            .and_then(|o| o.os.clone());
         let new = Host {
             name,
             host,
@@ -202,6 +208,7 @@ impl HostForm {
             group,
             pinned: self.old.as_ref().is_some_and(|o| o.pinned),
             jump,
+            os,
             auth,
         };
         new.validate()?;

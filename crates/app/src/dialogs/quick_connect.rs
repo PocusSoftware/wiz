@@ -120,6 +120,7 @@ impl QuickConnect {
             group: None,
             pinned: false,
             jump: None,
+            os: None,
             auth,
         };
         host.validate()?;

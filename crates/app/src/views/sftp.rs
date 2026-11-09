@@ -64,7 +64,7 @@ pub struct RemoteRef {
 #[derive(Clone)]
 pub enum Source {
     Local,
-    Remote(RemoteRef),
+    Remote(Box<RemoteRef>),
 }
 
 impl Source {

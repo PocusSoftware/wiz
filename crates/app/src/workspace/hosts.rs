@@ -138,6 +138,35 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Look up the operating system of saved host `account` on its new connection, for the
+    /// logo on its card. Silent when it can't be told, and saves only a change.
+    pub(super) fn detect_os(&self, account: String, conn: Arc<Connection>, cx: &mut Context<Self>) {
+        if !crate::prefs::get().show_os_logos()
+            || !self.cfg.hosts.iter().any(|h| h.account() == account)
+        {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            let Some(os) = runtime::spawn(async move { ssh_core::os::detect(&conn).await }).await
+            else {
+                return;
+            };
+            this.update(cx, |t, cx| {
+                // Looked up again: the host may have been edited or deleted meanwhile.
+                let Some(h) = t.cfg.hosts.iter_mut().find(|h| h.account() == account) else {
+                    return;
+                };
+                if h.os.as_deref() != Some(os) {
+                    h.os = Some(os.into());
+                    t.save_config(cx);
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     fn toggle_pin(&mut self, ix: usize, cx: &mut Context<Self>) {
         if let Some(h) = self.cfg.hosts.get_mut(ix) {
             h.pinned = !h.pinned;
@@ -155,9 +184,16 @@ impl Workspace {
             .get(&account)
             .is_some_and(|l| !l.conn.is_closed());
         let connecting = self.pending.iter().any(|p| p.account == account);
-        let kind_icon = match h.auth {
-            AuthMethod::Password => "server",
-            AuthMethod::Key { .. } | AuthMethod::Agent => "key",
+        let kind_icon = match h.os.as_deref() {
+            // Only logos from the fixed table: hosts.toml may have been edited by hand.
+            Some(os) if crate::prefs::get().show_os_logos() && ssh_core::os::is_known(os) => {
+                format!("os/{os}")
+            }
+            _ => match h.auth {
+                AuthMethod::Password => "server",
+                AuthMethod::Key { .. } | AuthMethod::Agent => "key",
+            }
+            .into(),
         };
         let dot = if live {
             GREEN
@@ -186,7 +222,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(icon(kind_icon, 16., accent_text()))
+                    .child(icon(&kind_icon, 16., accent_text()))
                     .child(
                         div()
                             .flex_1()
