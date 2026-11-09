@@ -4,6 +4,7 @@
 mod connect;
 mod credentials;
 mod focus;
+mod home;
 mod hosts;
 mod latency;
 mod overlays;
@@ -17,7 +18,7 @@ mod tabs;
 mod tests;
 
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -50,7 +51,7 @@ use crate::views::settings::{SettingsEvent, SettingsView};
 use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::views::terminal::{TerminalEvent, TerminalView};
 use crate::widgets::anim::{fade_in, page_in, pop_in, stagger_in};
-use crate::widgets::input::TextInput;
+use crate::widgets::input::{Hide, InputEvent, TextInput};
 use crate::widgets::{FocusNext, FocusPrev, button, icon, icon_button, keyboard, primary_button};
 
 actions!(
@@ -214,6 +215,9 @@ struct Tab {
     name: Option<SharedString>,
     /// Keyboard focus on the tab strip, moved with the arrow keys.
     focus: FocusHandle,
+    /// Account of the host a Docker or files tab was opened for, so the hosts page can
+    /// list it. Terminals go by their panes instead.
+    account: Option<String>,
 }
 
 /// Runs once the secrets file is unlocked.
@@ -258,8 +262,11 @@ pub struct Workspace {
     tab_scroll: gpui::ScrollHandle,
     next_pending: u64,
     next_tab: u64,
-    /// Host groups folded shut on the hosts page.
-    collapsed: HashSet<String>,
+    /// Account of the host picked on the hosts page. By account, not index, so it
+    /// survives hosts being deleted or reordered.
+    selected: Option<String>,
+    /// The search field on the hosts page.
+    search: Entity<TextInput>,
     /// Bumped whenever the visible page changes, to replay the page fade.
     epoch: u64,
     form: Option<Entity<HostForm>>,
@@ -337,6 +344,13 @@ impl Workspace {
         })
         .detach();
         Self::watch_latency(window, cx);
+        let search = cx.new(|cx| {
+            let mut t = TextInput::new("Search or user@host", false, cx);
+            t.set_hide_mode(Hide::Redact);
+            t
+        });
+        cx.subscribe(&search, |_, _, _: &InputEvent, cx| cx.notify())
+            .detach();
         let (code_tx, mut code_rx) = unbounded_channel::<CodeRequest>();
         cx.spawn_in(window, async move |this, cx| {
             while let Some(req) = code_rx.recv().await {
@@ -376,7 +390,8 @@ impl Workspace {
             confirm_delete: None,
             quit_notice: None,
             tab_scroll: gpui::ScrollHandle::new(),
-            collapsed: HashSet::new(),
+            selected: None,
+            search,
             epoch: 0,
             form: None,
             trust: VecDeque::new(),
@@ -611,6 +626,10 @@ impl Render for Workspace {
                 // No Enter here: trusting a new key takes a deliberate press of the button.
                 if !t.trust.is_empty() && ev.keystroke.key == "escape" {
                     t.answer_trust(false, w, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                if t.page == Page::Home && !t.modal_open() && t.home_key(ev, w, cx) {
                     cx.stop_propagation();
                 }
             }))

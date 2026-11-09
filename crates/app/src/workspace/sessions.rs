@@ -84,6 +84,7 @@ impl Workspace {
                             cols: vec![1.0],
                             rows: vec![vec![1.0]],
                         }),
+                        None,
                         window,
                         cx,
                     );
@@ -108,6 +109,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let label = format!("{} · docker", host.name);
+        let account = host.account();
         let view = cx.new(|cx| DockerView::new(Backend::Remote(conn.clone()), true, cx));
         cx.subscribe_in(
             &view,
@@ -122,7 +124,7 @@ impl Workspace {
             },
         )
         .detach();
-        self.push_tab(label, TabKind::Docker(view), window, cx);
+        self.push_tab(label, TabKind::Docker(view), Some(account), window, cx);
     }
 
     /// A files tab: this Mac on the left, the host on the right.
@@ -157,7 +159,7 @@ impl Workspace {
                     })
                     .detach();
                     view.update(cx, SftpView::load);
-                    this.push_tab(label, TabKind::Sftp(view), window, cx);
+                    this.push_tab(label, TabKind::Sftp(view), Some(host.account()), window, cx);
                 }
                 Err(e) => {
                     this.set_status(format!("{}: {e}", host.name), true);
@@ -258,7 +260,13 @@ impl Workspace {
             DockerEvent::Logs { name, id, backend } => {
                 let (id, backend) = (id.clone(), backend.clone());
                 let view = cx.new(|cx| LogView::new(backend, id, cx));
-                self.push_tab(format!("{name} · logs"), TabKind::Logs(view), window, cx);
+                self.push_tab(
+                    format!("{name} · logs"),
+                    TabKind::Logs(view),
+                    None,
+                    window,
+                    cx,
+                );
             }
         }
     }
@@ -274,7 +282,13 @@ impl Workspace {
                         this.on_docker_event(ev, None, window, cx)
                     })
                     .detach();
-                    this.push_tab("Local Docker".into(), TabKind::Docker(view), window, cx);
+                    this.push_tab(
+                        "Local Docker".into(),
+                        TabKind::Docker(view),
+                        None,
+                        window,
+                        cx,
+                    );
                 }
                 Err(e) => {
                     this.set_status(format!("Docker: {e}"), true);

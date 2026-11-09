@@ -43,8 +43,11 @@ To put another server in the split, click the split button or press ⇧⌘D and 
 ## Keyboard
 Everything works without a mouse. Tab and Shift+Tab, or the arrow keys, move between controls. Enter or Space presses the focused one. A dialog keeps Tab inside it, fields first, then its buttons. The terminal keeps Tab for the shell, so ⌘L jumps to the tab bar. There Left and Right move between tabs, Home and End go to the ends, Enter selects, Shift+Left and Shift+Right move a tab, Delete closes it, and Shift+F10 opens its menu (Up and Down to pick). In the file panes Left and Right switch between the two lists.
 
+## Hosts page
+Saved hosts are listed on the left, pinned ones first, then one section per group. The host you pick shows on the right: open a terminal, Docker or files on it, switch to the tabs already open for it, and see how it connects (address, sign-in, jump hosts). Pin, edit and delete are there too. Typing searches by name, address or group, Up and Down pick a host, Enter opens a terminal on it, and Escape clears the search. A double click on a host opens a terminal. In a narrow window only the list shows, and one click opens it.
+
 ## Quick connect
-⌘K, the arrow button in the title bar, or the card on the hosts page. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.
+⌘K, the arrow button in the title bar, or type `user@host` in the hosts page search and press Enter when no saved host matches. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.
 
 ## Snippets
 Save commands you type often under Settings, Snippets (stored in `snippets.toml` next to `hosts.toml`). ⌘J (Ctrl+Shift+J on Windows) opens a picker over the terminal in front: type to filter, arrows and Enter to pick. The command is pasted without Enter, so you can read it before running it. Multi-line commands go in the file by hand.
@@ -98,7 +101,7 @@ The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scrip
 `scripts/bundle.sh` builds `Wiz.app` (release binary, icon, ad-hoc signature) and installs it to `/Applications`, replacing the previous build. The logo source is `crates/app/assets/brand/icon.svg`; the in-app mark is `crates/app/assets/icons/hat.svg`.
 
 ## Hide sensitive information
-Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in host cards, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.
+Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in the hosts page, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.
 
 ## License
 Wiz is MIT licensed. The bundled fonts are not: IBM Plex Sans and JetBrains Mono are under the SIL Open Font License 1.1 (texts in `crates/app/assets/fonts/`). `scripts/bundle.sh` copies both texts into `Wiz.app/Contents/Resources`; a Windows build ships them next to `Wiz.exe`.

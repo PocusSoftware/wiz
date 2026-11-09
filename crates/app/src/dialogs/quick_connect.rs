@@ -60,6 +60,14 @@ impl QuickConnect {
         window.focus(&self.target.focus_handle(cx), cx);
     }
 
+    /// Start with `target` typed in, as searched for on the hosts page.
+    pub fn set_target(&mut self, target: &str, cx: &mut Context<Self>) {
+        self.target.update(cx, |t, cx| {
+            t.set_value(target);
+            cx.notify();
+        });
+    }
+
     fn submit(&mut self, cx: &mut Context<Self>) {
         match self.build(cx) {
             Ok((host, creds)) => cx.emit(QuickEvent::Connect {

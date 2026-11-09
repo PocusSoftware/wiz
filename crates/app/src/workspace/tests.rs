@@ -521,7 +521,7 @@ fn logs_tab(root: &Entity<Workspace>, cx: &mut VisualTestContext, name: &str) {
     root.update_in(cx, |r, w, cx| {
         let local = Arc::new(docker::Local::new().unwrap());
         let view = cx.new(|cx| LogView::new(Backend::Local(local), name.into(), cx));
-        r.push_tab(name.into(), TabKind::Logs(view), w, cx);
+        r.push_tab(name.into(), TabKind::Logs(view), None, w, cx);
     });
 }
 
@@ -1035,4 +1035,112 @@ fn card_icon_prefers_the_picked_logo() {
     h.logo = Some("../x".into());
     h.os = Some("../y".into());
     assert_eq!(hosts::card_icon(&h, true), "server");
+}
+
+fn named(name: &str, user: &str, group: Option<&str>, pinned: bool) -> Host {
+    Host {
+        name: name.into(),
+        group: group.map(Into::into),
+        pinned,
+        ..test_host(user)
+    }
+}
+
+#[test]
+fn hosts_page_lists_pinned_then_groups_then_the_rest() {
+    use home::{Section, sections};
+    let hosts = vec![
+        named("web", "deploy", None, false),
+        named("db", "pg", Some("prod"), false),
+        named("box", "root", Some("Lab"), false),
+        named("main", "me", Some("prod"), true),
+    ];
+    assert_eq!(
+        sections(&hosts, ""),
+        vec![
+            (Section::Pinned, vec![3]),
+            (Section::Group("Lab".into()), vec![2]),
+            (Section::Group("prod".into()), vec![1]),
+            (Section::Other, vec![0]),
+        ]
+    );
+    // The search goes by name, user@host and group, ignoring case.
+    assert_eq!(sections(&hosts, " WEB "), vec![(Section::Other, vec![0])]);
+    assert_eq!(
+        sections(&hosts, "pg@127"),
+        vec![(Section::Group("prod".into()), vec![1])]
+    );
+    assert_eq!(
+        sections(&hosts, "prod"),
+        vec![
+            (Section::Pinned, vec![3]),
+            (Section::Group("prod".into()), vec![1])
+        ]
+    );
+    assert!(sections(&hosts, "nothing").is_empty());
+}
+
+#[test]
+fn picked_host_follows_its_account() {
+    let mut hosts = vec![
+        named("a", "a", None, false),
+        named("b", "b", None, false),
+        named("c", "c", None, false),
+    ];
+    let b = hosts[1].account();
+    assert_eq!(home::pick(&hosts, &[0, 1, 2], Some(&b)), Some(1));
+    // Deleting a host before it moves its index, not the pick.
+    hosts.remove(0);
+    assert_eq!(home::pick(&hosts, &[0, 1], Some(&b)), Some(0));
+    // A picked host that is gone or filtered out falls back to the first one listed.
+    hosts.remove(0);
+    assert_eq!(home::pick(&hosts, &[0], Some(&b)), Some(0));
+    assert_eq!(home::pick(&hosts, &[], Some(&b)), None);
+}
+
+#[gpui::test]
+fn hosts_page_by_keyboard(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    root.update(cx, |r, cx| {
+        r.cfg.hosts = vec![named("a", "a", None, false), named("b", "b", None, false)];
+        cx.notify();
+    });
+    let picked = |cx: &mut VisualTestContext| {
+        root.read_with(cx, |r, cx| {
+            let shown = r.shown(cx);
+            home::pick(&r.cfg.hosts, &shown, r.selected.as_deref())
+        })
+    };
+    assert_eq!(picked(cx), Some(0));
+    cx.simulate_keystrokes("down");
+    assert_eq!(picked(cx), Some(1));
+    cx.simulate_keystrokes("down");
+    assert_eq!(picked(cx), Some(1));
+    cx.simulate_keystrokes("up");
+    assert_eq!(picked(cx), Some(0));
+
+    // Typing searches; Escape clears it.
+    root.update_in(cx, |r, w, cx| r.show_page(Page::Home, w, cx));
+    type_text(cx, "b@");
+    assert_eq!(picked(cx), Some(1));
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, cx| r.search.read(cx).value().is_empty()));
+    // Enter with no host matching quick connects to what was typed.
+    type_text(cx, "me@nowhere");
+    assert_eq!(picked(cx), None);
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert!(root.read_with(cx, |r, cx| r.quick_form.is_some()
+        && r.search.read(cx).value().is_empty()));
+
+    // Tabs opened for a host are listed with it.
+    let b = root.read_with(cx, |r, _| r.cfg.hosts[1].account());
+    logs_tab(&root, cx, "x");
+    root.update(cx, |r, _| r.tabs[0].account = Some(b.clone()));
+    assert_eq!(
+        root.read_with(cx, |r, _| home::tabs_of(&r.tabs, &b)),
+        vec![0]
+    );
+    assert!(root.read_with(cx, |r, _| home::tabs_of(&r.tabs, "x@y:22").is_empty()));
 }

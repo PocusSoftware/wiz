@@ -15,6 +15,7 @@ impl Workspace {
         &mut self,
         label: String,
         kind: TabKind,
+        account: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -27,6 +28,7 @@ impl Workspace {
             pinned: false,
             name: None,
             focus: cx.focus_handle(),
+            account,
         });
         self.select_tab(self.tabs.len() - 1, window, cx);
     }
@@ -69,6 +71,8 @@ impl Workspace {
         }
         match (page, &self.settings) {
             (Page::Settings, Some(v)) => window.focus(&v.read(cx).focus_handle(cx), cx),
+            // Typing on the hosts page searches.
+            (Page::Home, _) => window.focus(&self.search.focus_handle(cx), cx),
             _ => window.focus(&self.focus, cx),
         }
         cx.notify();

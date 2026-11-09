@@ -247,6 +247,9 @@ pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
     cmd.arg(path).spawn().map(drop)
 }
 
+/// What the hosts page calls the computer Wiz runs on.
+pub const THIS_COMPUTER: &str = "This Mac";
+
 /// The logged-in user, masked by "hide sensitive information".
 pub fn local_user() -> Option<String> {
     std::env::var("USER").ok()
