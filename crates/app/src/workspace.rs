@@ -241,6 +241,8 @@ pub struct Workspace {
     tab_menu: Option<(u64, gpui::Point<Pixels>)>,
     /// The menu of the split button, where the mouse was: pick the server for a new pane.
     split_menu: Option<gpui::Point<Pixels>>,
+    /// The right-click menu of the empty part of the host list, where the mouse was.
+    hosts_menu: Option<gpui::Point<Pixels>>,
     /// A tab being renamed in place: its id, the name field, and the blur watch that
     /// saves when focus leaves it.
     renaming: Option<(u64, Entity<TextInput>, gpui::Subscription)>,
@@ -377,6 +379,7 @@ impl Workspace {
             active: 0,
             tab_menu: None,
             split_menu: None,
+            hosts_menu: None,
             renaming: None,
             page: Page::Home,
             settings: None,

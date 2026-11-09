@@ -1,4 +1,5 @@
 //! Rearranging tabs: the right-click menu (pin, rename, duplicate, close) and dragging.
+//! Also the other menus drawn the same way: the split button's and the host list's.
 
 use gpui::{Anchor, Div, ElementId, MouseButton, Point, anchored, point};
 
@@ -53,6 +54,7 @@ impl Workspace {
     pub(super) fn close_tab_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.tab_menu = None;
         self.split_menu = None;
+        self.hosts_menu = None;
         if self.page == Page::Tab {
             self.select_tab(self.active, window, cx);
         } else {
@@ -183,7 +185,20 @@ impl Workspace {
 
     /// Whether a right-click or split menu is open.
     pub(super) fn menu_open(&self) -> bool {
-        self.tab_menu.is_some() || self.split_menu.is_some()
+        self.tab_menu.is_some() || self.split_menu.is_some() || self.hosts_menu.is_some()
+    }
+
+    /// The right-click menu of the empty part of the host list, at `at`.
+    pub(super) fn open_hosts_menu(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.hosts_menu = Some(at);
+        // Out of the search field, so Escape reaches the menu.
+        window.focus(&self.focus, cx);
+        cx.notify();
     }
 
     /// The split button's menu: which server the new pane opens on.
@@ -274,10 +289,23 @@ impl Workspace {
             .into_any_element()
     }
 
-    /// The open menu: the split button's, or the right-click menu of a tab.
+    /// The open menu: the split button's, the host list's, or the right-click menu of a tab.
     pub(super) fn tab_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Some(at) = self.split_menu {
             return Some(self.split_menu_view(at, cx));
+        }
+        if let Some(at) = self.hosts_menu {
+            let add = Self::split_row(
+                "hm-add",
+                "plus",
+                "Add host",
+                crate::shortcuts::label("new_host"),
+            )
+            .on_click(cx.listener(|t, _, w, cx| {
+                t.close_tab_menu(w, cx);
+                t.open_form(None, w, cx);
+            }));
+            return Some(self.menu_overlay(usize::MAX - 1, at, Anchor::TopLeft, MENU_W, [add], cx));
         }
         let (id, at) = self.tab_menu?;
         let tab = self.tabs.iter().find(|t| t.id == id)?;

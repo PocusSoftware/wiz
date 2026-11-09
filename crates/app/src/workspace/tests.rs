@@ -1169,3 +1169,36 @@ fn hosts_page_click_picks_wide_and_opens_narrow(cx: &mut TestAppContext) {
     assert!(root.read_with(cx, |r, _| r.selected.is_none()
         && (!r.pending.is_empty() || r.modal_open() || r.status.is_some())));
 }
+
+#[gpui::test]
+fn host_list_menu_adds_a_host(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    root.update(cx, |r, cx| {
+        r.cfg.hosts = vec![named("a", "a", None, false)];
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let right_click = |cx: &mut VisualTestContext, y: f32| {
+        cx.simulate_event(gpui::MouseDownEvent {
+            position: gpui::point(px(100.), px(y)),
+            modifiers: gpui::Modifiers::default(),
+            button: gpui::MouseButton::Right,
+            click_count: 1,
+            first_mouse: false,
+        });
+    };
+    // Not on a host.
+    right_click(cx, 90.);
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none()));
+    // Below the hosts it opens; Escape closes it.
+    right_click(cx, 500.);
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_some()));
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none()));
+    // Its item opens the host form.
+    right_click(cx, 500.);
+    cx.simulate_click(gpui::point(px(130.), px(514.)), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none() && r.form.is_some()));
+}

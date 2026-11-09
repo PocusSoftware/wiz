@@ -2,7 +2,7 @@
 
 mod details;
 
-use gpui::KeyDownEvent;
+use gpui::{KeyDownEvent, MouseButton, MouseDownEvent};
 
 use super::hosts::{card_icon, logo};
 use super::*;
@@ -193,6 +193,12 @@ impl Workspace {
             .child(
                 div()
                     .id("home-list")
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|t, ev: &MouseDownEvent, w, cx| {
+                            t.open_hosts_menu(ev.position, w, cx)
+                        }),
+                    )
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
@@ -317,6 +323,8 @@ impl Workspace {
             .when(picked, |d| d.bg(c(ACTIVE)))
             .cursor_pointer()
             .hover(|s| s.bg(c(HOVER)))
+            // The list's menu is for its empty part only.
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |t, ev: &ClickEvent, w, cx| {
                 if !wide || ev.click_count() >= 2 {
                     t.open_host(ix, Open::Shell, w, cx);
