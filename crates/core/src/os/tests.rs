@@ -15,6 +15,10 @@ fn ids_are_mapped_and_unquoted() {
     assert_eq!(parse("ID='pop'\nLinux"), Some("popos"));
     assert_eq!(parse("ID=arch\nLinux"), Some("archlinux"));
     assert_eq!(parse("ID=nixos\nLinux"), Some("nixos"));
+    assert_eq!(
+        parse("ID=lcos\nID_LIKE=\"devuan debian\"\nLinux"),
+        Some("lcos")
+    );
 }
 
 #[test]

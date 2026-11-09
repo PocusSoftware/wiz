@@ -86,6 +86,7 @@ icons!(
     "os/kalilinux",
     "os/kdeneon",
     "os/kubuntu",
+    "os/lcos",
     "os/linux",
     "os/linuxmint",
     "os/locos",
@@ -152,7 +153,8 @@ pub const FONTS: &[&[u8]] = &[
 ];
 
 /// Icons are compiled into the binary (Lucide, ISC license; server OS logos in `os/` from
-/// Simple Icons, CC0, and font-logos, public domain, texts next to the files).
+/// Simple Icons, CC0, and font-logos, public domain, texts next to the files; `lcos` drawn
+/// for Wiz after the LCOS badge, lettering in IBM Plex Sans).
 pub struct Assets;
 
 impl AssetSource for Assets {

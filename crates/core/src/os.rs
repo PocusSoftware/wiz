@@ -228,6 +228,11 @@ pub const LOGOS: &[Logo] = &[
         ids: &["kubuntu"],
     },
     Logo {
+        slug: "lcos",
+        title: "LCOS",
+        ids: &["lcos"],
+    },
+    Logo {
         slug: "linux",
         title: "Linux",
         ids: &["linux"],
