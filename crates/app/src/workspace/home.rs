@@ -196,7 +196,7 @@ impl Workspace {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(|t, ev: &MouseDownEvent, w, cx| {
-                            t.open_hosts_menu(ev.position, w, cx)
+                            t.open_hosts_menu(ev.position, None, w, cx)
                         }),
                     )
                     .flex_1()
@@ -323,8 +323,14 @@ impl Workspace {
             .when(picked, |d| d.bg(c(ACTIVE)))
             .cursor_pointer()
             .hover(|s| s.bg(c(HOVER)))
-            // The list's menu is for its empty part only.
-            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, {
+                let account = account.clone();
+                cx.listener(move |t, ev: &MouseDownEvent, w, cx| {
+                    cx.stop_propagation();
+                    t.selected = Some(account.clone());
+                    t.open_hosts_menu(ev.position, Some(account.clone()), w, cx);
+                })
+            })
             .on_click(cx.listener(move |t, ev: &ClickEvent, w, cx| {
                 if !wide || ev.click_count() >= 2 {
                     t.open_host(ix, Open::Shell, w, cx);

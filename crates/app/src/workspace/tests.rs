@@ -1171,7 +1171,7 @@ fn hosts_page_click_picks_wide_and_opens_narrow(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn host_list_menu_adds_a_host(cx: &mut TestAppContext) {
+fn host_list_menus(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
     root.update(cx, |r, cx| {
@@ -1188,16 +1188,23 @@ fn host_list_menu_adds_a_host(cx: &mut TestAppContext) {
             first_mouse: false,
         });
     };
-    // Not on a host.
+    let menu = |cx: &mut VisualTestContext| {
+        root.read_with(cx, |r, _| r.hosts_menu.as_ref().map(|(_, a)| a.clone()))
+    };
+    // On a host it is that host's menu, and Escape closes it.
     right_click(cx, 90.);
-    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none()));
-    // Below the hosts it opens; Escape closes it.
-    right_click(cx, 500.);
-    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_some()));
+    let account = root.read_with(cx, |r, _| r.cfg.hosts[0].account());
+    assert_eq!(menu(cx), Some(Some(account)));
     cx.simulate_keystrokes("escape");
-    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none()));
-    // Its item opens the host form.
+    assert_eq!(menu(cx), None);
+    // Its pin item pins the host and closes the menu.
+    right_click(cx, 90.);
+    cx.simulate_click(gpui::point(px(130.), px(202.)), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none() && r.cfg.hosts[0].pinned));
+    // Below the hosts it only adds a host.
     right_click(cx, 500.);
+    assert_eq!(menu(cx), Some(None));
     cx.simulate_click(gpui::point(px(130.), px(514.)), gpui::Modifiers::default());
     cx.run_until_parked();
     assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none() && r.form.is_some()));

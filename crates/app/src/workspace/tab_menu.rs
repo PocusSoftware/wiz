@@ -188,14 +188,16 @@ impl Workspace {
         self.tab_menu.is_some() || self.split_menu.is_some() || self.hosts_menu.is_some()
     }
 
-    /// The right-click menu of the empty part of the host list, at `at`.
+    /// The right-click menu of the host list at `at`: of the host with `account`, or of the
+    /// empty part of the list.
     pub(super) fn open_hosts_menu(
         &mut self,
         at: Point<Pixels>,
+        account: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.hosts_menu = Some(at);
+        self.hosts_menu = Some((at, account));
         // Out of the search field, so Escape reaches the menu.
         window.focus(&self.focus, cx);
         cx.notify();
@@ -294,18 +296,8 @@ impl Workspace {
         if let Some(at) = self.split_menu {
             return Some(self.split_menu_view(at, cx));
         }
-        if let Some(at) = self.hosts_menu {
-            let add = Self::split_row(
-                "hm-add",
-                "plus",
-                "Add host",
-                crate::shortcuts::label("new_host"),
-            )
-            .on_click(cx.listener(|t, _, w, cx| {
-                t.close_tab_menu(w, cx);
-                t.open_form(None, w, cx);
-            }));
-            return Some(self.menu_overlay(usize::MAX - 1, at, Anchor::TopLeft, MENU_W, [add], cx));
+        if let Some((at, account)) = &self.hosts_menu {
+            return self.hosts_menu_view(*at, account.as_deref(), cx);
         }
         let (id, at) = self.tab_menu?;
         let tab = self.tabs.iter().find(|t| t.id == id)?;
@@ -357,6 +349,76 @@ impl Workspace {
             },
         )));
         Some(self.menu_overlay(id as usize, at, Anchor::TopLeft, MENU_W, items, cx))
+    }
+
+    /// The host list's menu: what can be done with the host with `account`, or adding a
+    /// host when it was opened on the empty part of the list.
+    fn hosts_menu_view(
+        &self,
+        at: Point<Pixels>,
+        account: Option<&str>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let Some(account) = account else {
+            let add = Self::split_row(
+                "hm-add",
+                "plus",
+                "Add host",
+                crate::shortcuts::label("new_host"),
+            )
+            .on_click(cx.listener(|t, _, w, cx| {
+                t.close_tab_menu(w, cx);
+                t.open_form(None, w, cx);
+            }));
+            return Some(self.menu_overlay(usize::MAX - 1, at, Anchor::TopLeft, MENU_W, [add], cx));
+        };
+        let ix = self.cfg.hosts.iter().position(|h| h.account() == account)?;
+        let pinned = self.cfg.hosts[ix].pinned;
+        let open = |id: &'static str, icon_name: &str, text: &str, what: fn() -> Open| {
+            Self::split_row(id, icon_name, text.to_string(), "")
+                .on_click(cx.listener(move |t, _, w, cx| {
+                    t.close_tab_menu(w, cx);
+                    t.open_host(ix, what(), w, cx);
+                }))
+                .into_any_element()
+        };
+        let items = [
+            open("hm-shell", "terminal", "New terminal", || Open::Shell),
+            open("hm-docker", "container", "Docker containers", || {
+                Open::Docker
+            }),
+            open("hm-files", "folder", "Files (SFTP)", || Open::Sftp),
+            div()
+                .my_1()
+                .h(px(1.))
+                .bg(c(BORDER_VARIANT))
+                .into_any_element(),
+            Self::split_row(
+                "hm-pin",
+                "pin",
+                if pinned { "Unpin" } else { "Pin to top" },
+                "",
+            )
+            .on_click(cx.listener(move |t, _, w, cx| {
+                t.close_tab_menu(w, cx);
+                t.toggle_pin(ix, cx);
+            }))
+            .into_any_element(),
+            Self::split_row("hm-edit", "pencil", "Edit", "")
+                .on_click(cx.listener(move |t, _, w, cx| {
+                    t.close_tab_menu(w, cx);
+                    t.open_form(Some(ix), w, cx);
+                }))
+                .into_any_element(),
+            Self::split_row("hm-del", "trash", "Delete", "")
+                .text_color(c(RED))
+                .on_click(cx.listener(move |t, _, w, cx| {
+                    t.close_tab_menu(w, cx);
+                    t.ask_delete_host(ix, w, cx);
+                }))
+                .into_any_element(),
+        ];
+        Some(self.menu_overlay(usize::MAX - 1, at, Anchor::TopLeft, MENU_W, items, cx))
     }
 
     /// Where the next pane opens: the same server, or any saved host.
