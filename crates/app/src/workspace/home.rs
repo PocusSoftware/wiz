@@ -355,7 +355,7 @@ impl Workspace {
                         div()
                             .truncate()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(h.name.clone()),
+                            .child(privacy::redact(&h.name).into_owned()),
                     )
                     .child(
                         div()

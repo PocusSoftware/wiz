@@ -217,7 +217,7 @@ impl Workspace {
         let scroll_x = self.tab_scroll.offset().x;
         let tabs = self.tabs.iter().enumerate().map(|(ix, tab)| {
             let active = self.page == Page::Tab && ix == self.active;
-            let mut text = tab.label.to_string();
+            let mut text = privacy::redact(&tab.label).into_owned();
             if let Some(name) = &tab.name {
                 text = privacy::redact(name).into_owned();
             } else if let TabKind::Terminal(t) = &tab.kind

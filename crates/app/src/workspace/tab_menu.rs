@@ -455,12 +455,17 @@ impl Workspace {
         for (ix, h) in self.cfg.hosts.iter().enumerate() {
             let addr = privacy::redact(&format!("{}@{}", h.user, h.host)).into_owned();
             items.push(
-                Self::split_row(("sm-host", ix), "server", h.name.clone(), addr)
-                    .on_click(cx.listener(move |t, _, w, cx| {
-                        t.close_tab_menu(w, cx);
-                        t.split_with(ix, w, cx);
-                    }))
-                    .into_any_element(),
+                Self::split_row(
+                    ("sm-host", ix),
+                    "server",
+                    privacy::redact(&h.name).into_owned(),
+                    addr,
+                )
+                .on_click(cx.listener(move |t, _, w, cx| {
+                    t.close_tab_menu(w, cx);
+                    t.split_with(ix, w, cx);
+                }))
+                .into_any_element(),
             );
         }
         self.menu_overlay(usize::MAX, at, Anchor::TopRight, SPLIT_MENU_W, items, cx)

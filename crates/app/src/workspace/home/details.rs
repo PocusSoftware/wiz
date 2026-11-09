@@ -88,7 +88,7 @@ impl Workspace {
                                     .truncate()
                                     .text_lg()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child(h.name.clone()),
+                                    .child(privacy::redact(&h.name).into_owned()),
                             )
                             .child(div().truncate().text_color(c(MUTED)).child(subtitle)),
                     )
@@ -186,8 +186,8 @@ impl Workspace {
             Ok(chain) => (
                 chain
                     .iter()
-                    .map(|hop| hop.name.as_str())
-                    .chain([h.name.as_str()])
+                    .map(|hop| privacy::redact(&hop.name))
+                    .chain([privacy::redact(&h.name)])
                     .collect::<Vec<_>>()
                     .join(" › "),
                 MUTED,
