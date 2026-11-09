@@ -154,6 +154,7 @@ mod agent_login {
             pinned: false,
             jump: None,
             os: None,
+            logo: None,
             auth: AuthMethod::Agent,
         };
         let connect = |creds: Credentials| {

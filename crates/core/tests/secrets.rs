@@ -36,6 +36,7 @@ fn server() -> Host {
         pinned: false,
         jump: None,
         os: None,
+        logo: None,
         auth: AuthMethod::Password,
     }
 }

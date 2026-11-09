@@ -128,6 +128,7 @@ fn test_host(user: &str) -> Host {
         pinned: false,
         jump: None,
         os: None,
+        logo: None,
         auth: AuthMethod::Password,
     }
 }
@@ -1006,6 +1007,7 @@ fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext)
         name: "inner".into(),
         jump: Some(bastion.account()),
         os: None,
+        logo: None,
         ..test_host("inner")
     };
     root.update_in(cx, |r, w, cx| {
@@ -1018,4 +1020,19 @@ fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext)
         assert_eq!(r.cfg.hosts[0].jump, None);
     });
     assert!(status(&root, cx).contains("inner now connects directly"));
+}
+
+#[test]
+fn card_icon_prefers_the_picked_logo() {
+    let mut h = test_host("root");
+    assert_eq!(hosts::card_icon(&h, true), "server");
+    h.os = Some("ubuntu".into());
+    assert_eq!(hosts::card_icon(&h, true), "os/ubuntu");
+    assert_eq!(hosts::card_icon(&h, false), "server");
+    h.logo = Some("nixos".into());
+    assert_eq!(hosts::card_icon(&h, false), "os/nixos");
+    // Hand-edited values never become asset paths.
+    h.logo = Some("../x".into());
+    h.os = Some("../y".into());
+    assert_eq!(hosts::card_icon(&h, true), "server");
 }

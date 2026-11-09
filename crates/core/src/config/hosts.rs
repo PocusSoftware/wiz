@@ -37,6 +37,9 @@ pub struct Host {
     /// Logo of the operating system found on the last connect (see `os::parse`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os: Option<String>,
+    /// Logo picked in the host form, shown instead of the detected one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
     // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }

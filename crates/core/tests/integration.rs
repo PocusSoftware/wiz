@@ -44,6 +44,7 @@ fn host(port: u16, auth: AuthMethod) -> Host {
         pinned: false,
         jump: None,
         os: None,
+        logo: None,
         auth,
     }
 }

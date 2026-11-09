@@ -42,9 +42,9 @@ impl Workspace {
                             // Hosts that go through this one follow it to its new address.
                             let old = this.cfg.hosts[*i].account();
                             this.cfg.retarget_jumps(&old, &host.account());
-                            this.cfg.hosts[*i] = host.clone();
+                            this.cfg.hosts[*i] = (**host).clone();
                         }
-                        _ => this.cfg.hosts.push(host.clone()),
+                        _ => this.cfg.hosts.push((**host).clone()),
                     }
                     this.save_config(cx);
                 }
@@ -184,17 +184,7 @@ impl Workspace {
             .get(&account)
             .is_some_and(|l| !l.conn.is_closed());
         let connecting = self.pending.iter().any(|p| p.account == account);
-        let kind_icon = match h.os.as_deref() {
-            // Only logos from the fixed table: hosts.toml may have been edited by hand.
-            Some(os) if crate::prefs::get().show_os_logos() && ssh_core::os::is_known(os) => {
-                format!("os/{os}")
-            }
-            _ => match h.auth {
-                AuthMethod::Password => "server",
-                AuthMethod::Key { .. } | AuthMethod::Agent => "key",
-            }
-            .into(),
-        };
+        let kind_icon = card_icon(h, crate::prefs::get().show_os_logos());
         let dot = if live {
             GREEN
         } else if connecting {
@@ -457,5 +447,24 @@ impl Workspace {
                 ),
         )
         .into_any_element()
+    }
+}
+
+/// The icon at the top of a host card. A picked logo always shows, a detected one only when
+/// `detected` (the setting) is on. Only logos from the table: hosts.toml may have been edited
+/// by hand.
+pub(super) fn card_icon(h: &Host, detected: bool) -> String {
+    let logo = h
+        .logo
+        .as_deref()
+        .or(h.os.as_deref().filter(|_| detected))
+        .and_then(ssh_core::os::logo);
+    match logo {
+        Some(l) => format!("os/{}", l.slug),
+        None => match h.auth {
+            AuthMethod::Password => "server",
+            AuthMethod::Key { .. } | AuthMethod::Agent => "key",
+        }
+        .into(),
     }
 }

@@ -37,6 +37,7 @@ async fn rsync_over_connection() {
         pinned: false,
         jump: None,
         os: None,
+        logo: None,
         auth: AuthMethod::Password,
     };
     let verifier = HostKeyVerifier {

@@ -1,6 +1,7 @@
 //! Add/edit host dialog. Secrets go to the secret store (Keychain or the encrypted file),
 //! never to the config file.
 
+mod logo;
 #[cfg(test)]
 mod tests;
 
@@ -24,7 +25,10 @@ enum Mode {
 }
 
 pub enum FormEvent {
-    Saved { host: Host, index: Option<usize> },
+    Saved {
+        host: Box<Host>,
+        index: Option<usize>,
+    },
     Cancelled,
 }
 
@@ -48,6 +52,9 @@ pub struct HostForm {
     key_path: Entity<TextInput>,
     passphrase: Entity<TextInput>,
     mode: Mode,
+    /// Logo picked by hand, `None` for the one found when connecting.
+    logo: Option<&'static str>,
+    logo_open: bool,
     error: Option<SharedString>,
     focus: FocusHandle,
 }
@@ -76,6 +83,11 @@ impl HostForm {
         let passphrase =
             cx.new(|cx| TextInput::new(if editing { "(unchanged)" } else { "optional" }, true, cx));
         let mut mode = Mode::Password;
+        let logo = existing
+            .as_ref()
+            .and_then(|(_, h)| h.logo.as_deref())
+            .and_then(ssh_core::os::logo)
+            .map(|l| l.slug);
         let (index, old) = match existing {
             Some((i, h)) => {
                 name.update(cx, |t, _| t.set_value(&h.name));
@@ -115,6 +127,8 @@ impl HostForm {
             key_path,
             passphrase,
             mode,
+            logo,
+            logo_open: false,
             error: None,
             focus: cx.focus_handle(),
         }
@@ -127,7 +141,7 @@ impl HostForm {
     fn submit(&mut self, cx: &mut Context<Self>) {
         match self.try_save(cx) {
             Ok(host) => cx.emit(FormEvent::Saved {
-                host,
+                host: Box::new(host),
                 index: self.index,
             }),
             Err(e) => {
@@ -209,6 +223,7 @@ impl HostForm {
             pinned: self.old.as_ref().is_some_and(|o| o.pinned),
             jump,
             os,
+            logo: self.logo.map(Into::into),
             auth,
         };
         new.validate()?;
@@ -333,6 +348,10 @@ impl Render for HostForm {
             .on_key_down(cx.listener(|t, ev: &KeyDownEvent, _, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" => t.submit(cx),
+                    "escape" if t.logo_open => {
+                        t.logo_open = false;
+                        cx.notify();
+                    }
                     "escape" => cx.emit(FormEvent::Cancelled),
                     _ => return,
                 }
@@ -385,6 +404,7 @@ impl Render for HostForm {
                     .child(field("User", &self.user).flex_1())
                     .child(field("Jump host", &self.jump).flex_1()),
             )
+            .child(self.logo_field(cx))
             .child(
                 div()
                     .flex()

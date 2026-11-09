@@ -31,6 +31,7 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
         pinned: false,
         jump: None,
         os: Some("ubuntu".into()),
+        logo: None,
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
@@ -42,4 +43,25 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
     });
     let moved = form.update(cx, HostForm::try_save).unwrap();
     assert_eq!(moved.os, None);
+}
+
+#[gpui::test]
+fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
+    let old = Host {
+        name: "web".into(),
+        host: "example.com".into(),
+        port: 22,
+        user: "root".into(),
+        group: None,
+        pinned: false,
+        jump: None,
+        os: None,
+        logo: Some("not-a-logo".into()),
+        auth: AuthMethod::Agent,
+    };
+    let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
+    assert_eq!(form.update(cx, HostForm::try_save).unwrap().logo, None);
+    form.update(cx, |f, _| f.logo = Some("debian"));
+    let saved = form.update(cx, HostForm::try_save).unwrap();
+    assert_eq!(saved.logo.as_deref(), Some("debian"));
 }

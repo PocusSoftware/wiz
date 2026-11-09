@@ -45,6 +45,7 @@ fn appliance_marker_beats_os_release() {
 fn kernel_name_without_os_release() {
     assert_eq!(parse("Darwin\n"), Some("macos"));
     assert_eq!(parse("OpenBSD\n"), Some("openbsd"));
+    assert_eq!(parse("SunOS\n"), Some("illumos"));
 }
 
 #[test]
@@ -57,11 +58,22 @@ fn garbage_is_none() {
         None
     );
     assert_eq!(parse("Windows_NT\n"), None);
-    assert_eq!(parse("ID=../../etc/passwd\nSunOS"), None);
+    assert_eq!(parse("ID=../../etc/passwd\nWindows_NT"), None);
 }
 
 #[test]
-fn every_slug_is_known() {
-    assert!(slugs().all(is_known));
-    assert!(!is_known("windows"));
+fn slugs_and_ids_are_unique() {
+    for (i, l) in LOGOS.iter().enumerate() {
+        assert_eq!(logo(l.slug).map(|o| o.title), Some(l.title));
+        for id in l.ids {
+            let owners = LOGOS.iter().filter(|o| o.ids.contains(id)).count();
+            assert_eq!(owners, 1, "{id} is listed twice");
+        }
+        assert!(
+            LOGOS[..i].iter().all(|o| o.slug != l.slug),
+            "{} twice",
+            l.slug
+        );
+    }
+    assert!(logo("windows").is_none());
 }

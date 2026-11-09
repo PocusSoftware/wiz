@@ -59,6 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pinned: false,
         jump: None,
         os: None,
+        logo: None,
         auth: AuthMethod::Password,
     };
     let creds = match creds {
