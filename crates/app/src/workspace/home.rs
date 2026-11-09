@@ -402,8 +402,13 @@ impl Workspace {
                 div()
                     .flex_1()
                     .font_weight(FontWeight::SEMIBOLD)
+                    .child("Local Docker"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(c(PLACEHOLDER))
                     .child(crate::platform::THIS_COMPUTER),
             )
-            .child(div().text_xs().text_color(c(PLACEHOLDER)).child("Docker"))
     }
 }
