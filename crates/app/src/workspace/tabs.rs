@@ -244,7 +244,7 @@ impl Workspace {
                 .group(format!("tab-{ix}"))
                 // Only the selected tab is a Tab stop; the arrow keys move along the strip.
                 .track_focus(&tab.focus.clone().tab_stop(ix == self.active))
-                .focus(|s| s.bg(c(ACTIVE)))
+                .focus(|s| s.bg(c(palette().active)))
                 .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, w, cx| {
                     t.strip_key(ix + 1, menu_at, ev, w, cx)
                 }))
@@ -257,7 +257,7 @@ impl Workspace {
                 .flex_shrink_0()
                 .w(px(tab_w))
                 .border_r_1()
-                .border_color(c(BORDER_VARIANT))
+                .border_color(c(palette().border_variant))
                 .relative()
                 .when(active, |d| {
                     d.child(
@@ -271,8 +271,12 @@ impl Workspace {
                     )
                 })
                 .bg(c(bg()))
-                .text_color(c(if active { TEXT } else { MUTED }))
-                .hover(|s| s.text_color(c(TEXT)))
+                .text_color(c(if active {
+                    palette().text
+                } else {
+                    palette().muted
+                }))
+                .hover(|s| s.text_color(c(palette().text)))
                 // Selecting moves focus to the tab's content; no flash of the focus look.
                 .on_mouse_down(MouseButton::Left, |_, w, _| w.prevent_default())
                 .on_click(cx.listener(move |t, _, w, cx| t.select_tab(ix, w, cx)))
@@ -283,7 +287,7 @@ impl Workspace {
                     },
                     |d, _, _, cx| cx.new(|_| d.clone()),
                 )
-                .drag_over::<DraggedTab>(|s, _, _, _| s.bg(c(ACTIVE)))
+                .drag_over::<DraggedTab>(|s, _, _, _| s.bg(c(palette().active)))
                 .on_drop(cx.listener(move |t, d: &DraggedTab, _, cx| t.move_tab(d.id, ix, cx)))
                 // Middle click closes, like browsers; pinned tabs close only from the menu.
                 .when(!tab.pinned, |d| {
@@ -301,7 +305,11 @@ impl Workspace {
                 .child(icon(
                     tab_icon,
                     13.,
-                    if active { accent_text() } else { MUTED },
+                    if active {
+                        accent_text()
+                    } else {
+                        palette().muted
+                    },
                 ))
                 .map(|d| match self.rename_field(id) {
                     Some(field) => d.child(field),
@@ -315,21 +323,21 @@ impl Workspace {
                             .flex_none()
                             .px(px(4.))
                             .rounded(px(2.))
-                            .bg(c(ACTIVE))
+                            .bg(c(palette().active))
                             .text_xs()
-                            .text_color(c(MUTED))
+                            .text_color(c(palette().muted))
                             .child(panes.to_string()),
                     )
                 })
                 // A pinned tab closes only from its menu.
-                .when(tab.pinned, |d| d.child(icon("pin", 12., MUTED)))
+                .when(tab.pinned, |d| d.child(icon("pin", 12., palette().muted)))
                 .when(!tab.pinned, |d| {
                     d.child(
                         icon_button(
                             ("tab-close", ix),
                             "x",
                             format!("Close ({})", crate::shortcuts::label("close_tab")),
-                            MUTED,
+                            palette().muted,
                         )
                         .size(px(16.))
                         // Delete on the focused tab does the same.
@@ -354,13 +362,13 @@ impl Workspace {
             .flex()
             .bg(c(bg()))
             .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .children(lead)
             .child(
                 div()
                     .id("home-tab")
                     .track_focus(&self.home_focus)
-                    .focus(|s| s.bg(c(ACTIVE)))
+                    .focus(|s| s.bg(c(palette().active)))
                     .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, w, cx| {
                         t.strip_key(0, point(px(0.), px(0.)), ev, w, cx)
                     }))
@@ -372,7 +380,7 @@ impl Workspace {
                     .items_center()
                     .cursor_pointer()
                     .border_x_1()
-                    .border_color(c(BORDER_VARIANT))
+                    .border_color(c(palette().border_variant))
                     .relative()
                     .when(self.page == Page::Home, |d| {
                         d.child(
@@ -385,7 +393,7 @@ impl Workspace {
                                 .bg(c(accent())),
                         )
                     })
-                    .hover(|s| s.bg(c(PANEL)))
+                    .hover(|s| s.bg(c(palette().panel)))
                     .tooltip(crate::widgets::tip("Hosts"))
                     .on_click(cx.listener(|t, _, w, cx| t.show_page(Page::Home, w, cx)))
                     .child(icon(
@@ -394,7 +402,7 @@ impl Workspace {
                         if self.page == Page::Home {
                             accent_text()
                         } else {
-                            MUTED
+                            palette().muted
                         },
                     )),
             )
@@ -441,7 +449,7 @@ impl Workspace {
                                         crate::shortcuts::label("split"),
                                         crate::shortcuts::label("split_menu")
                                     ),
-                                    MUTED,
+                                    palette().muted,
                                 )
                                 .on_click(cx.listener(
                                     |t, ev: &ClickEvent, w, cx| {
@@ -460,7 +468,7 @@ impl Workspace {
                                     "Quick connect ({})",
                                     crate::shortcuts::label("quick_connect")
                                 ),
-                                MUTED,
+                                palette().muted,
                             )
                             .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
                         )
@@ -474,7 +482,7 @@ impl Workspace {
                                 if privacy::hide() {
                                     accent_text()
                                 } else {
-                                    MUTED
+                                    palette().muted
                                 },
                             )
                             .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
@@ -492,7 +500,7 @@ impl Workspace {
                             if self.page == Page::Settings {
                                 accent_text()
                             } else {
-                                MUTED
+                                palette().muted
                             },
                         )
                         .on_click(cx.listener(|t, _, w, cx| t.toggle_settings(w, cx))),
@@ -506,10 +514,14 @@ impl Workspace {
     /// left they go close first, like macOS; on the right close last, like Windows.
     pub(super) fn window_controls() -> impl IntoElement {
         let left = crate::prefs::get().window_controls() == WindowControls::Left;
-        let min = win_button("win-min", "minus", ACTIVE, Min, |w, _| w.minimize_window());
-        let max = win_button("win-max", "maximize", ACTIVE, Max, |w, _| w.zoom_window());
+        let min = win_button("win-min", "minus", palette().active, Min, |w, _| {
+            w.minimize_window()
+        });
+        let max = win_button("win-max", "maximize", palette().active, Max, |w, _| {
+            w.zoom_window()
+        });
         // Closing the window quits, so it goes through the same check.
-        let close = win_button("win-close", "x", RED, Close, |w, cx| {
+        let close = win_button("win-close", "x", palette().red, Close, |w, cx| {
             w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
         });
         div()
@@ -521,7 +533,7 @@ impl Workspace {
             .h(px(TITLEBAR_H - 1.))
             .flex()
             .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .bg(c(bg()))
             // A click here is not a click outside an open dialog.
             .occlude()
@@ -554,8 +566,8 @@ impl Workspace {
                 .gap_2()
                 .items_center()
                 .justify_center()
-                .text_color(c(PLACEHOLDER))
-                .child(icon("terminal", 28., ACTIVE))
+                .text_color(c(palette().placeholder))
+                .child(icon("terminal", 28., palette().active))
                 .child("Pick a host to open a shell")
                 .into_any_element(),
         }
@@ -581,6 +593,6 @@ fn win_button(
         .hover(move |s| s.bg(c(hover)))
         // The buttons touch: on their shared edge pixel only the top one takes the click.
         .occlude()
-        .child(icon(name, 14., TEXT));
+        .child(icon(name, 14., palette().text));
     crate::platform::window_button(el, area, action)
 }

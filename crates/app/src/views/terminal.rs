@@ -477,9 +477,9 @@ impl Render for TerminalView {
                     div()
                         .px_3()
                         .py_1()
-                        .bg(c(PANEL))
+                        .bg(c(palette().panel))
                         .text_xs()
-                        .text_color(c(YELLOW))
+                        .text_color(c(palette().yellow))
                         .child(text),
                 )
             })
@@ -488,9 +488,9 @@ impl Render for TerminalView {
                     div()
                         .px_3()
                         .py_1()
-                        .bg(c(PANEL))
+                        .bg(c(palette().panel))
                         .text_xs()
-                        .text_color(c(YELLOW))
+                        .text_color(c(palette().yellow))
                         .child(match status {
                             Some(0) | None => "Session closed".to_string(),
                             Some(n) => format!("Session closed (exit status {n})"),

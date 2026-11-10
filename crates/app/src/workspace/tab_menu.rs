@@ -228,14 +228,14 @@ impl Workspace {
     /// A row of a menu.
     fn menu_item(id: impl Into<ElementId>, text: impl Into<SharedString>) -> gpui::Stateful<Div> {
         keyboard(div().id(id))
-            .focus(|s| s.bg(c(HOVER)))
+            .focus(|s| s.bg(c(palette().hover)))
             .h(px(26.))
             .px_2()
             .flex()
             .items_center()
             .rounded(px(2.))
             .cursor_pointer()
-            .hover(|s| s.bg(c(HOVER)))
+            .hover(|s| s.bg(c(palette().hover)))
             .overflow_hidden()
             .whitespace_nowrap()
             .child(text.into())
@@ -258,10 +258,10 @@ impl Workspace {
             .flex()
             .flex_col()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
-            .text_color(c(TEXT))
+            .border_color(c(palette().border))
+            .text_color(c(palette().text))
             .children(items);
         div()
             .id("tab-menu")
@@ -391,7 +391,7 @@ impl Workspace {
             div()
                 .my_1()
                 .h(px(1.))
-                .bg(c(BORDER_VARIANT))
+                .bg(c(palette().border_variant))
                 .into_any_element(),
             Self::split_row(
                 "hm-pin",
@@ -411,7 +411,7 @@ impl Workspace {
                 }))
                 .into_any_element(),
             Self::split_row("hm-del", "trash", "Delete", "")
-                .text_color(c(RED))
+                .text_color(c(palette().red))
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.ask_delete_host(ix, w, cx);
@@ -439,7 +439,7 @@ impl Workspace {
                 div()
                     .my_1()
                     .h(px(1.))
-                    .bg(c(BORDER_VARIANT))
+                    .bg(c(palette().border_variant))
                     .into_any_element(),
             );
             items.push(
@@ -447,7 +447,7 @@ impl Workspace {
                     .px_2()
                     .pb_1()
                     .text_xs()
-                    .text_color(c(PLACEHOLDER))
+                    .text_color(c(palette().placeholder))
                     .child("Other host")
                     .into_any_element(),
             );
@@ -479,7 +479,7 @@ impl Workspace {
         note: impl Into<SharedString>,
     ) -> gpui::Stateful<Div> {
         keyboard(div().id(id))
-            .focus(|s| s.bg(c(HOVER)))
+            .focus(|s| s.bg(c(palette().hover)))
             .h(px(28.))
             .px_2()
             .flex()
@@ -487,9 +487,9 @@ impl Workspace {
             .gap_2()
             .rounded(px(2.))
             .cursor_pointer()
-            .hover(|s| s.bg(c(HOVER)))
+            .hover(|s| s.bg(c(palette().hover)))
             .whitespace_nowrap()
-            .child(icon(icon_name, 14., MUTED))
+            .child(icon(icon_name, 14., palette().muted))
             .child(div().flex_1().min_w_0().truncate().child(text.into()))
             .child(
                 div()
@@ -497,7 +497,7 @@ impl Workspace {
                     .max_w(px(120.))
                     .truncate()
                     .text_xs()
-                    .text_color(c(PLACEHOLDER))
+                    .text_color(c(palette().placeholder))
                     .child(note.into()),
             )
     }

@@ -112,9 +112,9 @@ impl Render for CodeDialog {
             .flex_col()
             .gap_2()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .child(
                 div()
@@ -127,7 +127,7 @@ impl Render for CodeDialog {
                             .child(format!("{} asks for more", self.host)),
                     )
                     .child(
-                        icon_button("code-close", "x", "Cancel login (Esc)", MUTED)
+                        icon_button("code-close", "x", "Cancel login (Esc)", palette().muted)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(CodeEvent::Cancelled))),
                     ),
@@ -136,7 +136,7 @@ impl Render for CodeDialog {
                 d.child(
                     div()
                         .text_xs()
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .child(self.text.clone()),
                 )
             })

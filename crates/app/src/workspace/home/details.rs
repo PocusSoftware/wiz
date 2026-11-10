@@ -13,7 +13,7 @@ impl Workspace {
             .items_center()
             .justify_center()
             .gap_2()
-            .child(icon("server", 28., ACTIVE))
+            .child(icon("server", 28., palette().active))
             .child(
                 div()
                     .text_sm()
@@ -22,7 +22,7 @@ impl Workspace {
             )
             .child(
                 div()
-                    .text_color(c(MUTED))
+                    .text_color(c(palette().muted))
                     .child("Save a server to connect with one click, or type user@host to the left to connect once."),
             )
             .child(
@@ -54,7 +54,7 @@ impl Workspace {
                 .mt_5()
                 .mb_1()
                 .text_xs()
-                .text_color(c(PLACEHOLDER))
+                .text_color(c(palette().placeholder))
                 .child(text.to_string())
         };
         let open: Vec<AnyElement> = tabs_of(&self.tabs, &account)
@@ -90,23 +90,32 @@ impl Workspace {
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(privacy::redact(&h.name).into_owned()),
                             )
-                            .child(div().truncate().text_color(c(MUTED)).child(subtitle)),
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_color(c(palette().muted))
+                                    .child(subtitle),
+                            ),
                     )
                     .child(
                         icon_button(
                             "d-pin",
                             "pin",
                             if h.pinned { "Unpin" } else { "Pin to top" },
-                            if h.pinned { accent_text() } else { MUTED },
+                            if h.pinned {
+                                accent_text()
+                            } else {
+                                palette().muted
+                            },
                         )
                         .on_click(cx.listener(move |t, _, _, cx| t.toggle_pin(ix, cx))),
                     )
                     .child(
-                        icon_button("d-edit", "pencil", "Edit host", MUTED)
+                        icon_button("d-edit", "pencil", "Edit host", palette().muted)
                             .on_click(cx.listener(move |t, _, w, cx| t.open_form(Some(ix), w, cx))),
                     )
                     .child(
-                        icon_button("d-del", "trash", "Delete host", RED)
+                        icon_button("d-del", "trash", "Delete host", palette().red)
                             .on_click(cx.listener(move |t, _, w, cx| t.ask_delete_host(ix, w, cx))),
                     ),
             )
@@ -156,11 +165,11 @@ impl Workspace {
             .items_center()
             .gap_2()
             .border_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .cursor_pointer()
-            .hover(|s| s.bg(c(HOVER)))
+            .hover(|s| s.bg(c(palette().hover)))
             .on_click(cx.listener(move |t, _, w, cx| t.select_tab(ti, w, cx)))
-            .child(icon(kind, 13., GREEN))
+            .child(icon(kind, 13., palette().green))
             .child(
                 div()
                     .flex_1()
@@ -168,8 +177,8 @@ impl Workspace {
                     .truncate()
                     .child(privacy::redact(&name).into_owned()),
             )
-            .child(div().text_color(c(MUTED)).child("Switch to"))
-            .child(icon("arrow-right", 12., MUTED))
+            .child(div().text_color(c(palette().muted)).child("Switch to"))
+            .child(icon("arrow-right", 12., palette().muted))
             .into_any_element()
     }
 
@@ -190,9 +199,9 @@ impl Workspace {
                     .chain([privacy::redact(&h.name)])
                     .collect::<Vec<_>>()
                     .join(" › "),
-                MUTED,
+                palette().muted,
             ),
-            Err(e) => (e, RED),
+            Err(e) => (e, palette().red),
         });
         let row = |name: &str, value: String, color: u32| {
             div()
@@ -203,7 +212,7 @@ impl Workspace {
                     div()
                         .w(px(90.))
                         .flex_none()
-                        .text_color(c(PLACEHOLDER))
+                        .text_color(c(palette().placeholder))
                         .child(name.to_string()),
                 )
                 .child(
@@ -218,8 +227,8 @@ impl Workspace {
         div()
             .flex()
             .flex_col()
-            .child(row("Address", address(h), TEXT))
-            .child(row("Sign in", sign_in, MUTED))
+            .child(row("Address", address(h), palette().text))
+            .child(row("Sign in", sign_in, palette().muted))
             .when_some(through, |d, (path, color)| {
                 d.child(row("Through", path, color))
             })
@@ -232,7 +241,7 @@ fn action(id: &'static str, name: &str, tooltip: &str, main: bool) -> gpui::Stat
     let (bg, fg, hover) = if main {
         (accent(), on_accent(), accent_text())
     } else {
-        (ACTIVE, TEXT, 0x323235)
+        (palette().active, palette().text, palette().active_hover)
     };
     keyboard(div().id(id))
         .size(px(32.))
@@ -241,7 +250,7 @@ fn action(id: &'static str, name: &str, tooltip: &str, main: bool) -> gpui::Stat
         .justify_center()
         .rounded(px(2.))
         .border_1()
-        .border_color(c(BORDER))
+        .border_color(c(palette().border))
         .bg(c(bg))
         .cursor_pointer()
         .hover(move |s| s.bg(c(hover)))

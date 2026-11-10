@@ -388,9 +388,9 @@ impl Render for HostForm {
             .flex_col()
             .gap_2()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .child(
                 div()
@@ -403,7 +403,7 @@ impl Render for HostForm {
                         "Add host"
                     }))
                     .child(
-                        icon_button("form-close", "x", "Close (Esc)", MUTED)
+                        icon_button("form-close", "x", "Close (Esc)", palette().muted)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
                     ),
@@ -449,7 +449,7 @@ impl Render for HostForm {
                 d.child(
                     div()
                         .text_xs()
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .child("Logs in with the keys in your SSH agent (1Password, Secretive, ssh-add). Set another agent under Settings, Passwords."),
                 )
             })
@@ -475,7 +475,7 @@ impl Render for HostForm {
                 ))
             })
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().text_xs().text_color(c(RED)).child(e))
+                d.child(div().text_xs().text_color(c(palette().red)).child(e))
             })
             .child(
                 div()

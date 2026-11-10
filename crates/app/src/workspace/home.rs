@@ -176,7 +176,7 @@ impl Workspace {
                 d.w(px(LIST_W))
                     .flex_none()
                     .border_r_1()
-                    .border_color(c(BORDER_VARIANT))
+                    .border_color(c(palette().border_variant))
             })
             .when(!wide, Styled::flex_1)
             .child(
@@ -187,7 +187,7 @@ impl Workspace {
                     .gap_1()
                     .child(div().flex_1().min_w_0().child(self.search.clone()))
                     .child(
-                        icon_button("add-host", "plus", "Add host", MUTED)
+                        icon_button("add-host", "plus", "Add host", palette().muted)
                             .on_click(cx.listener(|t, _, w, cx| t.open_form(None, w, cx))),
                     ),
             )
@@ -259,7 +259,7 @@ impl Workspace {
                         .pt_2()
                         .pb_1()
                         .text_xs()
-                        .text_color(c(PLACEHOLDER))
+                        .text_color(c(palette().placeholder))
                         .child(title)
                         .into_any_element(),
                 );
@@ -278,7 +278,7 @@ impl Workspace {
             rows.push(
                 div()
                     .p_2()
-                    .text_color(c(PLACEHOLDER))
+                    .text_color(c(palette().placeholder))
                     .child(
                         privacy::redact(&format!(
                             "No hosts match. Press Enter to connect to {query}."
@@ -321,9 +321,9 @@ impl Workspace {
             } else {
                 gpui::transparent_black()
             })
-            .when(picked, |d| d.bg(c(ACTIVE)))
+            .when(picked, |d| d.bg(c(palette().active)))
             .cursor_pointer()
-            .hover(|s| s.bg(c(HOVER)))
+            .hover(|s| s.bg(c(palette().hover)))
             .on_mouse_down(MouseButton::Right, {
                 let account = account.clone();
                 cx.listener(move |t, ev: &MouseDownEvent, w, cx| {
@@ -361,7 +361,7 @@ impl Workspace {
                         div()
                             .truncate()
                             .text_xs()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .child(address(h)),
                     ),
             )
@@ -372,12 +372,12 @@ impl Workspace {
                         .items_center()
                         .gap_1()
                         .text_xs()
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .when(open > 0, |d| d.child(open.to_string()))
                         .child(div().size(px(7.)).bg(c(dot_color(if live {
-                            GREEN
+                            palette().green
                         } else {
-                            YELLOW
+                            palette().yellow
                         })))),
                 )
             })
@@ -396,9 +396,9 @@ impl Workspace {
             .border_1()
             .border_color(gpui::transparent_black())
             .cursor_pointer()
-            .hover(|s| s.bg(c(HOVER)))
+            .hover(|s| s.bg(c(palette().hover)))
             .on_click(cx.listener(|t, _, w, cx| t.open_local_docker(w, cx)))
-            .child(icon("container", 16., MUTED))
+            .child(icon("container", 16., palette().muted))
             .child(
                 div()
                     .flex_1()

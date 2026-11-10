@@ -185,9 +185,9 @@ impl Render for QuickConnect {
             .flex_col()
             .gap_2()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .child(
                 div()
@@ -196,7 +196,7 @@ impl Render for QuickConnect {
                     .justify_between()
                     .child(div().text_sm().child("Quick connect"))
                     .child(
-                        icon_button("qc-close", "x", "Close (Esc)", MUTED)
+                        icon_button("qc-close", "x", "Close (Esc)", palette().muted)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(QuickEvent::Cancelled))),
                     ),
@@ -227,7 +227,7 @@ impl Render for QuickConnect {
                 })),
             )
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().text_xs().text_color(c(RED)).child(e))
+                d.child(div().text_xs().text_color(c(palette().red)).child(e))
             })
             .child(
                 div()

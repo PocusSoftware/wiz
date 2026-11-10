@@ -8,7 +8,10 @@ use gpui::{
     point, px,
 };
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSView};
+use objc2_app_kit::{
+    NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSView, NSWorkspace,
+};
+use objc2_foundation::NSArray;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 use crate::workspace::{NextTab, PrevTab, Quit, SelectTab, Workspace};
@@ -250,4 +253,20 @@ pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
 /// The logged-in user, masked by "hide sensitive information".
 pub fn local_user() -> Option<String> {
     std::env::var("USER").ok()
+}
+
+/// Whether the system uses dark colors, and whether it asks for more contrast.
+/// The appearance is matched to light or dark on its own: with Increase contrast on, its
+/// name is a high contrast one, which gpui reads as light.
+pub fn system_look(_: &Window) -> (bool, bool) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return (true, false);
+    };
+    // SAFETY: AppKit's appearance names are immutable statics, set before main.
+    let (light, dark) = unsafe { (NSAppearanceNameAqua, NSAppearanceNameDarkAqua) };
+    let best = NSApplication::sharedApplication(mtm)
+        .effectiveAppearance()
+        .bestMatchFromAppearancesWithNames(&NSArray::from_slice(&[light, dark]));
+    let high = NSWorkspace::sharedWorkspace().accessibilityDisplayShouldIncreaseContrast();
+    (best.is_some_and(|name| *name == *dark), high)
 }

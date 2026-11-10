@@ -99,9 +99,9 @@ impl TerminalView {
                 .flex()
                 .items_center()
                 .gap_1()
-                .bg(c(ELEVATED))
+                .bg(c(palette().elevated))
                 .border_1()
-                .border_color(c(BORDER))
+                .border_color(c(palette().border))
                 .rounded(px(2.))
                 .text_xs()
                 // Clicks here must not reach the terminal (it would take focus and select).
@@ -124,17 +124,17 @@ impl TerminalView {
                     cx.stop_propagation();
                 }))
                 .child(div().flex_1().min_w_0().child(s.input.clone()))
-                .child(div().text_color(c(PLACEHOLDER)).child(count))
+                .child(div().text_color(c(palette().placeholder)).child(count))
                 .child(
-                    icon_button("find-prev", "arrow-up", "Previous (⇧↵)", MUTED)
+                    icon_button("find-prev", "arrow-up", "Previous (⇧↵)", palette().muted)
                         .on_click(cx.listener(|t, _, _, cx| t.step_match(false, cx))),
                 )
                 .child(
-                    icon_button("find-next", "arrow-down", "Next (↵)", MUTED)
+                    icon_button("find-next", "arrow-down", "Next (↵)", palette().muted)
                         .on_click(cx.listener(|t, _, _, cx| t.step_match(true, cx))),
                 )
                 .child(
-                    icon_button("find-close", "x", "Close (Esc)", MUTED)
+                    icon_button("find-close", "x", "Close (Esc)", palette().muted)
                         .on_click(cx.listener(|t, _, w, cx| t.close_search(w, cx))),
                 )
                 .into_any_element(),

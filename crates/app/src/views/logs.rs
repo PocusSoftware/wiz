@@ -305,7 +305,7 @@ impl LogView {
                         .flex()
                         .child(
                             div()
-                                .text_color(c(PLACEHOLDER))
+                                .text_color(c(palette().placeholder))
                                 .child(chars[from..cut].iter().collect::<String>()),
                         )
                         .child(chars[cut..to].iter().collect::<String>())
@@ -406,7 +406,7 @@ impl Render for LogView {
                     .items_center()
                     .gap_3()
                     .border_b_1()
-                    .border_color(c(BORDER_VARIANT))
+                    .border_color(c(palette().border_variant))
                     .child(
                         checkbox("autoscroll", self.auto, "Auto-scroll").on_click(cx.listener(
                             |t, _, _, cx| {
@@ -419,34 +419,42 @@ impl Render for LogView {
                             },
                         )),
                     )
-                    .child(div().text_color(c(PLACEHOLDER)).child(if self.auto {
-                        "refreshing every 2s"
-                    } else {
-                        "paused"
-                    }))
+                    .child(
+                        div()
+                            .text_color(c(palette().placeholder))
+                            .child(if self.auto {
+                                "refreshing every 2s"
+                            } else {
+                                "paused"
+                            }),
+                    )
                     .child(div().flex_1())
                     .when_some(self.error.clone(), |d, e| {
                         d.child(
                             div()
-                                .text_color(c(RED))
+                                .text_color(c(palette().red))
                                 .child(crate::privacy::redact(&e).into_owned()),
                         )
                     })
                     .child(
                         div()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .child(format!("{count} lines")),
                     )
                     .child(
-                        icon_button("log-latest", "arrow-down", "Jump to latest", MUTED).on_click(
-                            cx.listener(|t, _, _, cx| {
-                                t.to_bottom();
-                                cx.notify();
-                            }),
-                        ),
+                        icon_button(
+                            "log-latest",
+                            "arrow-down",
+                            "Jump to latest",
+                            palette().muted,
+                        )
+                        .on_click(cx.listener(|t, _, _, cx| {
+                            t.to_bottom();
+                            cx.notify();
+                        })),
                     )
                     .child(
-                        icon_button("log-refresh", "refresh", "Refresh now", MUTED)
+                        icon_button("log-refresh", "refresh", "Refresh now", palette().muted)
                             .on_click(cx.listener(|t, _, _, cx| t.refresh(cx))),
                     ),
             )

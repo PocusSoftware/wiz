@@ -9,9 +9,17 @@ impl SettingsView {
         let d = div().flex().flex_col();
         match self.category {
             Category::Appearance => d
+                .child(Self::row("Theme", "Light or dark colors. System follows the system setting.", div().flex().gap_1().children([("a-theme-system", "System", Appearance::System), ("a-theme-light", "Light", Appearance::Light), ("a-theme-dark", "Dark", Appearance::Dark)].map(|(id, name, look)| {
+                    if s.appearance() == look { primary_button(id, name) } else { button(id, name) }
+                        .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.appearance = Some(look))))
+                }))))
+                .child(Self::row("Contrast", "Stronger text and borders. System follows the system accessibility setting.", div().flex().gap_1().children([("a-contrast-system", "System", Contrast::System), ("a-contrast-standard", "Standard", Contrast::Standard), ("a-contrast-high", "High", Contrast::High)].map(|(id, name, contrast)| {
+                    if s.contrast() == contrast { primary_button(id, name) } else { button(id, name) }
+                        .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.contrast = Some(contrast))))
+                }))))
                 .child(self.toggle("a-colorful", "Colorful", "The accent color, and red, green and yellow icons and status dots. Off is the gray theme.", s.colorful(), |s, v| s.colorful = Some(v), cx))
                 .child(self.accent_row(cx))
-                .child(self.toggle("a-oled", "OLED black", "Pure black behind the window and terminals, so OLED screens switch those pixels off.", s.oled_black(), |s, v| s.oled_black = Some(v), cx))
+                .child(self.toggle("a-oled", "OLED black", "Pure black behind the window and terminals of the dark theme, so OLED screens switch those pixels off.", s.oled_black(), |s, v| s.oled_black = Some(v), cx))
                 .child(Self::row("Window buttons", "Which end of the tab bar has minimize, maximize and close.", div().flex().gap_1().children([("Left", WindowControls::Left), ("Right", WindowControls::Right)].map(|(name, side)| {
                     if s.window_controls() == side { primary_button(name, name) } else { button(name, name) }
                         .on_click(cx.listener(move |t, _, _, cx| t.apply(cx, move |s| s.window_controls = Some(side))))

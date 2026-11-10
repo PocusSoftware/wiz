@@ -85,7 +85,7 @@ impl SettingsView {
                 .gap_3()
                 .py_1()
                 .border_b_1()
-                .border_color(c(BORDER_VARIANT))
+                .border_color(c(palette().border_variant))
                 .child(
                     div()
                         .flex_1()
@@ -100,7 +100,7 @@ impl SettingsView {
                                 .truncate()
                                 .text_xs()
                                 .font_family(mono())
-                                .text_color(c(PLACEHOLDER))
+                                .text_color(c(palette().placeholder))
                                 .child(format!(
                                     "{}{}",
                                     privacy::redact(first),
@@ -123,7 +123,7 @@ impl SettingsView {
             .flex()
             .flex_col()
             .child(
-                div().pt_2().text_xs().text_color(c(PLACEHOLDER)).child(format!(
+                div().pt_2().text_xs().text_color(c(palette().placeholder)).child(format!(
                     "Pick one with {} while a terminal is in front. It is pasted without Enter. For several lines, edit snippets.toml.",
                     crate::shortcuts::label("snippets")
                 )),
@@ -152,7 +152,7 @@ impl SettingsView {
             .child(Self::group("Saved"))
             .children(rows)
             .when(self.snippets.is_empty(), |d| {
-                d.child(div().py_2().text_color(c(MUTED)).child("No snippets yet."))
+                d.child(div().py_2().text_color(c(palette().muted)).child("No snippets yet."))
             })
     }
 }

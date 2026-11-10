@@ -303,6 +303,16 @@ const STATUS_SECS: u64 = 5;
 const STATUS_ERROR_SECS: u64 = 10;
 
 impl Workspace {
+    /// Follow the system look from the start. Activation catches changes that send no
+    /// appearance event, like high contrast on Windows.
+    fn follow_system_look(window: &mut Window, cx: &mut Context<Self>) {
+        read_system_look(window);
+        cx.observe_window_appearance(window, |_, window, _| read_system_look(window))
+            .detach();
+        cx.observe_window_activation(window, |_, window, _| read_system_look(window))
+            .detach();
+    }
+
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let cfg_path = Config::default_path().unwrap_or_else(|_| PathBuf::from("hosts.toml"));
         let mut status = None;
@@ -347,6 +357,7 @@ impl Workspace {
         })
         .detach();
         Self::watch_latency(window, cx);
+        Self::follow_system_look(window, cx);
         let search = cx.new(|cx| {
             let mut t = TextInput::new("Search or user@host", false, cx);
             t.set_hide_mode(Hide::Redact);
@@ -670,7 +681,7 @@ impl Render for Workspace {
             .font_family(ui())
             .text_size(px(12.))
             .bg(c(bg()))
-            .text_color(c(TEXT))
+            .text_color(c(palette().text))
             .child(
                 div()
                     .flex_1()
@@ -707,9 +718,9 @@ impl Render for Workspace {
                             .items_center()
                             .gap_2()
                             .border_t_1()
-                            .border_color(c(BORDER_VARIANT))
-                            .text_color(c(MUTED))
-                            .child(div().size(px(7.)).bg(c(dot_color(YELLOW))))
+                            .border_color(c(palette().border_variant))
+                            .text_color(c(palette().muted))
+                            .child(div().size(px(7.)).bg(c(dot_color(palette().yellow))))
                             .child(
                                 div().flex_1().child(
                                     privacy::redact(&format!("Connecting to {}...", p.name))
@@ -721,7 +732,7 @@ impl Render for Workspace {
                                     ("cancel-connect", p.id as usize),
                                     "x",
                                     "Cancel",
-                                    MUTED,
+                                    palette().muted,
                                 )
                                 .size(px(18.))
                                 .on_click(
@@ -735,9 +746,9 @@ impl Render for Workspace {
                                 .px_2()
                                 .py(px(3.))
                                 .border_t_1()
-                                .border_color(c(BORDER_VARIANT))
-                                .text_color(c(if err { RED } else { MUTED }))
-                                .focus(|s| s.bg(c(HOVER)))
+                                .border_color(c(palette().border_variant))
+                                .text_color(c(if err { palette().red } else { palette().muted }))
+                                .focus(|s| s.bg(c(palette().hover)))
                                 .cursor_pointer()
                                 .tooltip(crate::widgets::tip("Click to dismiss"))
                                 .on_click(cx.listener(|t, _, _, cx| {
@@ -756,6 +767,14 @@ impl Render for Workspace {
 }
 
 /// Hosts, host names and usernames (and the local user) that "hide sensitive information" masks.
+/// Pick up the system's light or dark and contrast settings, for the `System` choices.
+fn read_system_look(window: &mut Window) {
+    let (dark, high) = crate::platform::system_look(window);
+    if set_system(dark, high) {
+        window.refresh();
+    }
+}
+
 fn refresh_privacy_tokens<'a>(hosts: impl Iterator<Item = &'a Host> + Clone) {
     let mut users: Vec<String> = hosts.clone().map(|h| h.user.clone()).collect();
     let names = hosts.clone().map(|h| h.name.clone()).collect();

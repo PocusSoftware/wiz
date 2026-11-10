@@ -1,6 +1,8 @@
 //! Saved hosts, settings and quick connect targets.
 
-use ssh_core::config::{AuthMethod, Config, Host, Settings, WindowControls, parse_target};
+use ssh_core::config::{
+    Appearance, AuthMethod, Config, Contrast, Host, Settings, WindowControls, parse_target,
+};
 
 #[test]
 fn settings_defaults_and_roundtrip() {
@@ -38,6 +40,14 @@ fn settings_defaults_and_roundtrip() {
     // Window buttons are written as a plain word.
     let left: Settings = toml::from_str("window_controls = \"left\"").unwrap();
     assert_eq!(left.window_controls(), WindowControls::Left);
+    // The look follows the system until one is picked.
+    assert_eq!(d.appearance(), Appearance::System);
+    assert_eq!(d.contrast(), Contrast::System);
+    let look: Settings = toml::from_str("appearance = \"light\"\ncontrast = \"high\"").unwrap();
+    assert_eq!(
+        (look.appearance(), look.contrast()),
+        (Appearance::Light, Contrast::High)
+    );
     // Unset fields keep their defaults.
     assert!(back.mask_ipv4() && back.mask_ports() && back.log_tail_lines() == 2000);
 }

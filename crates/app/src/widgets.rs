@@ -24,11 +24,11 @@ impl Render for Tip {
             .px_2()
             .py_1()
             .rounded(px(2.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .text_xs()
-            .text_color(c(TEXT))
+            .text_color(c(palette().text))
             .child(self.0.clone())
     }
 }
@@ -44,10 +44,10 @@ pub fn drag_chip(label: SharedString) -> Div {
         .px_2()
         .py(px(3.))
         .rounded(px(2.))
-        .bg(c(ELEVATED))
+        .bg(c(palette().elevated))
         .border_1()
-        .border_color(c(BORDER))
-        .text_color(c(TEXT))
+        .border_color(c(palette().border))
+        .text_color(c(palette().text))
         .font_family(ui())
         .text_size(px(12.))
         .child(label)
@@ -63,7 +63,7 @@ pub fn typed<'a>(key: &str, key_char: Option<&'a str>) -> Option<&'a str> {
 /// `focus` with a background instead.
 pub fn keyboard(el: Stateful<Div>) -> Stateful<Div> {
     el.tab_index(0)
-        .focus(|s| s.border_color(c(TEXT)))
+        .focus(|s| s.border_color(c(palette().text)))
         // A mouse click leaves focus where it was (the terminal keeps typing), like macOS
         // buttons, and the ring shows only for the keyboard.
         .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
@@ -109,8 +109,8 @@ pub fn icon_button(
         .border_1()
         .border_color(gpui::transparent_black())
         .cursor_pointer()
-        .hover(|s| s.bg(c(HOVER)))
-        .active(|s| s.bg(c(ACTIVE)))
+        .hover(|s| s.bg(c(palette().hover)))
+        .active(|s| s.bg(c(palette().active)))
         .tooltip(tip(tooltip))
         .child(icon(name, 13., color))
 }
@@ -121,7 +121,7 @@ fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> S
         .h(px(26.))
         .font_weight(gpui::FontWeight::MEDIUM)
         .border_1()
-        .border_color(c(BORDER))
+        .border_color(c(palette().border))
         .flex()
         .items_center()
         .rounded(px(2.))
@@ -134,7 +134,13 @@ fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> S
 }
 
 pub fn button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
-    base(id, text, ACTIVE, TEXT, 0x323235)
+    base(
+        id,
+        text,
+        palette().active,
+        palette().text,
+        palette().active_hover,
+    )
 }
 
 pub fn primary_button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
@@ -142,7 +148,10 @@ pub fn primary_button(id: impl Into<ElementId>, text: &str) -> Stateful<Div> {
 }
 
 pub fn label(text: &str) -> Div {
-    div().text_xs().text_color(c(MUTED)).child(text.to_string())
+    div()
+        .text_xs()
+        .text_color(c(palette().muted))
+        .child(text.to_string())
 }
 
 /// Square checkbox with a label. The caller attaches `on_click`.
@@ -154,8 +163,8 @@ pub fn checkbox(id: impl Into<ElementId>, checked: bool, text: &str) -> Stateful
         .items_center()
         .gap(px(6.))
         .cursor_pointer()
-        .hover(|s| s.bg(c(HOVER)))
-        .focus(|s| s.bg(c(HOVER)))
+        .hover(|s| s.bg(c(palette().hover)))
+        .focus(|s| s.bg(c(palette().hover)))
         .child(
             div()
                 .size(px(14.))
@@ -164,8 +173,8 @@ pub fn checkbox(id: impl Into<ElementId>, checked: bool, text: &str) -> Stateful
                 .items_center()
                 .justify_center()
                 .border_2()
-                .border_color(c(if checked { accent() } else { BORDER }))
-                .bg(c(if checked { accent() } else { ELEMENT }))
+                .border_color(c(if checked { accent() } else { palette().border }))
+                .bg(c(if checked { accent() } else { palette().element }))
                 .when(checked, |d| d.child(icon("check", 10., on_accent()))),
         )
         .child(text.to_string())

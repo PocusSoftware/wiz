@@ -76,10 +76,10 @@ fn keycap(text: String, lit: bool) -> gpui::Div {
         .rounded(px(4.))
         .border_1()
         .border_b_2()
-        .border_color(c(if lit { accent() } else { BORDER }))
-        .bg(c(ELEMENT))
+        .border_color(c(if lit { accent() } else { palette().border }))
+        .bg(c(palette().element))
         .text_sm()
-        .text_color(c(if lit { accent_text() } else { TEXT }))
+        .text_color(c(if lit { accent_text() } else { palette().text }))
         .child(text)
 }
 
@@ -110,8 +110,8 @@ impl SettingsView {
                     div()
                         .rounded(px(6.))
                         .border_1()
-                        .border_color(c(BORDER_VARIANT))
-                        .bg(c(PANEL))
+                        .border_color(c(palette().border_variant))
+                        .bg(c(palette().panel))
                         .overflow_hidden()
                         .children(items),
                 )
@@ -125,7 +125,7 @@ impl SettingsView {
                 div()
                     .pt_2()
                     .text_xs()
-                    .text_color(c(PLACEHOLDER))
+                    .text_color(c(palette().placeholder))
                     .child("Click a shortcut, then press the new keys. Escape cancels."),
             )
             .child(div().py_2().child(self.shortcut_search.clone()))
@@ -134,12 +134,12 @@ impl SettingsView {
                 d.child(
                     div()
                         .py_2()
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .child("No shortcuts match."),
                 )
             })
             .when_some(self.shortcut_note.clone(), |d, n| {
-                d.child(div().mt_2().text_color(c(RED)).child(n))
+                d.child(div().mt_2().text_color(c(palette().red)).child(n))
             })
     }
 
@@ -171,8 +171,10 @@ impl SettingsView {
             .gap_3()
             .px_3()
             .py_2()
-            .hover(|s| s.bg(c(HOVER)))
-            .when(divider, |d| d.border_b_1().border_color(c(BORDER_VARIANT)))
+            .hover(|s| s.bg(c(palette().hover)))
+            .when(divider, |d| {
+                d.border_b_1().border_color(c(palette().border_variant))
+            })
             .child(
                 div()
                     .flex_1()
@@ -185,12 +187,12 @@ impl SettingsView {
                     keyboard(div().id(("sc-reset", i)))
                         .px_1()
                         .border_1()
-                        .border_color(c(0x00000000))
+                        .border_color(gpui::transparent_black())
                         .rounded(px(3.))
                         .text_xs()
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .cursor_pointer()
-                        .hover(|s| s.text_color(c(TEXT)))
+                        .hover(|s| s.text_color(c(palette().text)))
                         .child("Reset")
                         .on_click(cx.listener(move |t, _, _, cx| {
                             t.apply(cx, |s| {
@@ -206,9 +208,9 @@ impl SettingsView {
                     .p(px(2.))
                     .rounded(px(5.))
                     .border_1()
-                    .border_color(c(0x00000000))
+                    .border_color(gpui::transparent_black())
                     .cursor_pointer()
-                    .hover(|s| s.bg(c(ACTIVE)))
+                    .hover(|s| s.bg(c(palette().active)))
                     .child(caps)
                     .on_click(cx.listener(move |t, _, _, cx| t.record_for(id, cx))),
             )

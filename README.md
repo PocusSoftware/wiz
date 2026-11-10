@@ -26,7 +26,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 | Area | Keys |
 |---|---|
 | Privacy | `hide_sensitive`, `mask_hosts`, `mask_users`, `mask_names` (off), `mask_ipv4`, `mask_ipv6`, `mask_ports`, `mask_secrets`, `hide_secret_files`, `secret_file_patterns`, `extra_mask` |
-| Appearance | `ui_font`, `terminal_font` (restart), `terminal_font_size`, `accent_color` ("#RRGGBB", when colorful), `window_controls` ("left" or "right"), `oled_black`, `show_os_logos` (the OS logo found when connecting; one picked in the host form always shows), `colorful` (off: the gray theme), `animations`, `show_latency` (off), `show_split_button`, `show_quick_connect_button`, `show_privacy_button` |
+| Appearance | `appearance` ("system", "light" or "dark"), `contrast` ("system", "standard" or "high"), `ui_font`, `terminal_font` (restart), `terminal_font_size`, `accent_color` ("#RRGGBB", when colorful), `window_controls` ("left" or "right"), `oled_black`, `show_os_logos` (the OS logo found when connecting; one picked in the host form always shows), `colorful` (off: the gray theme), `animations`, `show_latency` (off), `show_split_button`, `show_quick_connect_button`, `show_privacy_button` |
 | Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
 | Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_scrollback`, `keepalive_secs` |

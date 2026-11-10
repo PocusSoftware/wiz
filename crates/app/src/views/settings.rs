@@ -12,7 +12,7 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
     KeyDownEvent, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{Settings, Snippet, WindowControls};
+use ssh_core::config::{Appearance, Contrast, Settings, Snippet, WindowControls};
 use ssh_core::secrets::{self, Store};
 
 use crate::prefs;
@@ -220,7 +220,7 @@ impl SettingsView {
             .gap_4()
             .py(px(4.))
             .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .child(
                 div()
                     .flex_1()
@@ -229,7 +229,7 @@ impl SettingsView {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .child(desc.to_string()),
                     ),
             )
@@ -242,7 +242,7 @@ impl SettingsView {
             .mt_4()
             .mb_1()
             .text_xs()
-            .text_color(c(MUTED))
+            .text_color(c(palette().muted))
             .child(name.to_uppercase())
     }
 
@@ -252,7 +252,7 @@ impl SettingsView {
             .mb_1()
             .pb(px(6.))
             .border_b_2()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .text_lg()
             .font_weight(FontWeight::SEMIBOLD)
             .child(title.to_string())
@@ -301,7 +301,7 @@ impl SettingsView {
                 .items_center()
                 .gap_1()
                 .child(
-                    icon_button((id, 0usize), "minus", "Decrease", MUTED).on_click(
+                    icon_button((id, 0usize), "minus", "Decrease", palette().muted).on_click(
                         cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, dec))),
                     ),
                 )
@@ -320,7 +320,7 @@ impl SettingsView {
                         }),
                 )
                 .child(
-                    icon_button((id, 1usize), "plus", "Increase", MUTED).on_click(
+                    icon_button((id, 1usize), "plus", "Increase", palette().muted).on_click(
                         cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, inc))),
                     ),
                 ),
@@ -363,13 +363,13 @@ impl SettingsView {
                 .items_center()
                 .gap_1()
                 .child(
-                    icon_button((id, 0usize), "minus", "Lower", MUTED).on_click(
+                    icon_button((id, 0usize), "minus", "Lower", palette().muted).on_click(
                         cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, dec))),
                     ),
                 )
                 .child(div().w(px(96.)).flex().justify_center().child(show(value)))
                 .child(
-                    icon_button((id, 1usize), "plus", "Higher", MUTED).on_click(
+                    icon_button((id, 1usize), "plus", "Higher", palette().muted).on_click(
                         cx.listener(move |t, _, _, cx| t.apply(cx, move |s| set(s, inc))),
                     ),
                 ),
@@ -403,7 +403,7 @@ impl SettingsView {
         div()
             .py(px(4.))
             .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .child(chips)
     }
 
@@ -507,7 +507,7 @@ impl Render for SettingsView {
                             .child(Self::title(self.category.name()))
                             .child(self.page(cx))
                             .when_some(self.error.clone(), |d, e| {
-                                d.child(div().mt_2().text_color(c(RED)).child(e))
+                                d.child(div().mt_2().text_color(c(palette().red)).child(e))
                             }),
                     ),
             )

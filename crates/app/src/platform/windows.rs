@@ -10,14 +10,17 @@ use std::path::{Path, PathBuf};
 
 use gpui::{
     App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
-    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowControlArea,
+    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowAppearance,
+    WindowControlArea,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
+use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetCursorPos, HTCAPTION, IsZoomed, PostMessageW, SC_MOVE, SW_MAXIMIZE, SW_RESTORE,
-    ShowWindowAsync, WM_SYSCOMMAND,
+    GetCursorPos, HTCAPTION, IsZoomed, PostMessageW, SC_MOVE, SPI_GETHIGHCONTRAST, SW_MAXIMIZE,
+    SW_RESTORE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, ShowWindowAsync, SystemParametersInfoW,
+    WM_SYSCOMMAND,
 };
 
 use crate::workspace::{NextTab, PrevTab, SelectTab, Workspace};
@@ -327,4 +330,29 @@ pub fn open_in_editor(path: &Path, app: &str) -> std::io::Result<()> {
 /// The logged-in user, masked by "hide sensitive information".
 pub fn local_user() -> Option<String> {
     std::env::var("USERNAME").ok()
+}
+
+/// Whether the system uses dark colors, and whether high contrast is on.
+pub fn system_look(window: &Window) -> (bool, bool) {
+    let dark = matches!(
+        window.appearance(),
+        WindowAppearance::Dark | WindowAppearance::VibrantDark
+    );
+    let mut hc = HIGHCONTRASTW {
+        cbSize: size_of::<HIGHCONTRASTW>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: `hc` is a live HIGHCONTRASTW with its size set, as SPI_GETHIGHCONTRAST expects.
+    let read = unsafe {
+        SystemParametersInfoW(
+            SPI_GETHIGHCONTRAST,
+            hc.cbSize,
+            Some((&raw mut hc).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    (
+        dark,
+        read.is_ok() && hc.dwFlags.contains(HCF_HIGHCONTRASTON),
+    )
 }

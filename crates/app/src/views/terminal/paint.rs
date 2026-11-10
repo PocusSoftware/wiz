@@ -2,17 +2,9 @@
 
 use super::*;
 
-/// Background of search hits other than the current one.
-const MATCH_BG: u32 = 0x6b5416;
-
-const ANSI: [u32; 16] = [
-    0x0a0a0b, 0xf66335, 0xdfbda0, 0xf05a29, 0xa0a0a6, 0xf87c49, 0xb6b6bb, 0xd7d7db, 0x626269,
-    0xf87c49, 0xe8cdb6, 0xf87c49, 0xc4c4c9, 0xf9926a, 0xd7d7db, 0xfafafb,
-];
-
 fn indexed(i: u8) -> u32 {
     match i {
-        0..=15 => ANSI[i as usize],
+        0..=15 => palette().ansi[i as usize],
         16..=231 => {
             let i = i as u32 - 16;
             let lvl = |n: u32| if n == 0 { 0 } else { 55 + 40 * n };
@@ -35,11 +27,11 @@ fn resolve(color: Color, default: u32) -> u32 {
                 NamedColor::Foreground
                 | NamedColor::BrightForeground
                 | NamedColor::DimForeground
-                | NamedColor::Cursor => TEXT,
+                | NamedColor::Cursor => palette().text,
                 NamedColor::Background => bg(),
-                _ if i < 16 => ANSI[i],
+                _ if i < 16 => palette().ansi[i],
                 _ if i >= NamedColor::DimBlack as usize => {
-                    ANSI[(i - NamedColor::DimBlack as usize).min(7)]
+                    palette().ansi[(i - NamedColor::DimBlack as usize).min(7)]
                 }
                 _ => default,
             }
@@ -85,7 +77,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
     let selection = content.selection;
 
     let default = Style {
-        fg: TEXT,
+        fg: palette().text,
         bg: None,
         bold: false,
         italic: false,
@@ -106,7 +98,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
             lines[row as usize][col] = ('\0', default);
             continue;
         }
-        let mut fg = resolve(cell.cell.fg, TEXT);
+        let mut fg = resolve(cell.cell.fg, palette().text);
         let mut back = resolve(cell.cell.bg, bg());
         if f.contains(Flags::INVERSE) {
             std::mem::swap(&mut fg, &mut back);
@@ -159,7 +151,7 @@ pub(super) fn snapshot(t: &TerminalView, focused: bool) -> Snapshot {
             let (bg, fg) = if i == s.cur {
                 (accent(), bg())
             } else {
-                (MATCH_BG, TEXT)
+                (palette().match_bg, palette().text)
             };
             let end = (m.col + m.len).min(cols);
             for (_, style) in lines[row as usize][m.col.min(end)..end].iter_mut() {

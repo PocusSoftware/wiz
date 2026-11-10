@@ -142,8 +142,8 @@ impl SftpView {
             .items_center()
             .gap_2()
             .border_t_1()
-            .border_color(c(BORDER))
-            .bg(c(ELEVATED))
+            .border_color(c(palette().border))
+            .bg(c(palette().elevated))
             .on_key_down(cx.listener(
                 |t, ev: &KeyDownEvent, w, cx| match ev.keystroke.key.as_str() {
                     "enter" => {
@@ -180,23 +180,27 @@ impl SftpView {
                 .child(cancel)
                 .into_any_element(),
             Prompt::Delete(side, names) => bar
-                .child(div().text_color(c(RED)).child(if names.len() == 1 {
-                    format!(
-                        "Delete {} permanently from {}?",
-                        names[0],
-                        self.pane(*side).source.label()
-                    )
-                } else {
-                    format!(
-                        "Delete {} items permanently from {}?",
-                        names.len(),
-                        self.pane(*side).source.label()
-                    )
-                }))
+                .child(
+                    div()
+                        .text_color(c(palette().red))
+                        .child(if names.len() == 1 {
+                            format!(
+                                "Delete {} permanently from {}?",
+                                names[0],
+                                self.pane(*side).source.label()
+                            )
+                        } else {
+                            format!(
+                                "Delete {} items permanently from {}?",
+                                names.len(),
+                                self.pane(*side).source.label()
+                            )
+                        }),
+                )
                 .child(div().flex_1())
                 .child(
                     button("p-ok", "Delete")
-                        .bg(c(RED))
+                        .bg(c(palette().red))
                         .text_color(c(0xffffff))
                         .on_click(cx.listener(|t, _, w, cx| t.confirm_prompt(w, cx))),
                 )

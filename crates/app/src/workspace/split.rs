@@ -337,12 +337,16 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let dragging = self.pane_drag.as_ref().is_some_and(|d| d.divider == which);
-        let line = c(if dragging { accent() } else { BORDER });
+        let line = c(if dragging { accent() } else { palette().border });
         let id = match which {
             Divider::Col(n) => ("divider", n),
             Divider::Row { col, n } => ("row-divider", col * 8 + n),
         };
-        let d = div().id(id).flex_none().flex().hover(|s| s.bg(c(HOVER)));
+        let d = div()
+            .id(id)
+            .flex_none()
+            .flex()
+            .hover(|s| s.bg(c(palette().hover)));
         let d = match which {
             Divider::Col(_) => d
                 .w(px(5.))
@@ -413,10 +417,14 @@ impl Workspace {
                     .items_center()
                     .gap(px(6.))
                     .border_b_1()
-                    .border_color(c(BORDER_VARIANT))
-                    .bg(c(if focused { PANEL } else { bg() }))
+                    .border_color(c(palette().border_variant))
+                    .bg(c(if focused { palette().panel } else { bg() }))
                     .text_xs()
-                    .text_color(c(if focused { TEXT } else { PLACEHOLDER }))
+                    .text_color(c(if focused {
+                        palette().text
+                    } else {
+                        palette().placeholder
+                    }))
                     .cursor_pointer()
                     .on_click(cx.listener(move |_, _, w, cx| {
                         w.focus(&pane.focus_handle(cx), cx);
@@ -434,11 +442,11 @@ impl Workspace {
                     .child(div().w(px(6.)).h(px(6.)).flex_none().bg(c(if focused {
                         accent()
                     } else {
-                        ACTIVE
+                        palette().active
                     })))
                     .child(div().flex_1().min_w_0().truncate().child(title))
                     .child(
-                        icon_button(("pane-close", i), "x", "Close pane", MUTED)
+                        icon_button(("pane-close", i), "x", "Close pane", palette().muted)
                             .size(px(16.))
                             .on_click(cx.listener(move |this, _, w, cx| {
                                 cx.stop_propagation();

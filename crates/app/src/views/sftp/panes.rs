@@ -66,8 +66,8 @@ impl SftpView {
                     .gap(px(6.))
                     .when(selected, |d| d.bg(accent_alpha(0.4)))
                     .border_l_2()
-                    .border_color(c(if is_cursor { accent() } else { 0x00000000 }))
-                    .hover(|s| s.bg(c(HOVER)))
+                    .border_color(c(if is_cursor { accent() } else { 0xffffff00 }))
+                    .hover(|s| s.bg(c(palette().hover)))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |t, ev: &MouseDownEvent, window, cx| {
@@ -107,7 +107,11 @@ impl SftpView {
                     .child(icon(
                         if e.is_dir { "folder" } else { "file" },
                         14.,
-                        if e.is_dir { accent_text() } else { MUTED },
+                        if e.is_dir {
+                            accent_text()
+                        } else {
+                            palette().muted
+                        },
                     ))
                     .child(div().flex_1().min_w_0().truncate().child(e.name.clone()))
                     .child(
@@ -116,7 +120,7 @@ impl SftpView {
                             .flex_none()
                             .flex()
                             .justify_end()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .child(if e.is_dir {
                                 String::new()
                             } else {
@@ -127,7 +131,7 @@ impl SftpView {
                         div()
                             .w(px(104.))
                             .flex_none()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .whitespace_nowrap()
                             .child(fmt_time(e.modified)),
                     )
@@ -140,13 +144,17 @@ impl SftpView {
         let cell = |id: &'static str, text: &'static str, key: SortKey| {
             let active = p.sort == key;
             keyboard(div().id((id, side as usize)))
-                .focus(|s| s.bg(c(HOVER)))
+                .focus(|s| s.bg(c(palette().hover)))
                 .flex()
                 .items_center()
                 .gap(px(2.))
                 .cursor_pointer()
-                .text_color(c(if active { TEXT } else { PLACEHOLDER }))
-                .hover(|s| s.text_color(c(TEXT)))
+                .text_color(c(if active {
+                    palette().text
+                } else {
+                    palette().placeholder
+                }))
+                .hover(|s| s.text_color(c(palette().text)))
                 .on_click(cx.listener(move |t, _, _, cx| {
                     let p = t.pane_mut(side);
                     if p.sort == key {
@@ -163,7 +171,7 @@ impl SftpView {
                     d.child(icon(
                         if p.asc { "chevron-up" } else { "chevron-down" },
                         10.,
-                        TEXT,
+                        palette().text,
                     ))
                 })
         };
@@ -174,7 +182,7 @@ impl SftpView {
             .items_center()
             .gap(px(6.))
             .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .text_xs()
             .child(div().w(px(14.)).flex_none())
             .child(div().flex_1().child(cell("h-name", "Name", SortKey::Name)))
@@ -207,7 +215,7 @@ impl SftpView {
             .items_center()
             .gap(px(2.))
             .border_b_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .on_key_down(cx.listener(move |t, ev: &KeyDownEvent, window, cx| {
                 match ev.keystroke.key.as_str() {
                     "enter" => {
@@ -230,7 +238,11 @@ impl SftpView {
                     (side.tag(), 1000usize),
                     "arrow-left",
                     "Back",
-                    if can_back { MUTED } else { ACTIVE },
+                    if can_back {
+                        palette().muted
+                    } else {
+                        palette().active
+                    },
                 )
                 .on_click(cx.listener(move |t, _, _, cx| t.back(side, cx))),
             )
@@ -242,12 +254,12 @@ impl SftpView {
                         "Parent folder ({})",
                         crate::platform::view_shortcut(false, "↑")
                     ),
-                    MUTED,
+                    palette().muted,
                 )
                 .on_click(cx.listener(move |t, _, _, cx| t.up(side, cx))),
             )
             .child(
-                icon_button((side.tag(), 1002usize), "home", "Home", MUTED)
+                icon_button((side.tag(), 1002usize), "home", "Home", palette().muted)
                     .on_click(cx.listener(move |t, _, _, cx| t.go(side, "~".into(), true, cx))),
             )
             .child(div().flex_1().min_w_0().child(p.input.clone()))
@@ -256,7 +268,7 @@ impl SftpView {
                     (side.tag(), 1003usize),
                     "refresh",
                     format!("Refresh ({})", crate::platform::view_shortcut(false, "R")),
-                    MUTED,
+                    palette().muted,
                 )
                 .on_click(cx.listener(move |t, _, _, cx| t.refresh(side, cx))),
             )
@@ -269,7 +281,7 @@ impl SftpView {
                     } else {
                         "Show dotfiles"
                     },
-                    MUTED,
+                    palette().muted,
                 )
                 .on_click(cx.listener(move |t, _, _, cx| {
                     let p = t.pane_mut(side);
@@ -283,7 +295,7 @@ impl SftpView {
                     (side.tag(), 1005usize),
                     "folder-plus",
                     format!("New folder ({})", crate::platform::view_shortcut(true, "N")),
-                    MUTED,
+                    palette().muted,
                 )
                 .on_click(cx.listener(move |t, _, w, cx| t.ask_new_folder(side, w, cx))),
             );
@@ -301,14 +313,14 @@ impl SftpView {
             div()
                 .flex_1()
                 .p_3()
-                .text_color(c(PLACEHOLDER))
+                .text_color(c(palette().placeholder))
                 .child("Loading...")
                 .into_any_element()
         } else if count == 0 {
             div()
                 .flex_1()
                 .p_3()
-                .text_color(c(PLACEHOLDER))
+                .text_color(c(palette().placeholder))
                 .child("Empty folder")
                 .into_any_element()
         } else {
@@ -332,7 +344,11 @@ impl SftpView {
             .flex()
             .flex_col()
             .border_2()
-            .border_color(c(if active { BORDER_VARIANT } else { 0x00000000 }))
+            .border_color(c(if active {
+                palette().border_variant
+            } else {
+                0xffffff00
+            }))
             .drag_over::<DragEntries>(move |s, d, _, _| {
                 if d.from != side {
                     s.border_color(c(accent())).bg(accent_alpha(0.08))
@@ -352,17 +368,17 @@ impl SftpView {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .bg(c(PANEL))
+                    .bg(c(palette().panel))
                     .child(
                         keyboard(div().id((side.tag(), 4000usize)))
-                            .focus(|s| s.bg(c(HOVER)))
+                            .focus(|s| s.bg(c(palette().hover)))
                             .h_full()
                             .flex()
                             .items_center()
                             .gap(px(5.))
                             .px(px(4.))
                             .cursor_pointer()
-                            .hover(|s| s.bg(c(HOVER)))
+                            .hover(|s| s.bg(c(palette().hover)))
                             .on_click(cx.listener(move |t, _, _, cx| {
                                 t.menu = if t.menu == Some(side) {
                                     None
@@ -378,26 +394,34 @@ impl SftpView {
                                     "server"
                                 },
                                 13.,
-                                if active { accent_text() } else { MUTED },
+                                if active {
+                                    accent_text()
+                                } else {
+                                    palette().muted
+                                },
                             ))
                             .child(
                                 div()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(p.source.label()),
                             )
-                            .child(icon("chevron-down", 10., MUTED)),
+                            .child(icon("chevron-down", 10., palette().muted)),
                     )
                     .child(div().flex_1())
                     .when(p.loading, |d| {
-                        d.child(div().text_color(c(PLACEHOLDER)).child("loading"))
+                        d.child(div().text_color(c(palette().placeholder)).child("loading"))
                     })
-                    .child(div().text_color(c(PLACEHOLDER)).child(if sel > 0 {
-                        format!("{sel} of {count} selected")
-                    } else if p.secret_hidden > 0 {
-                        format!("{count} items · {} secret hidden", p.secret_hidden)
-                    } else {
-                        format!("{count} items")
-                    })),
+                    .child(
+                        div()
+                            .text_color(c(palette().placeholder))
+                            .child(if sel > 0 {
+                                format!("{sel} of {count} selected")
+                            } else if p.secret_hidden > 0 {
+                                format!("{count} items · {} secret hidden", p.secret_hidden)
+                            } else {
+                                format!("{count} items")
+                            }),
+                    ),
             )
             .child(toolbar)
             .when_some(p.error.clone(), |d, e| {
@@ -405,8 +429,8 @@ impl SftpView {
                     div()
                         .px_2()
                         .py(px(3.))
-                        .text_color(c(RED))
-                        .bg(c(0xe5534b1a))
+                        .text_color(c(palette().red))
+                        .bg(with_alpha(palette().red, 0.1))
                         .child(crate::privacy::redact(&e).into_owned()),
                 )
             })
@@ -432,14 +456,14 @@ impl SftpView {
             let is_cur = name == current;
             let is_local = account.is_none();
             keyboard(div().id((side.tag(), 5000 + n)))
-                .focus(|s| s.bg(c(ACTIVE)))
+                .focus(|s| s.bg(c(palette().active)))
                 .h(px(26.))
                 .px_2()
                 .flex()
                 .items_center()
                 .gap_2()
                 .cursor_pointer()
-                .hover(|s| s.bg(c(ACTIVE)))
+                .hover(|s| s.bg(c(palette().active)))
                 .on_click(cx.listener(move |t, _, _, cx| {
                     t.menu = None;
                     cx.emit(SftpEvent::PickHost {
@@ -448,7 +472,11 @@ impl SftpView {
                     });
                     cx.notify();
                 }))
-                .child(icon(if is_local { "folder" } else { "server" }, 13., MUTED))
+                .child(icon(
+                    if is_local { "folder" } else { "server" },
+                    13.,
+                    palette().muted,
+                ))
                 .child(div().flex_1().child(name))
                 .when(is_cur, |d| d.child(icon("check", 12., accent_text())))
         });
@@ -460,9 +488,9 @@ impl SftpView {
                     .top(px(22.))
                     .left_0()
                     .w(px(220.))
-                    .bg(c(ELEVATED))
+                    .bg(c(palette().elevated))
                     .border_2()
-                    .border_color(c(BORDER))
+                    .border_color(c(palette().border))
                     .children(rows),
                 (side.tag(), 6000usize),
             )

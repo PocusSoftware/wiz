@@ -220,7 +220,7 @@ impl TextInput {
         let run = TextRun {
             len: shown.len(),
             font: self.font.clone(),
-            color: c(TEXT),
+            color: c(palette().text),
             background_color: None,
             underline: None,
             strikethrough: None,
@@ -424,7 +424,7 @@ impl Render for TextInput {
             div().w(px(1.)).h(px(13.)).flex_none().bg(c(if focused {
                 accent_text()
             } else {
-                ACTIVE
+                palette().active
             }))
         };
 
@@ -449,7 +449,7 @@ impl Render for TextInput {
         }
         if self.text.is_empty() && !focused {
             row = div()
-                .text_color(c(PLACEHOLDER))
+                .text_color(c(palette().placeholder))
                 .child(self.placeholder.clone());
         }
 
@@ -488,14 +488,14 @@ impl Render for TextInput {
             .relative()
             .cursor_text()
             .rounded(px(2.))
-            .bg(c(ELEMENT))
+            .bg(c(palette().element))
             .border_2()
             .border_color(if focused {
                 accent_alpha(0.4)
             } else {
-                c(BORDER)
+                c(palette().border)
             })
-            .text_color(c(TEXT))
+            .text_color(c(palette().text))
             .child(div().relative().child(recorder).child(row))
     }
 }

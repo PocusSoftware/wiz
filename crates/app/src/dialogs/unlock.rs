@@ -158,9 +158,9 @@ impl Render for UnlockDialog {
             .flex_col()
             .gap_2()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .child(
                 div()
@@ -169,12 +169,12 @@ impl Render for UnlockDialog {
                     .justify_between()
                     .child(div().text_sm().child(title))
                     .child(
-                        icon_button("unlock-close", "x", "Close (Esc)", MUTED)
+                        icon_button("unlock-close", "x", "Close (Esc)", palette().muted)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(UnlockEvent::Cancelled))),
                     ),
             )
-            .child(div().text_xs().text_color(c(MUTED)).child(hint))
+            .child(div().text_xs().text_color(c(palette().muted)).child(hint))
             .child(
                 div()
                     .flex()
@@ -198,7 +198,7 @@ impl Render for UnlockDialog {
                 )
             })
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().text_xs().text_color(c(RED)).child(e))
+                d.child(div().text_xs().text_color(c(palette().red)).child(e))
             })
             .child(
                 div()

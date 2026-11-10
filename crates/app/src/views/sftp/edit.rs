@@ -184,17 +184,17 @@ impl SftpView {
         let rows = self.edits.iter().map(|e| {
             let id = e.id;
             let (status, color): (String, u32) = match &e.state {
-                EState::Downloading => ("Downloading...".into(), MUTED),
+                EState::Downloading => ("Downloading...".into(), palette().muted),
                 EState::Synced => (
                     match e.synced_at {
                         Some(t) => format!("In sync, {}", t.format("%H:%M:%S")),
                         None => "In sync".into(),
                     },
-                    GREEN,
+                    palette().green,
                 ),
-                EState::Modified => ("Saved locally, not uploaded".into(), YELLOW),
-                EState::Uploading => ("Uploading...".into(), MUTED),
-                EState::Failed(m) => (crate::privacy::redact(m).into_owned(), RED),
+                EState::Modified => ("Saved locally, not uploaded".into(), palette().yellow),
+                EState::Uploading => ("Uploading...".into(), palette().muted),
+                EState::Failed(m) => (crate::privacy::redact(m).into_owned(), palette().red),
             };
             let can_upload =
                 e.downloaded && matches!(e.state, EState::Modified | EState::Failed(_));
@@ -217,7 +217,7 @@ impl SftpView {
                         .w(px(130.))
                         .flex_none()
                         .overflow_hidden()
-                        .text_color(c(PLACEHOLDER))
+                        .text_color(c(palette().placeholder))
                         .child(div().whitespace_nowrap().child(e.remote.label.clone())),
                 )
                 .child(
@@ -235,15 +235,15 @@ impl SftpView {
                     )
                 })
                 .child(
-                    icon_button(("e-x", id as usize), "x", "Stop watching", MUTED)
+                    icon_button(("e-x", id as usize), "x", "Stop watching", palette().muted)
                         .on_click(cx.listener(move |t, _, _, cx| t.stop_edit(id, cx))),
                 )
         });
         Some(
             div()
                 .border_t_1()
-                .border_color(c(BORDER))
-                .bg(c(PANEL))
+                .border_color(c(palette().border))
+                .bg(c(palette().panel))
                 .children(rows)
                 .into_any_element(),
         )

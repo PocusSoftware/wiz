@@ -517,7 +517,7 @@ impl Render for SftpView {
             .items_center()
             .justify_center()
             .gap_1()
-            .bg(c(PANEL))
+            .bg(c(palette().panel))
             .child(
                 icon_button(
                     "xfer-up",

@@ -68,7 +68,11 @@ impl Workspace {
                 .id("latency")
                 .px(px(6.))
                 .text_xs()
-                .text_color(c(if ms >= SLOW_MS { YELLOW } else { MUTED }))
+                .text_color(c(if ms >= SLOW_MS {
+                    palette().yellow
+                } else {
+                    palette().muted
+                }))
                 .tooltip(crate::widgets::tip(
                     "Round trip to this terminal's server. Typing feels at least this slow.",
                 ))

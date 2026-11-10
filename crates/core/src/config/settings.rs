@@ -32,11 +32,31 @@ pub enum WindowControls {
     Right,
 }
 
+/// Light or dark colors, or the ones the system uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    System,
+    Light,
+    Dark,
+}
+
+/// Standard or high contrast colors, or what the system asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Contrast {
+    System,
+    Standard,
+    High,
+}
+
 /// Optional `settings.toml` next to `hosts.toml`. Every field is optional; the getters
 /// below give the defaults.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Settings {
     // Appearance
+    pub appearance: Option<Appearance>,
+    pub contrast: Option<Contrast>,
     pub ui_font: Option<String>,
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
@@ -129,6 +149,8 @@ macro_rules! getters {
 }
 
 getters! {
+    appearance: Appearance = Appearance::System;
+    contrast: Contrast = Contrast::System;
     terminal_font_size: f32 = 13.0;
     animations: bool = true;
     colorful: bool = false;

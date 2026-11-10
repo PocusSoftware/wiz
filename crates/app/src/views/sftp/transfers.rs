@@ -301,7 +301,7 @@ impl SftpView {
             let big = files >= prefs.rsync_hint_files() as u64
                 || total >= (prefs.rsync_hint_mb() as u64) << 20;
             let status: (String, u32) = match &tr.state {
-                TState::Queued => ("Queued".into(), MUTED),
+                TState::Queued => ("Queued".into(), palette().muted),
                 TState::Running if paused => (
                     format!(
                         "Paused  {:.0}%  {}/{}",
@@ -309,7 +309,7 @@ impl SftpView {
                         human_size(tr.progress.done.load(Ordering::Relaxed)),
                         human_size(tr.progress.total.load(Ordering::Relaxed)),
                     ),
-                    YELLOW,
+                    palette().yellow,
                 ),
                 TState::Running => (
                     format!(
@@ -319,16 +319,16 @@ impl SftpView {
                         human_size(tr.progress.total.load(Ordering::Relaxed)),
                         human_size(tr.speed as u64)
                     ),
-                    MUTED,
+                    palette().muted,
                 ),
-                TState::Done => ("Done".into(), GREEN),
-                TState::Cancelled => ("Cancelled".into(), YELLOW),
-                TState::Failed(e) => (crate::privacy::redact(e).into_owned(), RED),
+                TState::Done => ("Done".into(), palette().green),
+                TState::Cancelled => ("Cancelled".into(), palette().yellow),
+                TState::Failed(e) => (crate::privacy::redact(e).into_owned(), palette().red),
             };
             let bar_color = match tr.state {
-                TState::Failed(_) => RED,
-                TState::Done => GREEN,
-                TState::Running if paused => YELLOW,
+                TState::Failed(_) => palette().red,
+                TState::Done => palette().green,
+                TState::Running if paused => palette().yellow,
                 _ => accent(),
             };
             let row = div()
@@ -350,7 +350,7 @@ impl SftpView {
                         .w(px(130.))
                         .flex_none()
                         .overflow_hidden()
-                        .text_color(c(PLACEHOLDER))
+                        .text_color(c(palette().placeholder))
                         .child(div().whitespace_nowrap().child(
                             if tr.via_rsync.load(Ordering::Relaxed) {
                                 format!("{} · rsync", tr.route)
@@ -360,7 +360,7 @@ impl SftpView {
                         )),
                 )
                 .child(
-                    div().w(px(140.)).h(px(6.)).flex_none().bg(c(ACTIVE)).child(
+                    div().w(px(140.)).h(px(6.)).flex_none().bg(c(palette().active)).child(
                         div()
                             .h_full()
                             .w(gpui::relative(if matches!(tr.state, TState::Done) {
@@ -385,7 +385,7 @@ impl SftpView {
                             ("t-pause", id as usize),
                             if paused { "play" } else { "pause" },
                             if paused { "Resume" } else { "Pause" },
-                            MUTED,
+                            palette().muted,
                         )
                         .on_click(cx.listener(move |t, _, _, cx| {
                             if let Some(tr) = t.transfers.iter().find(|x| x.id == id) {
@@ -400,7 +400,7 @@ impl SftpView {
                         ("t-x", id as usize),
                         "x",
                         if running { "Cancel" } else if queued { "Remove from queue" } else { "Dismiss" },
-                        MUTED,
+                        palette().muted,
                     )
                     .on_click(cx.listener(move |t, _, _, cx| {
                         if let Some(tr) = t.transfers.iter().find(|x| x.id == id) {
@@ -429,7 +429,7 @@ impl SftpView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .text_color(c(YELLOW))
+                    .text_color(c(palette().yellow))
                     .child(format!(
                         "Large transfer ({} files, {}): rsync is faster (needs rsync on the server){}{}.",
                         files,
@@ -461,8 +461,8 @@ impl SftpView {
         Some(
             div()
                 .border_t_1()
-                .border_color(c(BORDER))
-                .bg(c(PANEL))
+                .border_color(c(palette().border))
+                .bg(c(palette().panel))
                 .children(rows)
                 .into_any_element(),
         )

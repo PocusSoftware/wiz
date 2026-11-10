@@ -75,9 +75,9 @@ impl Workspace {
                         .flex_col()
                         .gap_2()
                         .rounded(px(3.))
-                        .bg(c(ELEVATED))
+                        .bg(c(palette().elevated))
                         .border_1()
-                        .border_color(c(BORDER))
+                        .border_color(c(palette().border))
                         .child(
                             div().text_sm().child(
                                 // Name the saved host: with hiding on, addresses alone all look alike.
@@ -196,9 +196,9 @@ impl Workspace {
                     .flex_col()
                     .gap_2()
                     .rounded(px(3.))
-                    .bg(c(ELEVATED))
+                    .bg(c(palette().elevated))
                     .border_1()
-                    .border_color(c(BORDER))
+                    .border_color(c(palette().border))
                     .child(
                         div()
                             .text_sm()
@@ -206,7 +206,7 @@ impl Workspace {
                     )
                     .child(
                         div()
-                            .text_color(c(MUTED))
+                            .text_color(c(palette().muted))
                             .child("This removes the host and its saved passwords."),
                     )
                     .child(
@@ -243,9 +243,9 @@ impl Workspace {
                         .flex_col()
                         .gap_2()
                         .rounded(px(3.))
-                        .bg(c(ELEVATED))
+                        .bg(c(palette().elevated))
                         .border_1()
-                        .border_color(c(BORDER))
+                        .border_color(c(palette().border))
                         .child(
                             div()
                                 .text_sm()
@@ -253,7 +253,7 @@ impl Workspace {
                         )
                         .child(
                             div()
-                                .text_color(c(MUTED))
+                                .text_color(c(palette().muted))
                                 .child(format!("Closing {what} ends its session.")),
                         )
                         .child(
@@ -285,11 +285,11 @@ impl Workspace {
                     .flex_col()
                     .gap_2()
                     .rounded(px(3.))
-                    .bg(c(ELEVATED))
+                    .bg(c(palette().elevated))
                     .border_1()
-                    .border_color(c(BORDER))
+                    .border_color(c(palette().border))
                     .child(div().text_sm().child("Can't quit yet"))
-                    .child(div().text_color(c(MUTED)).child(format!(
+                    .child(div().text_color(c(palette().muted)).child(format!(
                         "{} open. Close {} first, or allow quitting in Settings.",
                         if n == 1 {
                             "1 session is".to_string()
@@ -348,6 +348,6 @@ fn fingerprint(label: &'static str, value: String) -> impl IntoElement {
         .flex()
         .flex_col()
         .gap_1()
-        .child(div().text_xs().text_color(c(MUTED)).child(label))
+        .child(div().text_xs().text_color(c(palette().muted)).child(label))
         .child(div().text_xs().font_family(mono()).child(value))
 }

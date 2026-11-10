@@ -11,11 +11,15 @@ impl SettingsView {
                 .py(px(5.))
                 .rounded(px(4.))
                 .border_1()
-                .border_color(c(0x00000000))
+                .border_color(gpui::transparent_black())
                 .cursor_pointer()
-                .text_color(c(if current { TEXT } else { MUTED }))
-                .when(current, |d| d.bg(c(ACTIVE)))
-                .when(!current, |d| d.hover(|s| s.bg(c(HOVER))))
+                .text_color(c(if current {
+                    palette().text
+                } else {
+                    palette().muted
+                }))
+                .when(current, |d| d.bg(c(palette().active)))
+                .when(!current, |d| d.hover(|s| s.bg(c(palette().hover))))
                 .child(cat.name())
                 .on_click(cx.listener(move |t, _, _, cx| t.show(cat, cx)))
         });
@@ -29,7 +33,7 @@ impl SettingsView {
             .p_2()
             .pt_4()
             .border_r_1()
-            .border_color(c(BORDER_VARIANT))
+            .border_color(c(palette().border_variant))
             .children(items)
             .child(div().flex_1())
             .child(
@@ -50,7 +54,7 @@ impl SettingsView {
                             div()
                                 .px_2()
                                 .text_xs()
-                                .text_color(c(MUTED))
+                                .text_color(c(palette().muted))
                                 .child("Reset every setting?"),
                         )
                         .child(
@@ -84,7 +88,7 @@ impl SettingsView {
                     .flex_col()
                     .gap_0p5()
                     .text_xs()
-                    .text_color(c(PLACEHOLDER))
+                    .text_color(c(palette().placeholder))
                     .child(format!("Wiz {}", crate::version()))
                     .child("Changes save automatically"),
             )

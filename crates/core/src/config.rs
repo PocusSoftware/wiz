@@ -6,7 +6,7 @@ mod snippets;
 mod target;
 
 pub use hosts::{AuthMethod, Config, Host};
-pub use settings::{DEFAULT_SECRET_FILES, Settings, WindowControls};
+pub use settings::{Appearance, Contrast, DEFAULT_SECRET_FILES, Settings, WindowControls};
 pub use snippets::{Snippet, Snippets};
 pub use target::parse_target;
 

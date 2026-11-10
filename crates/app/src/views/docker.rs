@@ -142,49 +142,52 @@ impl Render for DockerView {
                 actions = actions.child(
                     div()
                         .text_xs()
-                        .text_color(c(PLACEHOLDER))
+                        .text_color(c(palette().placeholder))
                         .child("working..."),
                 );
             } else {
                 if running {
                     let i = id.clone();
                     actions = actions
-                        .child(icon_button(("stop", ix), "stop", "Stop", MUTED).on_click(
-                            cx.listener(move |t, _, _, cx| t.act(i.clone(), Action::Stop, cx)),
-                        ))
                         .child(
-                            icon_button(("restart", ix), "refresh", "Restart", MUTED).on_click({
-                                let i = id.clone();
-                                cx.listener(move |t, _, _, cx| {
-                                    t.act(i.clone(), Action::Restart, cx)
-                                })
-                            }),
+                            icon_button(("stop", ix), "stop", "Stop", palette().muted).on_click(
+                                cx.listener(move |t, _, _, cx| t.act(i.clone(), Action::Stop, cx)),
+                            ),
+                        )
+                        .child(
+                            icon_button(("restart", ix), "refresh", "Restart", palette().muted)
+                                .on_click({
+                                    let i = id.clone();
+                                    cx.listener(move |t, _, _, cx| {
+                                        t.act(i.clone(), Action::Restart, cx)
+                                    })
+                                }),
                         );
                     if self.can_shell {
                         let (i, n) = (id.clone(), name.clone());
                         actions = actions.child(
-                            icon_button(("shell", ix), "terminal", "Open shell", MUTED).on_click(
-                                cx.listener(move |_, _, _, cx| {
+                            icon_button(("shell", ix), "terminal", "Open shell", palette().muted)
+                                .on_click(cx.listener(move |_, _, _, cx| {
                                     cx.emit(DockerEvent::Shell {
                                         id: i.clone(),
                                         name: n.clone(),
                                     })
-                                }),
-                            ),
+                                })),
                         );
                     }
                 } else {
                     let i = id.clone();
-                    actions =
-                        actions.child(icon_button(("start", ix), "play", "Start", MUTED).on_click(
+                    actions = actions.child(
+                        icon_button(("start", ix), "play", "Start", palette().muted).on_click(
                             cx.listener(move |t, _, _, cx| t.act(i.clone(), Action::Start, cx)),
-                        ));
+                        ),
+                    );
                 }
                 let (i, n) = (id.clone(), name);
-                actions = actions
-                    .child(icon_button(("logs", ix), "logs", "Logs", MUTED).on_click(
-                        cx.listener(move |t, _, _, cx| t.logs(i.clone(), n.clone(), cx)),
-                    ));
+                actions = actions.child(
+                    icon_button(("logs", ix), "logs", "Logs", palette().muted)
+                        .on_click(cx.listener(move |t, _, _, cx| t.logs(i.clone(), n.clone(), cx))),
+                );
                 let i = id;
                 let rm = icon_button(
                     ("rm", ix),
@@ -194,9 +197,13 @@ impl Render for DockerView {
                     } else {
                         "Remove"
                     },
-                    if confirming { RED } else { MUTED },
+                    if confirming {
+                        palette().red
+                    } else {
+                        palette().muted
+                    },
                 )
-                .when(confirming, |b| b.bg(c(0xe5534b26)))
+                .when(confirming, |b| b.bg(with_alpha(palette().red, 0.15)))
                 .on_click(cx.listener(move |t, _, _, cx| {
                     if t.confirm_remove.as_deref() == Some(i.as_str()) {
                         t.act(i.clone(), Action::Remove, cx);
@@ -215,14 +222,18 @@ impl Render for DockerView {
                 .px_2()
                 .h(px(26.))
                 .border_b_1()
-                .border_color(c(BORDER_VARIANT))
-                .hover(|s| s.bg(c(HOVER)))
+                .border_color(c(palette().border_variant))
+                .hover(|s| s.bg(c(palette().hover)))
                 .child(
                     div()
                         .size(px(6.))
                         .flex_none()
                         .rounded(px(1.))
-                        .bg(c(dot_color(if running { GREEN } else { ACTIVE }))),
+                        .bg(c(dot_color(if running {
+                            palette().green
+                        } else {
+                            palette().active
+                        }))),
                 )
                 .child(
                     // Double click opens the logs. Only here, so quick clicks on the
@@ -244,7 +255,7 @@ impl Render for DockerView {
                         .child(div().whitespace_nowrap().child(ct.name.clone()))
                         .child(
                             div()
-                                .text_color(c(PLACEHOLDER))
+                                .text_color(c(palette().placeholder))
                                 .whitespace_nowrap()
                                 .child(summary(ct)),
                         ),
@@ -264,15 +275,15 @@ impl Render for DockerView {
                     .items_center()
                     .justify_between()
                     .border_b_1()
-                    .border_color(c(BORDER_VARIANT))
+                    .border_color(c(palette().border_variant))
                     .child(
                         div()
                             .text_xs()
-                            .text_color(c(MUTED))
+                            .text_color(c(palette().muted))
                             .child(format!("{} containers", self.items.len())),
                     )
                     .child(
-                        icon_button("refresh", "refresh", "Refresh", MUTED)
+                        icon_button("refresh", "refresh", "Refresh", palette().muted)
                             .on_click(cx.listener(|t, _, _, cx| t.refresh(cx))),
                     ),
             )
@@ -282,7 +293,7 @@ impl Render for DockerView {
                         .px_2()
                         .py_1()
                         .text_xs()
-                        .text_color(c(RED))
+                        .text_color(c(palette().red))
                         .child(crate::privacy::redact(&e).into_owned()),
                 )
             })
@@ -292,7 +303,7 @@ impl Render for DockerView {
                     d.child(
                         div()
                             .p_2()
-                            .text_color(c(PLACEHOLDER))
+                            .text_color(c(palette().placeholder))
                             .child("No containers."),
                     )
                 },

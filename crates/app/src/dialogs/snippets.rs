@@ -165,10 +165,10 @@ impl Render for SnippetPicker {
                 .py_1()
                 .rounded(px(3.))
                 .border_1()
-                .border_color(c(0x00000000))
+                .border_color(gpui::transparent_black())
                 .cursor_pointer()
-                .when(row == selected, |d| d.bg(c(ACTIVE)))
-                .hover(|s| s.bg(c(HOVER)))
+                .when(row == selected, |d| d.bg(c(palette().active)))
+                .hover(|s| s.bg(c(palette().hover)))
                 .child(
                     div()
                         .truncate()
@@ -179,7 +179,7 @@ impl Render for SnippetPicker {
                         .truncate()
                         .text_xs()
                         .font_family(mono())
-                        .text_color(c(MUTED))
+                        .text_color(c(palette().muted))
                         .child(format!(
                             "{}{}",
                             privacy::redact(first),
@@ -209,9 +209,9 @@ impl Render for SnippetPicker {
             .flex_col()
             .gap_2()
             .rounded(px(3.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .child(
                 div()
@@ -224,7 +224,7 @@ impl Render for SnippetPicker {
                         "Snippets"
                     }))
                     .child(
-                        icon_button("snip-close", "x", "Close (Esc)", MUTED)
+                        icon_button("snip-close", "x", "Close (Esc)", palette().muted)
                             .tab_index(1)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(SnippetEvent::Cancelled))),
                     ),
@@ -262,7 +262,7 @@ impl Render for SnippetPicker {
                         d.child(
                             div()
                                 .p_2()
-                                .text_color(c(MUTED))
+                                .text_color(c(palette().muted))
                                 .child(if self.items.is_empty() {
                                     "No snippets yet. Add some under Settings, Snippets."
                                 } else {
@@ -278,10 +278,10 @@ impl Render for SnippetPicker {
                 )
             })
             .when_some(self.error.clone(), |d, e| {
-                d.child(div().text_xs().text_color(c(RED)).child(e))
+                d.child(div().text_xs().text_color(c(palette().red)).child(e))
             })
             .when(!adding, |d| {
-                d.child(div().text_xs().text_color(c(PLACEHOLDER)).child(
+                d.child(div().text_xs().text_color(c(palette().placeholder)).child(
                     "Enter pastes the command. It is not run until you press Enter in the terminal.",
                 ))
             })

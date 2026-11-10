@@ -87,12 +87,12 @@ impl SettingsView {
                 .children(SWATCHES.iter().enumerate().map(|(i, &(name, rgb))| {
                     keyboard(div().id(("accent", i)))
                         // The picked swatch already has the light border.
-                        .focus(|s| s.border_color(c(MUTED)))
+                        .focus(|s| s.border_color(c(palette().muted)))
                         .size(px(20.))
                         .rounded(px(2.))
                         .bg(c(rgb))
                         .border_2()
-                        .border_color(c(if rgb == current { TEXT } else { bg() }))
+                        .border_color(c(if rgb == current { palette().text } else { bg() }))
                         .cursor_pointer()
                         .tooltip(tip(name))
                         .on_click(cx.listener(move |t, _, _, cx| t.pick_accent(rgb, cx)))
@@ -102,11 +102,15 @@ impl SettingsView {
                         .relative()
                         .child(
                             keyboard(div().id("accent-custom"))
-                                .focus(|s| s.border_color(c(MUTED)))
+                                .focus(|s| s.border_color(c(palette().muted)))
                                 .size(px(20.))
                                 .rounded(px(2.))
                                 .border_2()
-                                .border_color(c(if self.picker.open { TEXT } else { bg() }))
+                                .border_color(c(if self.picker.open {
+                                    palette().text
+                                } else {
+                                    bg()
+                                }))
                                 .bg(linear_gradient(
                                     45.,
                                     linear_color_stop(c(0xe5484d), 0.),
@@ -157,9 +161,9 @@ impl SettingsView {
         div()
             .p_3()
             .rounded(px(6.))
-            .bg(c(ELEVATED))
+            .bg(c(palette().elevated))
             .border_1()
-            .border_color(c(BORDER))
+            .border_color(c(palette().border))
             .shadow_lg()
             .occlude()
             .on_mouse_down_out(cx.listener(|t, _, _, cx| {
