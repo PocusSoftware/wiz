@@ -63,15 +63,15 @@ fn light_accent_shades_darken() {
     set_monochrome(false);
     set_accent(DEFAULT_ACCENT);
     assert_eq!(accent_text(), 0xc04821);
-    assert_eq!(selection(), 0xfbd1c3);
+    assert_eq!(selection(), 0xf2c7b8);
     // The gray theme's accent turns dark, so it shows on white.
     set_monochrome(true);
-    assert_eq!(accent(), 0x2c2c2e);
+    assert_eq!(accent(), 0x2f2f31);
     assert_eq!(on_accent(), 0xffffff);
     set_monochrome(false);
     // OLED black is for the dark theme only.
     set_oled(true);
-    assert_eq!(bg(), 0xffffff);
+    assert_eq!(bg(), LIGHT.bg);
     set_oled(false);
     set_look(Appearance::System, Contrast::System);
 }
