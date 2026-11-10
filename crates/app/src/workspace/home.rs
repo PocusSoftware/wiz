@@ -405,11 +405,5 @@ impl Workspace {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Local Docker"),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(c(PLACEHOLDER))
-                    .child(crate::platform::THIS_COMPUTER),
-            )
     }
 }
