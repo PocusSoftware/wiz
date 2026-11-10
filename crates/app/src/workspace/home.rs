@@ -2,6 +2,8 @@
 
 mod details;
 
+use std::collections::HashSet;
+
 use gpui::{KeyDownEvent, MouseButton, MouseDownEvent};
 
 use super::hosts::{card_icon, logo};
@@ -16,12 +18,13 @@ const LIST_W: f32 = 260.;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Section {
     Pinned,
+    /// A folder, by name.
     Group(String),
-    /// Neither pinned nor in a group.
+    /// Neither pinned nor in a folder.
     Other,
 }
 
-/// Whether `h` matches the search: its name, address, group or a tag contains `query`, ignoring
+/// Whether `h` matches the search: its name, address, folder or a tag contains `query`, ignoring
 /// case. An empty search matches every host.
 pub(super) fn matches(h: &Host, query: &str) -> bool {
     let q = query.trim().to_lowercase();
@@ -34,7 +37,7 @@ pub(super) fn matches(h: &Host, query: &str) -> bool {
 }
 
 /// The hosts matching `query` as indices into `hosts`, by section: pinned first, then
-/// each group by name, then the rest. Empty sections are left out.
+/// each folder by name, then the rest. Empty sections are left out.
 pub(super) fn sections(hosts: &[Host], query: &str) -> Vec<(Section, Vec<usize>)> {
     let section = |h: &Host| match (&h.group, h.pinned) {
         (_, true) => Section::Pinned,
@@ -62,6 +65,25 @@ pub(super) fn sections(hosts: &[Host], query: &str) -> Vec<(Section, Vec<usize>)
                 .collect();
             (!members.is_empty()).then_some((s, members))
         })
+        .collect()
+}
+
+/// Whether `section` shows only its title: a folded folder, unless a search is showing what
+/// matches inside it.
+pub(super) fn is_folded(section: &Section, folded: &HashSet<String>, query: &str) -> bool {
+    query.trim().is_empty() && matches!(section, Section::Group(g) if folded.contains(g))
+}
+
+/// The hosts listed, in order: those of `sections` that are not folded away.
+pub(super) fn listed(
+    sections: &[(Section, Vec<usize>)],
+    folded: &HashSet<String>,
+    query: &str,
+) -> Vec<usize> {
+    sections
+        .iter()
+        .filter(|(s, _)| !is_folded(s, folded, query))
+        .flat_map(|(_, ixs)| ixs.iter().copied())
         .collect()
 }
 
@@ -93,12 +115,18 @@ fn address(h: &Host) -> String {
 }
 
 impl Workspace {
-    /// The saved hosts the page lists, in order, after the search.
+    /// The saved hosts the page lists, in order, after the search and folding.
     pub(super) fn shown(&self, cx: &App) -> Vec<usize> {
-        sections(&self.cfg.hosts, self.search.read(cx).value())
-            .into_iter()
-            .flat_map(|(_, ixs)| ixs)
-            .collect()
+        let query = self.search.read(cx).value();
+        listed(&sections(&self.cfg.hosts, query), &self.folded, query)
+    }
+
+    /// Fold folder `name` down to its title, or unfold it.
+    fn toggle_folder(&mut self, name: &str, cx: &mut Context<Self>) {
+        if !self.folded.remove(name) {
+            self.folded.insert(name.to_string());
+        }
+        cx.notify();
     }
 
     /// Keys on the hosts page that no control took. Up and Down pick a host, Enter opens a
@@ -163,7 +191,7 @@ impl Workspace {
         let wide = width >= px(WIDE_W);
         let query = self.search.read(cx).value().trim().to_string();
         let sections = sections(&self.cfg.hosts, &query);
-        let shown: Vec<usize> = sections.iter().flat_map(|(_, ixs)| ixs.clone()).collect();
+        let shown = listed(&sections, &self.folded, &query);
         let picked = pick(&self.cfg.hosts, &shown, self.selected.as_deref());
 
         let rows = self.host_rows(&sections, &query, picked, wide, cx);
@@ -233,8 +261,8 @@ impl Workspace {
             .into_any_element()
     }
 
-    /// The list under the search: section titles and host rows, or what Enter would do
-    /// when nothing matches.
+    /// The list under the search: section and folder titles and host rows, or what Enter
+    /// would do when nothing matches.
     fn host_rows(
         &self,
         sections: &[(Section, Vec<usize>)],
@@ -246,11 +274,20 @@ impl Workspace {
         let mut rows: Vec<AnyElement> = Vec::new();
         let titled = sections.len() > 1;
         for (section, ixs) in sections {
+            if let Section::Group(g) = section {
+                let folded = is_folded(section, &self.folded, query);
+                rows.push(
+                    self.folder_title(g, ixs.len(), folded, cx)
+                        .into_any_element(),
+                );
+                if folded {
+                    continue;
+                }
+            }
             let title = match section {
-                Section::Pinned => "Pinned".to_string(),
-                Section::Group(g) => privacy::redact(g).into_owned(),
-                Section::Other if titled => "Hosts".to_string(),
-                Section::Other => String::new(),
+                Section::Pinned => "Pinned",
+                Section::Other if titled => "Hosts",
+                _ => "",
             };
             if !title.is_empty() {
                 rows.push(
@@ -264,8 +301,11 @@ impl Workspace {
                         .into_any_element(),
                 );
             }
+            let nested = matches!(section, Section::Group(_));
             for &ix in ixs {
-                let row = self.host_row(ix, wide && picked == Some(ix), wide, cx);
+                let row = self
+                    .host_row(ix, wide && picked == Some(ix), wide, cx)
+                    .when(nested, |d| d.pl(px(22.)));
                 // Cascade only on launch; coming back later just fades the page.
                 rows.push(if self.epoch == 0 {
                     stagger_in(row, ("row", ix), rows.len()).into_any_element()
@@ -289,6 +329,53 @@ impl Workspace {
             );
         }
         rows
+    }
+
+    /// The title of a folder, folding or unfolding it on click.
+    fn folder_title(
+        &self,
+        name: &str,
+        count: usize,
+        folded: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let key = name.to_string();
+        div()
+            .id(SharedString::from(format!("folder-{name}")))
+            .mt_1()
+            .h(px(26.))
+            .px_2()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap_1p5()
+            .text_xs()
+            .text_color(c(palette().muted))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(palette().hover)))
+            .on_click(cx.listener(move |t, _, _, cx| t.toggle_folder(&key, cx)))
+            .child(icon(
+                if folded {
+                    "chevron-right"
+                } else {
+                    "chevron-down"
+                },
+                10.,
+                palette().placeholder,
+            ))
+            .child(icon("folder", 12., palette().muted))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(privacy::redact(name).into_owned()),
+            )
+            .child(
+                div()
+                    .text_color(c(palette().placeholder))
+                    .child(count.to_string()),
+            )
     }
 
     /// One host in the list: logo, name, address, and a dot while it is connected.

@@ -103,7 +103,7 @@ impl Host {
         if let Some(g) = &self.group
             && (g.chars().count() > 40 || g.chars().any(char::is_control))
         {
-            return Err("Group must be 40 characters or fewer.".into());
+            return Err("Folder must be 40 characters or fewer.".into());
         }
         Ok(())
     }

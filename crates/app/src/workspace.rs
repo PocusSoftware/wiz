@@ -18,7 +18,7 @@ mod tabs;
 mod tests;
 
 use std::cell::Cell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -270,6 +270,8 @@ pub struct Workspace {
     selected: Option<String>,
     /// The search field on the hosts page.
     search: Entity<TextInput>,
+    /// Folders on the hosts page showing only their title, by name.
+    folded: HashSet<String>,
     /// Bumped whenever the visible page changes, to replay the page fade.
     epoch: u64,
     form: Option<Entity<HostForm>>,
@@ -407,6 +409,7 @@ impl Workspace {
             tab_scroll: gpui::ScrollHandle::new(),
             selected: None,
             search,
+            folded: HashSet::new(),
             epoch: 0,
             form: None,
             trust: VecDeque::new(),
@@ -777,7 +780,10 @@ fn read_system_look(window: &mut Window) {
 
 fn refresh_privacy_tokens<'a>(hosts: impl Iterator<Item = &'a Host> + Clone) {
     let mut users: Vec<String> = hosts.clone().map(|h| h.user.clone()).collect();
-    let names = hosts.clone().map(|h| h.name.clone()).collect();
+    let names = hosts
+        .clone()
+        .flat_map(|h| std::iter::once(h.name.clone()).chain(h.group.clone()))
+        .collect();
     let hosts = hosts.map(|h| h.host.clone()).collect();
     users.extend(crate::platform::local_user());
     privacy::set_known(hosts, users, names);

@@ -1,6 +1,7 @@
 //! Add/edit host dialog. Secrets go to the secret store (Keychain or the encrypted file),
 //! never to the config file.
 
+mod folder;
 mod logo;
 #[cfg(test)]
 mod tests;
@@ -39,8 +40,9 @@ pub struct HostForm {
     old: Option<Host>,
     /// The other saved hosts, to refuse duplicates and to pick a jump host from.
     others: Vec<Host>,
-    /// Existing group names, so "prod" joins an existing "Prod" instead of making a twin.
+    /// Existing folder names, so "prod" joins an existing "Prod" instead of making a twin.
     groups: Vec<String>,
+    folders_open: bool,
     name: Entity<TextInput>,
     group: Entity<TextInput>,
     tags: Entity<TextInput>,
@@ -78,6 +80,7 @@ impl HostForm {
         let jump = cx.new(|cx| TextInput::new("Optional, name of a saved host", false, cx));
         // Host, user and port are bullets unless the field is being edited.
         name.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
+        group.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         port.update(cx, |t, _| t.set_hide_mode(Hide::Port));
@@ -125,7 +128,8 @@ impl HostForm {
             index,
             old,
             others,
-            groups,
+            groups: folder::folder_names(groups),
+            folders_open: false,
             name,
             group,
             tags,
@@ -377,6 +381,7 @@ impl Render for HostForm {
                     }
                     "enter" => t.submit(cx),
                     "escape" if t.logo_open => t.close_logos(None, w, cx),
+                    "escape" if t.folders_open => t.close_folders(None, cx),
                     "escape" => cx.emit(FormEvent::Cancelled),
                     _ => return,
                 }
@@ -413,7 +418,7 @@ impl Render for HostForm {
                     .flex()
                     .gap_2()
                     .child(field("Name", &self.name).flex_1())
-                    .child(field("Group", &self.group).flex_1()),
+                    .child(self.folder_field(cx).flex_1()),
             )
             .child(field("Tags", &self.tags))
             .child(

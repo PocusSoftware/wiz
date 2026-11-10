@@ -1085,6 +1085,67 @@ fn hosts_page_lists_pinned_then_groups_then_the_rest() {
 }
 
 #[test]
+fn folded_folders_hide_their_hosts_until_a_search() {
+    use home::{Section, is_folded, listed, sections};
+    let hosts = vec![
+        named("web", "deploy", None, false),
+        named("db", "pg", Some("prod"), false),
+        named("main", "me", Some("prod"), true),
+    ];
+    let folded = HashSet::from(["prod".to_string()]);
+    let all = sections(&hosts, "");
+    assert!(is_folded(&Section::Group("prod".into()), &folded, ""));
+    // The pinned host of a folded folder stays listed.
+    assert_eq!(listed(&all, &folded, ""), vec![2, 0]);
+    assert_eq!(listed(&all, &HashSet::new(), ""), vec![2, 1, 0]);
+    // A search shows what matches inside a folded folder.
+    assert!(!is_folded(&Section::Group("prod".into()), &folded, "db"));
+    assert_eq!(listed(&sections(&hosts, "db"), &folded, "db"), vec![1]);
+}
+
+#[gpui::test]
+fn keyboard_skips_hosts_in_folded_folders(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    root.update(cx, |r, cx| {
+        r.cfg.hosts = vec![
+            named("a", "a", Some("lab"), false),
+            named("b", "b", None, false),
+        ];
+        r.folded.insert("lab".into());
+        cx.notify();
+    });
+    let picked = |cx: &mut VisualTestContext| {
+        root.read_with(cx, |r, cx| {
+            let shown = r.shown(cx);
+            home::pick(&r.cfg.hosts, &shown, r.selected.as_deref())
+        })
+    };
+    assert_eq!(root.read_with(cx, Workspace::shown), vec![1]);
+    assert_eq!(picked(cx), Some(1));
+    cx.simulate_keystrokes("up");
+    assert_eq!(picked(cx), Some(1));
+    root.update(cx, |r, _| r.folded.clear());
+    cx.simulate_keystrokes("up");
+    assert_eq!(picked(cx), Some(0));
+}
+
+#[test]
+fn folder_names_are_masked_with_host_names() {
+    let _g = setup();
+    let hosts = [named("web", "deploy", Some("acme-corp"), false)];
+    refresh_privacy_tokens(hosts.iter());
+    privacy::configure(&Settings {
+        hide_sensitive: Some(true),
+        mask_names: Some(true),
+        ..Default::default()
+    });
+    let shown = privacy::redact("acme-corp").into_owned();
+    privacy::configure(&Settings::default());
+    assert_eq!(shown, privacy::mask());
+}
+
+#[test]
 fn picked_host_follows_its_account() {
     let mut hosts = vec![
         named("a", "a", None, false),

@@ -91,3 +91,27 @@ fn tags_are_split_trimmed_and_deduplicated(cx: &mut TestAppContext) {
     let saved = form.update(cx, HostForm::try_save).unwrap();
     assert_eq!(saved.tags, ["db", "Web", "eu"]);
 }
+
+#[test]
+fn existing_folders_are_listed_once() {
+    let names = vec!["prod".into(), "Lab".into(), "Prod".into(), "lab".into()];
+    assert_eq!(folder::folder_names(names), vec!["Lab", "prod"]);
+}
+
+#[gpui::test]
+fn picked_folder_is_saved(cx: &mut TestAppContext) {
+    let form = cx.new(|cx| HostForm::new(None, Vec::new(), vec!["Prod".into()], cx));
+    form.update(cx, |f, cx| {
+        f.mode = Mode::Agent;
+        f.host.update(cx, |t, _| t.set_value("example.com"));
+        f.folders_open = true;
+        f.close_folders(Some("Prod"), cx);
+        assert!(!f.folders_open);
+    });
+    let host = form.update(cx, HostForm::try_save).unwrap();
+    assert_eq!(host.group.as_deref(), Some("Prod"));
+    // A typed name joins the folder that differs only in case.
+    form.update(cx, |f, cx| f.group.update(cx, |t, _| t.set_value("prod")));
+    let host = form.update(cx, HostForm::try_save).unwrap();
+    assert_eq!(host.group.as_deref(), Some("Prod"));
+}
