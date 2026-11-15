@@ -20,7 +20,7 @@ const SWATCHES: &[(&str, u32)] = &[
     ("Red", 0xe5484d),
     ("Pink", 0xd6409f),
     ("Purple", 0x8e4ec6),
-    ("Blue", 0x3e63dd),
+    ("Blue", 0x3a63ec),
     ("Sky", 0x0090ff),
     ("Teal", 0x12a594),
     ("Green", 0x46a758),
