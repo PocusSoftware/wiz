@@ -61,13 +61,42 @@ fn picker_saves_a_new_snippet(cx: &mut gpui::TestAppContext) {
 
     let (picker, cx) = cx.add_window_view(|_, cx| SnippetPicker::new(cx));
     picker.update_in(cx, |p, window, cx| {
-        p.start_adding(window, cx);
+        p.open_form(Form::New, window, cx);
         p.name.update(cx, |i, _| i.set_value("Disk usage"));
         p.command.update(cx, |i, _| i.set_value("df -h"));
-        p.save_new(window, cx);
-        assert!(!p.adding);
+        p.save_form(window, cx);
+        assert_eq!(p.form, None);
         assert_eq!(p.items, vec![snip("Disk usage", "df -h")]);
     });
     let saved = Snippets::load(&Snippets::default_path().unwrap()).unwrap();
     assert_eq!(saved.items, vec![snip("Disk usage", "df -h")]);
+}
+
+#[gpui::test]
+fn picker_edits_and_deletes_a_snippet(cx: &mut gpui::TestAppContext) {
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = tempfile::tempdir().unwrap();
+    // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
+    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    let items = vec![snip("Disk usage", "df -h"), snip("Logs", "journalctl -f")];
+    Snippets { items }
+        .save(&Snippets::default_path().unwrap())
+        .unwrap();
+
+    let (picker, cx) = cx.add_window_view(|_, cx| SnippetPicker::new(cx));
+    picker.update_in(cx, |p, window, cx| {
+        p.open_form(Form::Edit(1), window, cx);
+        assert_eq!(p.command.read(cx).value(), "journalctl -f");
+        p.command
+            .update(cx, |i, _| i.set_value("journalctl -fu ssh"));
+        p.save_form(window, cx);
+        assert_eq!(p.items[1], snip("Logs", "journalctl -fu ssh"));
+        p.open_form(Form::Edit(0), window, cx);
+        p.delete(window, cx);
+        assert_eq!(p.form, None);
+    });
+    let saved = Snippets::load(&Snippets::default_path().unwrap()).unwrap();
+    assert_eq!(saved.items, vec![snip("Logs", "journalctl -fu ssh")]);
 }

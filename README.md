@@ -50,7 +50,7 @@ Saved hosts are listed on the left, pinned ones first, then each folder, then th
 ⌘K, the arrow button in the title bar, or type `user@host` in the hosts page search and press Enter when no saved host matches. Type `user@host:port`, `user@[::1]:2222` or paste `ssh -p 2222 user@host`, then a password or a key (empty key path tries `~/.ssh/id_ed25519`, `id_ecdsa`, `id_rsa`). The credentials stay in memory for the session, so a dropped terminal still reconnects. Tick "Save as host" to add it to the hosts page.
 
 ## Snippets
-Save commands you type often under Settings, Snippets (stored in `snippets.toml` next to `hosts.toml`). ⌘J (Ctrl+Shift+J on Windows) opens a picker over the terminal in front: type to filter, arrows and Enter to pick. The command is pasted without Enter, so you can read it before running it. Multi-line commands go in the file by hand.
+Save commands you type often under Settings, Snippets (stored in `snippets.toml` next to `hosts.toml`). ⌘J (Ctrl+Shift+J on Windows) opens a picker over the terminal in front: type to filter, arrows and Enter to pick. The + button adds a snippet and the pencil on a snippet edits or deletes it. The command is pasted without Enter, so you can read it before running it. Multi-line commands go in the file by hand.
 
 ## Credentials: Keychain or encrypted file
 Settings, Credentials picks where passwords and key passphrases are kept:
