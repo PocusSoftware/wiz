@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
@@ -50,7 +50,7 @@ use crate::views::logs::LogView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Source as SftpSource};
 use crate::views::terminal::{TerminalEvent, TerminalView};
-use crate::widgets::anim::{fade_in, page_in, pop_in, stagger_in};
+use crate::widgets::anim::{Spring, fade_in, page_in, pop_in, stagger_in};
 use crate::widgets::input::{Hide, InputEvent, TextInput};
 use crate::widgets::{FocusNext, FocusPrev, button, icon, icon_button, keyboard, primary_button};
 
@@ -153,9 +153,10 @@ struct TermTab {
     /// space available on every render (see `layout`).
     layout: Vec<Vec<usize>>,
     /// Width of each column as a share of the tab, summing to 1.
-    cols: Vec<f32>,
+    cols: Vec<Spring>,
     /// Height of each pane in its column as a share of the column, summing to 1.
-    rows: Vec<Vec<f32>>,
+    rows: Vec<Vec<Spring>>,
+    ticked: Option<Instant>,
 }
 
 /// A split divider being dragged, and where the mouse was last (x for a column divider,
@@ -588,6 +589,15 @@ impl Render for Workspace {
             t.focused = Self::focused_pane(t, window, cx);
         }
         self.arrange_splits(window);
+        if self.page == Page::Tab
+            && let Some(Tab {
+                kind: TabKind::Terminal(t),
+                ..
+            }) = self.tabs.get_mut(self.active)
+            && t.step()
+        {
+            window.request_animation_frame();
+        }
         static FIRST: AtomicBool = AtomicBool::new(true);
         if FIRST.swap(false, Ordering::Relaxed) {
             crate::mark("first render");

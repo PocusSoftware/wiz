@@ -1,5 +1,8 @@
 //! Small, quick motion: ease-out fades and a few pixels of rise. Nothing loops.
 
+#[cfg(test)]
+mod tests;
+
 use std::time::Duration;
 
 /// Duration in ms, or effectively instant when animations are switched off.
@@ -68,4 +71,37 @@ pub fn stagger_in<E: Styled + IntoElement + 'static>(
         }),
         |el, t| el.opacity(t).mt(px((1.0 - t) * 8.0)),
     )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spring {
+    pub value: f32,
+    pub velocity: f32,
+    pub target: f32,
+}
+
+impl Spring {
+    const RESPONSE: f32 = 0.3;
+
+    pub fn new(value: f32) -> Self {
+        Self {
+            value,
+            velocity: 0.,
+            target: value,
+        }
+    }
+
+    pub fn step(&mut self, dt: f32) -> bool {
+        let k = (std::f32::consts::TAU / Self::RESPONSE).powi(2);
+        let c = 4. * std::f32::consts::PI / Self::RESPONSE;
+        let dt = dt.min(1. / 30.);
+        self.velocity += (-k * (self.value - self.target) - c * self.velocity) * dt;
+        self.value += self.velocity * dt;
+        let settled = (self.value - self.target).abs() < 1e-3 && self.velocity.abs() < 1e-2;
+        if settled || !crate::prefs::get().animations() {
+            *self = Self::new(self.target);
+            return false;
+        }
+        true
+    }
 }

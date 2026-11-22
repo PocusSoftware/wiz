@@ -8,13 +8,34 @@ impl TermTab {
         if layout == self.layout {
             return;
         }
-        self.cols = vec![1.0 / layout.len() as f32; layout.len()];
+        self.cols = even(&self.cols, layout.len());
         self.rows = layout
             .iter()
-            .map(|col| vec![1.0 / col.len() as f32; col.len()])
+            .enumerate()
+            .map(|(i, col)| even(self.rows.get(i).map_or(&[], Vec::as_slice), col.len()))
             .collect();
         self.layout = layout;
     }
+
+    pub(super) fn step(&mut self) -> bool {
+        let now = Instant::now();
+        let dt = self.ticked.map_or(0., |t| (now - t).as_secs_f32());
+        let mut moving = false;
+        for s in self.cols.iter_mut().chain(self.rows.iter_mut().flatten()) {
+            moving |= s.step(dt);
+        }
+        self.ticked = moving.then_some(now);
+        moving
+    }
+}
+
+fn even(old: &[Spring], n: usize) -> Vec<Spring> {
+    (0..n)
+        .map(|i| Spring {
+            target: 1.0 / n as f32,
+            ..old.get(i).copied().unwrap_or(Spring::new(0.))
+        })
+        .collect()
 }
 
 /// A split pane being dragged by its header onto another pane of the same tab.
@@ -322,10 +343,10 @@ impl Workspace {
             return;
         }
         let delta = f32::from(now - drag.last) / span;
-        let pair = sizes[a] + sizes[b];
-        let first = (sizes[a] + delta).clamp(MIN_PANE, pair - MIN_PANE);
-        sizes[a] = first;
-        sizes[b] = pair - first;
+        let pair = sizes[a].target + sizes[b].target;
+        let first = (sizes[a].target + delta).clamp(MIN_PANE, pair - MIN_PANE);
+        sizes[a] = Spring::new(first);
+        sizes[b] = Spring::new(pair - first);
         drag.last = now;
         cx.notify();
     }
@@ -488,7 +509,7 @@ impl Workspace {
             if ci > 0 {
                 row = row.child(self.divider(Divider::Col(ci - 1), cx));
             }
-            let col_share = t.cols.get(ci).copied().unwrap_or(0.);
+            let col_share = t.cols.get(ci).map_or(0., |s| s.value);
             let mut column = div()
                 .flex_basis(gpui::relative(col_share))
                 .flex_shrink(1.)
@@ -504,8 +525,7 @@ impl Workspace {
                     .rows
                     .get(ci)
                     .and_then(|r| r.get(ri))
-                    .copied()
-                    .unwrap_or(0.);
+                    .map_or(0., |s| s.value);
                 if let Some(p) = t.panes.get(i) {
                     column = column.child(
                         self.pane(tab_ix, i, &p.view, i == t.focused, cx)

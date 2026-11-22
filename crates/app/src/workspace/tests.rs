@@ -184,8 +184,17 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     });
     assert!(!ssh_core::config_dir().unwrap().join("hosts.toml").exists());
 
-    // Split three times: side by side, then a 2x2 grid.
-    for n in 2..=4 {
+    cx.dispatch_action(SplitPane);
+    wait(cx, &root, "a split pane", |r, _| {
+        term(r).is_some_and(|t| t.panes.len() == 2)
+    });
+    root.read_with(cx, |r, _| {
+        let t = term(r).unwrap();
+        assert_eq!(t.cols[1].target, 0.5);
+        assert!(t.cols[1].value < 0.5, "{:?}", t.cols);
+    });
+    // Split twice more: a 2x2 grid.
+    for n in 3..=4 {
         cx.dispatch_action(SplitPane);
         wait(cx, &root, "a split pane", |r, _| {
             term(r).is_some_and(|t| t.panes.len() == n)
@@ -238,11 +247,13 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
         r.drag_divider(gpui::point(px(0.), px(300.)), w, cx);
         r.pane_drag = None;
         let t = term(r).unwrap();
-        assert!((t.cols[0] - 0.6).abs() < 0.01, "{:?}", t.cols);
-        assert!((t.cols.iter().sum::<f32>() - 1.).abs() < 1e-4);
-        assert!(t.rows[1][0] < 0.45, "{:?}", t.rows);
-        assert!((t.rows[1].iter().sum::<f32>() - 1.).abs() < 1e-4);
-        assert_eq!(t.rows[0], vec![0.5, 0.5]);
+        let shares = |s: &[Spring]| s.iter().map(|s| s.target).collect::<Vec<_>>();
+        let (cols, rows) = (shares(&t.cols), shares(&t.rows[1]));
+        assert!((cols[0] - 0.6).abs() < 0.01, "{cols:?}");
+        assert!((cols.iter().sum::<f32>() - 1.).abs() < 1e-4);
+        assert!(rows[0] < 0.45, "{rows:?}");
+        assert!((rows.iter().sum::<f32>() - 1.).abs() < 1e-4);
+        assert_eq!(shares(&t.rows[0]), vec![0.5, 0.5]);
     });
 
     // A short wide window puts the 4 side by side; a tiny one keeps all 4 in the grid.
