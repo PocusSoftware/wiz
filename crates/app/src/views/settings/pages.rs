@@ -26,7 +26,6 @@ impl SettingsView {
                 }))))
                 .child(self.toggle("a-os-logos", "Server logos", "The operating system logo found when connecting, like Ubuntu or NixOS. A logo picked in the host form always shows.", s.show_os_logos(), |s, v| s.show_os_logos = Some(v), cx))
                 .child(self.toggle("a-anim", "Animations", "Short fades and slides for dialogs, menus and pages.", s.animations(), |s, v| s.animations = Some(v), cx))
-                .child(self.stepper("a-size", "Terminal font size", "Applies immediately.", s.terminal_font_size() as u32, (8, 32, 1), "pt", |s, v| s.terminal_font_size = Some(v as f32), cx))
                 .child(self.text("Interface font", "Family name. Applies after a restart.", &self.ui_font))
                 .child(self.text("Terminal font", "Family name. Applies after a restart.", &self.terminal_font))
                 .child(Self::group("Tab bar"))
@@ -80,6 +79,7 @@ impl SettingsView {
                 .child(self.stepper("l-tail", "Log lines to load", "Newest lines fetched per refresh.", s.log_tail_lines(), (100, 50_000, 100), "lines", |s, v| s.log_tail_lines = Some(v), cx))
                 .child(self.stepper("d-refresh", "Container list refresh", "How often the Docker panel reloads.", s.docker_refresh_secs(), (1, 60, 1), "s", |s, v| s.docker_refresh_secs = Some(v), cx)),
             Category::TerminalNetwork => d
+                .child(self.zoom_row(&s, cx))
                 .child(self.stepper("t-scroll", "Scrollback", "Lines kept per terminal. Applies to new terminals.", s.terminal_scrollback(), (1_000, 200_000, 1_000), "lines", |s, v| s.terminal_scrollback = Some(v), cx))
                 .child(self.stepper("n-keep", "SSH keep-alive", "Seconds between keep-alive probes, 0 turns them off. Applies to new connections.", s.keepalive_secs(), (0, 600, 5), "s", |s, v| s.keepalive_secs = Some(v), cx))
                 .child(self.toggle("n-confirm", "Ask before closing a session", "Confirm before a terminal, files or Docker tab (or a split pane) on a server is closed.", s.confirm_close(), |s, v| s.confirm_close = Some(v), cx))

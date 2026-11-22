@@ -398,3 +398,11 @@ pub fn mono() -> SharedString {
 pub fn mono_size() -> f32 {
     crate::prefs::get().terminal_font_size().clamp(6.0, 48.0)
 }
+
+pub fn zoomed(size: f32, step: f32) -> f32 {
+    (size.round() + step).clamp(8.0, 32.0)
+}
+
+pub fn zoom_percent(size: f32) -> u32 {
+    (size / ssh_core::config::Settings::default().terminal_font_size() * 100.).round() as u32
+}

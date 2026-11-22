@@ -37,6 +37,8 @@ pub const OS: gpui::OperatingSystem = gpui::OperatingSystem::Windows;
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
 
+pub const ZOOM_KEYS: &str = "Ctrl+= and Ctrl+- change it, Ctrl+0 resets it.";
+
 /// Placeholder of the agent socket setting: what an empty one uses.
 pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
 pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent; 1Password uses that pipe too when its agent is on.";

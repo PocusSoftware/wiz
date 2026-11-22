@@ -119,3 +119,13 @@ fn oled_black() {
     set_oled(false);
     assert_eq!(bg(), DARK.bg);
 }
+
+#[test]
+fn zoom_steps_and_percent() {
+    assert_eq!(zoomed(13., 1.), 14.);
+    assert_eq!(zoomed(32., 1.), 32.);
+    assert_eq!(zoomed(8., -1.), 8.);
+    assert_eq!(zoom_percent(13.), 100);
+    assert_eq!(zoom_percent(26.), 200);
+    assert_eq!(zoom_percent(14.), 108);
+}

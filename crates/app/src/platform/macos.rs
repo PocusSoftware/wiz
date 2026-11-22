@@ -28,6 +28,8 @@ pub const OS: gpui::OperatingSystem = gpui::OperatingSystem::Mac;
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "⌘Q";
 
+pub const ZOOM_KEYS: &str = "⌘= and ⌘- change it, ⌘0 resets it.";
+
 /// Placeholder of the agent socket setting: what an empty one uses.
 pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
 pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add). For 1Password: ~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock";

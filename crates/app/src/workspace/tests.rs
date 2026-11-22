@@ -1287,6 +1287,4 @@ fn zoom_changes_the_terminal_font_size(cx: &mut TestAppContext) {
     assert_eq!(size(), Some(12.));
     cx.dispatch_action(ResetZoom);
     assert_eq!(size(), None);
-    assert_eq!(zoomed(32., 1.), 32.);
-    assert_eq!(zoomed(8., -1.), 8.);
 }

@@ -566,10 +566,6 @@ impl Workspace {
     }
 }
 
-fn zoomed(size: f32, step: f32) -> f32 {
-    (size.round() + step).clamp(8.0, 32.0)
-}
-
 impl Focusable for Workspace {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()

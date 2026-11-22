@@ -327,6 +327,47 @@ impl SettingsView {
         )
     }
 
+    fn zoom_row(&self, s: &Settings, cx: &mut Context<Self>) -> gpui::Div {
+        let size = s.terminal_font_size();
+        let (dec, inc) = (zoomed(size, -1.), zoomed(size, 1.));
+        Self::row(
+            "Zoom",
+            &format!("Size of the terminal text. {}", crate::platform::ZOOM_KEYS),
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(
+                    icon_button("t-zoom-reset", "refresh", "Reset zoom", palette().muted)
+                        .when(s.terminal_font_size.is_none(), Styled::invisible)
+                        .on_click(
+                            cx.listener(|t, _, _, cx| t.apply(cx, |s| s.terminal_font_size = None)),
+                        ),
+                )
+                .child(
+                    icon_button(("t-zoom", 0usize), "minus", "Zoom out", palette().muted).on_click(
+                        cx.listener(move |t, _, _, cx| {
+                            t.apply(cx, move |s| s.terminal_font_size = Some(dec))
+                        }),
+                    ),
+                )
+                .child(
+                    div()
+                        .w(px(110.))
+                        .flex()
+                        .justify_center()
+                        .child(format!("{}% ({size} pt)", zoom_percent(size))),
+                )
+                .child(
+                    icon_button(("t-zoom", 1usize), "plus", "Zoom in", palette().muted).on_click(
+                        cx.listener(move |t, _, _, cx| {
+                            t.apply(cx, move |s| s.terminal_font_size = Some(inc))
+                        }),
+                    ),
+                ),
+        )
+    }
+
     /// Like `stepper`, but steps through fixed `choices` (for ranges where linear steps are
     /// useless, like speeds from 128 KB/s to 100 MB/s).
     #[expect(
