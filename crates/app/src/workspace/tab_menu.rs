@@ -417,7 +417,7 @@ impl Workspace {
                 }))
                 .into_any_element(),
             Self::split_row("hm-del", "trash", "Delete", "")
-                .text_color(c(palette().red))
+                .text_color(c(danger()))
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.ask_delete_host(ix, w, cx);

@@ -88,7 +88,10 @@ fn gray_theme_icons_drop_color() {
     assert_eq!(icon_color(p.red), p.muted);
     assert_eq!(icon_color(accent_text()), p.text);
     assert_eq!(icon_color(p.muted), p.muted);
+    assert_eq!(danger(), accent());
+    assert_eq!(on_danger(), on_accent());
     set_monochrome(false);
+    assert_eq!(danger(), p.red);
 }
 
 #[test]

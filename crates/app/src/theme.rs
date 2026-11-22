@@ -263,6 +263,22 @@ pub fn dot_color(color: u32) -> u32 {
     }
 }
 
+pub fn danger() -> u32 {
+    if MONOCHROME.load(Ordering::Relaxed) {
+        accent()
+    } else {
+        palette().red
+    }
+}
+
+pub fn on_danger() -> u32 {
+    if MONOCHROME.load(Ordering::Relaxed) {
+        on_accent()
+    } else {
+        0xffffff
+    }
+}
+
 /// The window and terminal background.
 pub fn bg() -> u32 {
     if OLED.load(Ordering::Relaxed) && is_dark() {

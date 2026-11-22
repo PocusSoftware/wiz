@@ -203,7 +203,7 @@ impl Render for DockerView {
                         palette().muted
                     },
                 )
-                .when(confirming, |b| b.bg(with_alpha(palette().red, 0.15)))
+                .when(confirming, |b| b.bg(with_alpha(danger(), 0.15)))
                 .on_click(cx.listener(move |t, _, _, cx| {
                     if t.confirm_remove.as_deref() == Some(i.as_str()) {
                         t.act(i.clone(), Action::Remove, cx);
