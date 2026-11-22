@@ -25,6 +25,12 @@ enum Mode {
     Agent,
 }
 
+pub enum Start {
+    New,
+    Edit(usize, Host),
+    Copy(Host),
+}
+
 pub enum FormEvent {
     Saved {
         host: Box<Host>,
@@ -38,6 +44,7 @@ impl EventEmitter<FormEvent> for HostForm {}
 pub struct HostForm {
     index: Option<usize>,
     old: Option<Host>,
+    copy_of: Option<String>,
     /// The other saved hosts, to refuse duplicates and to pick a jump host from.
     others: Vec<Host>,
     /// Existing folder names, so "prod" joins an existing "Prod" instead of making a twin.
@@ -66,7 +73,7 @@ pub struct HostForm {
 
 impl HostForm {
     pub fn new(
-        existing: Option<(usize, Host)>,
+        start: Start,
         others: Vec<Host>,
         groups: Vec<String>,
         cx: &mut Context<Self>,
@@ -84,49 +91,58 @@ impl HostForm {
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         port.update(cx, |t, _| t.set_hide_mode(Hide::Port));
-        let editing = existing.is_some();
-        let secret_hint = if editing { "(unchanged)" } else { "" };
+        let (secret_hint, passphrase_hint) = match start {
+            Start::New => ("", "optional"),
+            Start::Edit(..) => ("(unchanged)", "(unchanged)"),
+            Start::Copy(_) => ("(copied)", "(copied)"),
+        };
         let password = cx.new(|cx| TextInput::new(secret_hint, true, cx));
         let key_path = cx.new(|cx| TextInput::new("~/.ssh/id_ed25519", false, cx));
-        let passphrase =
-            cx.new(|cx| TextInput::new(if editing { "(unchanged)" } else { "optional" }, true, cx));
+        let passphrase = cx.new(|cx| TextInput::new(passphrase_hint, true, cx));
         let logo_search = cx.new(|cx| TextInput::new("Search, like ubuntu or rhel", false, cx));
         cx.subscribe(&logo_search, |_, _, _: &InputEvent, cx| cx.notify())
             .detach();
         let mut mode = Mode::Password;
-        let logo = existing
+        let (index, old, copy_of, shown) = match start {
+            Start::New => (None, None, None, None),
+            Start::Edit(i, h) => (Some(i), Some(h.clone()), None, Some(h)),
+            Start::Copy(h) => (None, None, Some(h.account()), Some(h)),
+        };
+        let logo = shown
             .as_ref()
-            .and_then(|(_, h)| h.logo.as_deref())
+            .and_then(|h| h.logo.as_deref())
             .and_then(ssh_core::os::logo)
             .map(|l| l.slug);
-        let (index, old) = match existing {
-            Some((i, h)) => {
-                name.update(cx, |t, _| t.set_value(&h.name));
-                group.update(cx, |t, _| {
-                    t.set_value(h.group.as_deref().unwrap_or_default())
-                });
-                tags.update(cx, |t, _| t.set_value(&h.tags.join(", ")));
-                host.update(cx, |t, _| t.set_value(&h.host));
-                port.update(cx, |t, _| t.set_value(&h.port.to_string()));
-                user.update(cx, |t, _| t.set_value(&h.user));
-                if let Some(j) = others.iter().find(|o| Some(o.account()) == h.jump) {
-                    jump.update(cx, |t, _| t.set_value(&j.name));
-                }
-                match &h.auth {
-                    AuthMethod::Password => {}
-                    AuthMethod::Key { path } => {
-                        mode = Mode::Key;
-                        key_path.update(cx, |t, _| t.set_value(&path.to_string_lossy()));
-                    }
-                    AuthMethod::Agent => mode = Mode::Agent,
-                }
-                (Some(i), Some(h))
+        if let Some(h) = shown {
+            let shown_name = if copy_of.is_some() {
+                format!("{} copy", h.name)
+            } else {
+                h.name.clone()
+            };
+            name.update(cx, |t, _| t.set_value(&shown_name));
+            group.update(cx, |t, _| {
+                t.set_value(h.group.as_deref().unwrap_or_default())
+            });
+            tags.update(cx, |t, _| t.set_value(&h.tags.join(", ")));
+            host.update(cx, |t, _| t.set_value(&h.host));
+            port.update(cx, |t, _| t.set_value(&h.port.to_string()));
+            user.update(cx, |t, _| t.set_value(&h.user));
+            if let Some(j) = others.iter().find(|o| Some(o.account()) == h.jump) {
+                jump.update(cx, |t, _| t.set_value(&j.name));
             }
-            None => (None, None),
-        };
+            match &h.auth {
+                AuthMethod::Password => {}
+                AuthMethod::Key { path } => {
+                    mode = Mode::Key;
+                    key_path.update(cx, |t, _| t.set_value(&path.to_string_lossy()));
+                }
+                AuthMethod::Agent => mode = Mode::Agent,
+            }
+        }
         Self {
             index,
             old,
+            copy_of,
             others,
             groups: folder::folder_names(groups),
             folders_open: false,
@@ -282,6 +298,13 @@ impl HostForm {
                         secrets::set(kind, &acct, &s.reveal()).map_err(|e| e.to_string())?;
                     }
                     secrets::delete(kind, &oa).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        if let Some(src) = &self.copy_of {
+            for kind in [Kind::Password, Kind::KeyPassphrase] {
+                if let Some(s) = secrets::get(kind, src).map_err(|e| e.to_string())? {
+                    secrets::set(kind, &acct, &s.reveal()).map_err(|e| e.to_string())?;
                 }
             }
         }

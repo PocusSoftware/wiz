@@ -20,6 +20,7 @@ icons!(
     "plus",
     "x",
     "pencil",
+    "copy",
     "trash",
     "refresh",
     "play",

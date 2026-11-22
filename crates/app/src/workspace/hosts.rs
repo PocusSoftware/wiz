@@ -11,14 +11,39 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         self.with_secrets(
-            move |this, window, cx| this.show_form(existing, window, cx),
+            move |this, window, cx| {
+                let start = existing
+                    .and_then(|i| this.cfg.hosts.get(i).cloned().map(|h| Start::Edit(i, h)))
+                    .unwrap_or(Start::New);
+                this.show_form(start, window, cx)
+            },
             window,
             cx,
         );
     }
 
-    fn show_form(&mut self, existing: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
-        let ex = existing.and_then(|i| self.cfg.hosts.get(i).cloned().map(|h| (i, h)));
+    pub(super) fn duplicate_host(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.with_secrets(
+            move |this, window, cx| {
+                if let Some(h) = this.cfg.hosts.get(ix).cloned() {
+                    this.show_form(Start::Copy(h), window, cx)
+                }
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn show_form(&mut self, start: Start, window: &mut Window, cx: &mut Context<Self>) {
+        let existing = match start {
+            Start::Edit(i, _) => Some(i),
+            Start::New | Start::Copy(_) => None,
+        };
         let others = self
             .cfg
             .hosts
@@ -33,7 +58,7 @@ impl Workspace {
             .iter()
             .filter_map(|h| h.group.clone())
             .collect();
-        let form = cx.new(|cx| HostForm::new(ex, others, groups, cx));
+        let form = cx.new(|cx| HostForm::new(start, others, groups, cx));
         cx.subscribe_in(&form, window, |this, _, ev: &FormEvent, window, cx| {
             match ev {
                 FormEvent::Saved { host, index } => {

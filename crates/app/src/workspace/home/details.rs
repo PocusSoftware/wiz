@@ -115,6 +115,10 @@ impl Workspace {
                             .on_click(cx.listener(move |t, _, w, cx| t.open_form(Some(ix), w, cx))),
                     )
                     .child(
+                        icon_button("d-copy", "copy", "Duplicate host", palette().muted)
+                            .on_click(cx.listener(move |t, _, w, cx| t.duplicate_host(ix, w, cx))),
+                    )
+                    .child(
                         icon_button("d-del", "trash", "Delete host", palette().red)
                             .on_click(cx.listener(move |t, _, w, cx| t.ask_delete_host(ix, w, cx))),
                     ),

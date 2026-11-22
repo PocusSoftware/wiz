@@ -6,7 +6,7 @@ use super::*;
 
 #[gpui::test]
 fn only_the_host_is_required(cx: &mut TestAppContext) {
-    let form = cx.new(|cx| HostForm::new(None, Vec::new(), Vec::new(), cx));
+    let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), Vec::new(), cx));
     let err = form.update(cx, |f, cx| f.try_save(cx).err());
     assert_eq!(err.as_deref(), Some("Host is required."));
 
@@ -35,7 +35,7 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
         tags: Vec::new(),
         auth: AuthMethod::Agent,
     };
-    let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
+    let form = cx.new(|cx| HostForm::new(Start::Edit(0, old), Vec::new(), Vec::new(), cx));
     let kept = form.update(cx, HostForm::try_save).unwrap();
     assert_eq!(kept.os.as_deref(), Some("ubuntu"));
 
@@ -61,7 +61,7 @@ fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
         tags: Vec::new(),
         auth: AuthMethod::Agent,
     };
-    let form = cx.new(|cx| HostForm::new(Some((0, old)), Vec::new(), Vec::new(), cx));
+    let form = cx.new(|cx| HostForm::new(Start::Edit(0, old), Vec::new(), Vec::new(), cx));
     assert_eq!(form.update(cx, HostForm::try_save).unwrap().logo, None);
     form.update(cx, |f, _| f.logo = Some("debian"));
     let saved = form.update(cx, HostForm::try_save).unwrap();
@@ -70,7 +70,7 @@ fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn enter_in_logo_search_picks_the_first_match(cx: &mut TestAppContext) {
-    let form = cx.new(|cx| HostForm::new(None, Vec::new(), Vec::new(), cx));
+    let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), Vec::new(), cx));
     form.update(cx, |f, cx| {
         assert_eq!(f.first_logo(cx), Some(None));
         f.logo_search.update(cx, |t, _| t.set_value("rhel"));
@@ -82,7 +82,7 @@ fn enter_in_logo_search_picks_the_first_match(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn tags_are_split_trimmed_and_deduplicated(cx: &mut TestAppContext) {
-    let form = cx.new(|cx| HostForm::new(None, Vec::new(), Vec::new(), cx));
+    let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), Vec::new(), cx));
     form.update(cx, |f, cx| {
         f.mode = Mode::Agent;
         f.host.update(cx, |t, _| t.set_value("example.com"));
@@ -100,7 +100,7 @@ fn existing_folders_are_listed_once() {
 
 #[gpui::test]
 fn picked_folder_is_saved(cx: &mut TestAppContext) {
-    let form = cx.new(|cx| HostForm::new(None, Vec::new(), vec!["Prod".into()], cx));
+    let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), vec!["Prod".into()], cx));
     form.update(cx, |f, cx| {
         f.mode = Mode::Agent;
         f.host.update(cx, |t, _| t.set_value("example.com"));
@@ -114,4 +114,48 @@ fn picked_folder_is_saved(cx: &mut TestAppContext) {
     form.update(cx, |f, cx| f.group.update(cx, |t, _| t.set_value("prod")));
     let host = form.update(cx, HostForm::try_save).unwrap();
     assert_eq!(host.group.as_deref(), Some("Prod"));
+}
+
+#[gpui::test]
+fn copy_starts_as_a_new_host_with_the_same_settings(cx: &mut TestAppContext) {
+    let src = Host {
+        name: "web".into(),
+        host: "example.com".into(),
+        port: 2222,
+        user: "deploy".into(),
+        group: Some("Prod".into()),
+        pinned: true,
+        jump: None,
+        os: Some("ubuntu".into()),
+        logo: Some("debian".into()),
+        tags: vec!["eu".into()],
+        auth: AuthMethod::Agent,
+    };
+    let form = cx.new(|cx| {
+        HostForm::new(
+            Start::Copy(src.clone()),
+            vec![src.clone()],
+            vec!["Prod".into()],
+            cx,
+        )
+    });
+    let err = form.update(cx, |f, cx| f.try_save(cx).err());
+    assert_eq!(
+        err.as_deref(),
+        Some("Another saved host already uses this user, host and port.")
+    );
+    form.update(cx, |f, cx| {
+        f.host.update(cx, |t, _| t.set_value("other.example.com"))
+    });
+    let copy = form.update(cx, HostForm::try_save).unwrap();
+    assert_eq!(form.read_with(cx, |f, _| f.index), None);
+    assert_eq!(copy.name, "web copy");
+    assert_eq!(copy.port, 2222);
+    assert_eq!(copy.user, "deploy");
+    assert_eq!(copy.group.as_deref(), Some("Prod"));
+    assert_eq!(copy.tags, ["eu"]);
+    assert_eq!(copy.logo.as_deref(), Some("debian"));
+    assert_eq!(copy.auth, AuthMethod::Agent);
+    assert!(!copy.pinned);
+    assert_eq!(copy.os, None);
 }
