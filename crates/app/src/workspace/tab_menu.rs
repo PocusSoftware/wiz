@@ -384,10 +384,10 @@ impl Workspace {
         };
         let items = [
             open("hm-shell", "terminal", "New terminal", || Open::Shell),
+            open("hm-files", "folder", "Files (SFTP)", || Open::Sftp),
             open("hm-docker", "container", "Docker containers", || {
                 Open::Docker
             }),
-            open("hm-files", "folder", "Files (SFTP)", || Open::Sftp),
             div()
                 .my_1()
                 .h(px(1.))

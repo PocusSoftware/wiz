@@ -134,14 +134,14 @@ impl Workspace {
                             cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Shell, w, cx)),
                         ),
                     )
+                    .child(action("d-files", "folder", "Files (SFTP)", false).on_click(
+                        cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Sftp, w, cx)),
+                    ))
                     .child(
                         action("d-docker", "container", "Docker containers", false).on_click(
                             cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Docker, w, cx)),
                         ),
-                    )
-                    .child(action("d-files", "folder", "Files (SFTP)", false).on_click(
-                        cx.listener(move |t, _, w, cx| t.open_host(ix, Open::Sftp, w, cx)),
-                    )),
+                    ),
             )
             .when(!open.is_empty(), |d| {
                 d.child(heading("Open now"))
