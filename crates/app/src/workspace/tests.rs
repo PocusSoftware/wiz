@@ -1274,3 +1274,19 @@ fn host_list_menus(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none() && r.form.is_some()));
 }
+
+#[gpui::test]
+fn zoom_changes_the_terminal_font_size(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (_root, cx) = open_root(cx);
+    let size = || crate::prefs::get().terminal_font_size;
+    cx.dispatch_action(ZoomIn);
+    assert_eq!(size(), Some(14.));
+    cx.dispatch_action(ZoomOut);
+    cx.dispatch_action(ZoomOut);
+    assert_eq!(size(), Some(12.));
+    cx.dispatch_action(ResetZoom);
+    assert_eq!(size(), None);
+    assert_eq!(zoomed(32., 1.), 32.);
+    assert_eq!(zoomed(8., -1.), 8.);
+}

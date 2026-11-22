@@ -14,7 +14,7 @@ use objc2_app_kit::{
 use objc2_foundation::NSArray;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-use crate::workspace::{NextTab, PrevTab, Quit, SelectTab, Workspace};
+use crate::workspace::{NextTab, PrevTab, Quit, ResetZoom, SelectTab, Workspace, ZoomIn, ZoomOut};
 
 /// Large transfers between this Mac and a server can run through rsync.
 pub const RSYNC: bool = true;
@@ -44,6 +44,10 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
         KeyBinding::new("cmd-q", Quit, None),
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
+        KeyBinding::new("cmd-=", ZoomIn, None),
+        KeyBinding::new("cmd-+", ZoomIn, None),
+        KeyBinding::new("cmd--", ZoomOut, None),
+        KeyBinding::new("cmd-0", ResetZoom, None),
     ];
     keys.extend(
         DIGITS
@@ -56,7 +60,10 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
 
 /// Whether `keys` is one of `fixed_bindings`.
 pub fn is_fixed(keys: &str) -> bool {
-    matches!(keys, "cmd-q" | "ctrl-tab" | "ctrl-shift-tab") || DIGITS.contains(&keys)
+    matches!(
+        keys,
+        "cmd-q" | "ctrl-tab" | "ctrl-shift-tab" | "cmd-=" | "cmd-+" | "cmd--" | "cmd-0"
+    ) || DIGITS.contains(&keys)
 }
 
 /// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`).

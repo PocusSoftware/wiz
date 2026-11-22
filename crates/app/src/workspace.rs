@@ -38,7 +38,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
 
 use crate::dialogs::code::{CodeDialog, CodeEvent};
-use crate::dialogs::host_form::{FormEvent, HostForm};
+use crate::dialogs::host_form::{FormEvent, HostForm, Start};
 use crate::dialogs::quick_connect::{QuickConnect as QuickDialog, QuickEvent};
 use crate::dialogs::snippets::SnippetPicker;
 use crate::dialogs::unlock::{UnlockDialog, UnlockEvent, UnlockMode};
@@ -70,7 +70,10 @@ actions!(
         Snippets,
         FocusTabs,
         NextPane,
-        PrevPane
+        PrevPane,
+        ZoomIn,
+        ZoomOut,
+        ResetZoom
     ]
 );
 
@@ -553,6 +556,18 @@ impl Workspace {
         }
         self.settings_changed(cx);
     }
+
+    fn zoom(&mut self, step: Option<f32>, cx: &mut Context<Self>) {
+        let size = step.map(|d| zoomed(crate::prefs::get().terminal_font_size(), d));
+        if let Err(e) = crate::prefs::update(|s| s.terminal_font_size = size) {
+            self.set_status(format!("Could not save settings: {e}"), true);
+        }
+        self.settings_changed(cx);
+    }
+}
+
+fn zoomed(size: f32, step: f32) -> f32 {
+    (size.round() + step).clamp(8.0, 32.0)
 }
 
 impl Focusable for Workspace {
@@ -679,6 +694,9 @@ impl Render for Workspace {
             .on_action(cx.listener(|t, _: &FocusPrev, w, cx| t.move_focus(true, w, cx)))
             .on_action(cx.listener(|t, _: &NextPane, w, cx| t.cycle_pane(false, w, cx)))
             .on_action(cx.listener(|t, _: &PrevPane, w, cx| t.cycle_pane(true, w, cx)))
+            .on_action(cx.listener(|t, _: &ZoomIn, _, cx| t.zoom(Some(1.), cx)))
+            .on_action(cx.listener(|t, _: &ZoomOut, _, cx| t.zoom(Some(-1.), cx)))
+            .on_action(cx.listener(|t, _: &ResetZoom, _, cx| t.zoom(None, cx)))
             .size_full()
             .flex()
             .font_family(ui())

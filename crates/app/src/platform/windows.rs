@@ -23,7 +23,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_SYSCOMMAND,
 };
 
-use crate::workspace::{NextTab, PrevTab, SelectTab, Workspace};
+use crate::workspace::{NextTab, PrevTab, ResetZoom, SelectTab, Workspace, ZoomIn, ZoomOut};
 
 /// rsync transfers need the macOS bridge; Windows uses SFTP only.
 pub const RSYNC: bool = false;
@@ -54,6 +54,10 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
     let mut keys = vec![
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
+        KeyBinding::new("ctrl-=", ZoomIn, None),
+        KeyBinding::new("ctrl-+", ZoomIn, None),
+        KeyBinding::new("ctrl--", ZoomOut, None),
+        KeyBinding::new("ctrl-0", ResetZoom, None),
     ];
     keys.extend(
         DIGITS
@@ -66,7 +70,10 @@ pub fn fixed_bindings() -> Vec<KeyBinding> {
 
 /// Whether `keys` is one of `fixed_bindings`.
 pub fn is_fixed(keys: &str) -> bool {
-    matches!(keys, "ctrl-tab" | "ctrl-shift-tab") || DIGITS.contains(&keys)
+    matches!(
+        keys,
+        "ctrl-tab" | "ctrl-shift-tab" | "ctrl-=" | "ctrl-+" | "ctrl--" | "ctrl-0"
+    ) || DIGITS.contains(&keys)
 }
 
 /// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`). Tabs switch
