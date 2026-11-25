@@ -5,13 +5,12 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use gpui::{
-    App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
-    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowAppearance,
-    WindowControlArea,
+    AnyElement, App, Div, InteractiveElement, Modifiers, MouseButton, MouseDownEvent, Stateful,
+    StatefulInteractiveElement, TitlebarOptions, Window, WindowAppearance, WindowControlArea,
+    WindowOptions,
 };
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
@@ -23,115 +22,27 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_SYSCOMMAND,
 };
 
-use crate::workspace::{NextTab, PrevTab, ResetZoom, SelectTab, Workspace, ZoomIn, ZoomOut};
+pub use super::ctrl::{
+    MODIFIER_HINT, ZOOM_KEYS, default_shortcut, fixed_bindings, font_exists, format_keys, is_fixed,
+    link_click, on_window_open, terminal_chord, view_shortcut,
+};
 
 /// rsync transfers need the macOS bridge; Windows uses SFTP only.
 pub const RSYNC: bool = false;
 
-/// Modifiers a shortcut must hold, for settings text.
-pub const MODIFIER_HINT: &str = "Ctrl or Alt";
-
 /// How gpui spells keystrokes here.
 pub const OS: gpui::OperatingSystem = gpui::OperatingSystem::Windows;
 
+/// How `format_keys` names the logo key.
+pub const LOGO_KEY: &str = "Win+";
+
 /// How quitting is done, for settings text.
 pub const QUIT_KEYS: &str = "Alt+F4";
-
-pub const ZOOM_KEYS: &str = "Ctrl+= and Ctrl+- change it, Ctrl+0 resets it.";
 
 /// Placeholder of the agent socket setting: what an empty one uses.
 pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
 pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent; 1Password uses that pipe too when its agent is on.";
 pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
-
-/// Ctrl+1 to Ctrl+9, which pick a tab. Literals because gpui only builds bindings from `&'static str`.
-const DIGITS: [&str; 9] = [
-    "ctrl-1", "ctrl-2", "ctrl-3", "ctrl-4", "ctrl-5", "ctrl-6", "ctrl-7", "ctrl-8", "ctrl-9",
-];
-
-/// Plain Ctrl+D, Ctrl+W and Ctrl+K mean something to the shell, so app shortcuts add Shift,
-/// like Windows Terminal. Ctrl+Tab and Ctrl+1 to Ctrl+9 switch tabs, so Ctrl+2 (NUL) and
-/// Ctrl+6 no longer reach the shell. Alt+F4 quits through the window's close request.
-pub fn fixed_bindings() -> Vec<KeyBinding> {
-    let mut keys = vec![
-        KeyBinding::new("ctrl-tab", NextTab, None),
-        KeyBinding::new("ctrl-shift-tab", PrevTab, None),
-        KeyBinding::new("ctrl-=", ZoomIn, None),
-        KeyBinding::new("ctrl-+", ZoomIn, None),
-        KeyBinding::new("ctrl--", ZoomOut, None),
-        KeyBinding::new("ctrl-0", ResetZoom, None),
-    ];
-    keys.extend(
-        DIGITS
-            .into_iter()
-            .enumerate()
-            .map(|(n, k)| KeyBinding::new(k, SelectTab(n), None)),
-    );
-    keys
-}
-
-/// Whether `keys` is one of `fixed_bindings`.
-pub fn is_fixed(keys: &str) -> bool {
-    matches!(
-        keys,
-        "ctrl-tab" | "ctrl-shift-tab" | "ctrl-=" | "ctrl-+" | "ctrl--" | "ctrl-0"
-    ) || DIGITS.contains(&keys)
-}
-
-/// The keystrokes a command starts with (ids are in `shortcuts::COMMANDS`). Tabs switch
-/// with the fixed Ctrl+Tab, so they have none of their own.
-pub fn default_shortcut(id: &str) -> Option<&'static str> {
-    Some(match id {
-        "split" => "ctrl-shift-d",
-        "split_menu" => "ctrl-shift-s",
-        "tab_menu" => "ctrl-shift-m",
-        // Like Windows Terminal.
-        "next_pane" => "alt-right",
-        "prev_pane" => "alt-left",
-        "focus_tabs" => "ctrl-shift-l",
-        "quick_connect" => "ctrl-shift-k",
-        "snippets" => "ctrl-shift-j",
-        "new_host" => "ctrl-shift-n",
-        "settings" => "ctrl-,",
-        "close_tab" => "ctrl-shift-w",
-        _ => return None,
-    })
-}
-
-/// Keystrokes written the Windows way: "ctrl-shift-d" is "Ctrl+Shift+D".
-pub fn format_keys(keys: &str) -> String {
-    let Ok(k) = gpui::Keystroke::parse_with_os(keys, OS) else {
-        return keys.to_string();
-    };
-    let m = k.modifiers;
-    let mut out = String::new();
-    for (held, name) in [
-        (m.control, "Ctrl+"),
-        (m.alt, "Alt+"),
-        (m.shift, "Shift+"),
-        (m.platform, "Win+"),
-    ] {
-        if held {
-            out.push_str(name);
-        }
-    }
-    let mut chars = k.key.chars();
-    out.extend(chars.next().map(|c| c.to_ascii_uppercase()));
-    out.push_str(chars.as_str());
-    out
-}
-
-/// Label of a shortcut inside a view (files, logs), like "Ctrl+R" or "Ctrl+Shift+N".
-pub fn view_shortcut(shift: bool, key: &str) -> String {
-    format!("Ctrl+{}{key}", if shift { "Shift+" } else { "" })
-}
-
-/// Terminal shortcuts (copy, paste, find, ...) are Ctrl+Shift+key, so plain Ctrl+key still
-/// reaches the shell (except paste, `terminal_paste`, and tab switching). `Some(alt)` when the chord is held, Alt picking the variant
-/// (previous match, type password).
-pub fn terminal_chord(m: Modifiers) -> Option<bool> {
-    (m.control && m.shift).then_some(m.alt)
-}
 
 /// Ctrl+V and Shift+Insert paste in the terminal, like Windows Terminal, even though plain
 /// Ctrl otherwise belongs to the shell. AltGr arrives as Ctrl+Alt, so Alt rules it out.
@@ -155,43 +66,22 @@ pub fn alt_gr(m: Modifiers, key: &str, key_char: Option<&str>) -> bool {
     m.control && m.alt && key_char.is_some_and(|c| c != key)
 }
 
-/// Ctrl-click opens a link in the terminal.
-pub fn link_click(m: Modifiers) -> bool {
-    m.control
-}
-
-/// Whether a font family is installed or bundled. DirectWrite gives every unknown family
-/// its own copy of the fallback font, so comparing resolved fonts can't tell; compare the
-/// names instead (case-insensitive, like DirectWrite).
-pub fn font_exists(ts: &TextSystem) -> impl Fn(&str) -> bool {
-    let names: HashSet<String> = ts
-        .all_font_names()
-        .into_iter()
-        .map(|n| n.to_lowercase())
-        .collect();
-    move |name| names.contains(&name.to_lowercase())
-}
-
 pub fn on_launch() {}
 
-pub fn titlebar() -> TitlebarOptions {
-    TitlebarOptions {
-        title: Some("Wiz".into()),
-        appears_transparent: true,
-        traffic_light_position: None,
+pub fn window_options() -> WindowOptions {
+    WindowOptions {
+        titlebar: Some(TitlebarOptions {
+            title: Some("Wiz".into()),
+            appears_transparent: true,
+            traffic_light_position: None,
+        }),
+        ..Default::default()
     }
 }
 
-/// Alt+F4 and the taskbar close the window directly; route them through the same check as
-/// Quit, so open sessions can block it.
-pub fn on_window_open(window: &mut Window, workspace: &Entity<Workspace>, cx: &mut App) {
-    let workspace = workspace.downgrade();
-    window.on_window_should_close(cx, move |window, cx| {
-        workspace
-            .update(cx, |w, cx| w.request_quit(window, cx))
-            .ok();
-        false
-    });
+/// Windows draws its own resize borders.
+pub fn resize_handles(_: &Window) -> Vec<AnyElement> {
+    Vec::new()
 }
 
 /// The title bar area lets Windows offer its window menu and snapping. Presses are handled

@@ -16,7 +16,7 @@ fn settings_defaults_and_roundtrip() {
         ),
         (2, 30, 500)
     );
-    assert!(d.secret_file_patterns().contains(&".env".to_string()));
+    assert!(d.secret_file_patterns().iter().any(|p| p == ".env"));
     assert_eq!(d.window_controls(), WindowControls::Right);
     assert_eq!(d.accent_color(), "#f05a29");
     assert!(!d.oled_black());

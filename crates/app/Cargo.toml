@@ -30,6 +30,10 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWind
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSArray", "NSString"] }
 raw-window-handle = "0.6"
 
+# GPUI's Linux backends are off by default.
+[target.'cfg(target_os = "linux")'.dependencies]
+gpui_platform = { package = "gpui-fast-platform", version = "=0.1.13", features = ["wayland", "x11"] }
+
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

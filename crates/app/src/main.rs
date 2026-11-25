@@ -107,8 +107,7 @@ fn main() {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(platform::titlebar()),
-                    ..Default::default()
+                    ..platform::window_options()
                 },
                 |window, cx| {
                     let workspace = cx.new(|cx| Workspace::new(window, cx));

@@ -3,9 +3,9 @@
 use std::path::Path;
 
 use gpui::{
-    App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton, MouseDownEvent,
-    Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window, WindowControlArea,
-    point, px,
+    AnyElement, App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton,
+    MouseDownEvent, Stateful, StatefulInteractiveElement, TextSystem, TitlebarOptions, Window,
+    WindowControlArea, WindowOptions, point, px,
 };
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
@@ -164,13 +164,21 @@ pub fn on_launch() {
     }
 }
 
-pub fn titlebar() -> TitlebarOptions {
-    TitlebarOptions {
-        title: Some("Wiz".into()),
-        appears_transparent: true,
-        // Native buttons are parked off-screen; the title bar draws its own.
-        traffic_light_position: Some(point(px(-100.), px(-100.))),
+pub fn window_options() -> WindowOptions {
+    WindowOptions {
+        titlebar: Some(TitlebarOptions {
+            title: Some("Wiz".into()),
+            appears_transparent: true,
+            // Native buttons are parked off-screen; the title bar draws its own.
+            traffic_light_position: Some(point(px(-100.), px(-100.))),
+        }),
+        ..Default::default()
     }
+}
+
+/// macOS resizes the window from its own borders.
+pub fn resize_handles(_: &Window) -> Vec<AnyElement> {
+    Vec::new()
 }
 
 /// Closing the window already goes through the title bar's own button and Quit.

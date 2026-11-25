@@ -1,0 +1,37 @@
+# Builds the Linux release of Wiz (x86_64) and runs the tests on Linux. Started by hand
+# (Actions tab or `gh workflow run linux.yml`), so it only uses minutes when wanted.
+# Built on Ubuntu: its glibc is older than Arch's, so the binary runs on both.
+name: Linux build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GPUI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libxcb1-dev libx11-xcb-dev libx11-dev libfontconfig-dev libfreetype-dev libvulkan-dev libzstd-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Tests run in release too, so dependencies are compiled once for both steps.
+      - name: Test
+        run: cargo test --workspace --release
+      - name: Build release
+        run: cargo build --release -p ssh-app
+      - name: Package
+        run: |
+          mkdir -p dist/wiz
+          cp target/release/wiz dist/wiz/
+          cp crates/app/assets/linux/software.pocus.wiz.desktop dist/wiz/
+          cp crates/app/assets/brand/icon-512.png dist/wiz/software.pocus.wiz.png
+          cp crates/app/assets/fonts/*.txt dist/wiz/
+          tar -czf dist/wiz-linux-x86_64.tar.gz -C dist wiz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiz-linux-x86_64
+          path: dist/wiz-linux-x86_64.tar.gz
+          if-no-files-found: error

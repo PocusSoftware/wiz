@@ -1,6 +1,6 @@
 # Wiz
 
-A fast SSH client for macOS and Windows in Rust (terminal, SFTP, Docker). Frontend: GPUI. Backend in `crates/core`.
+A fast SSH client for macOS, Windows and Linux in Rust (terminal, SFTP, Docker). Frontend: GPUI. Backend in `crates/core`.
 
 ## Status
 - Done: password, key (ed25519/RSA, encrypted), ssh-agent and keyboard-interactive auth with one-time codes, jump hosts, Keychain secrets,
@@ -21,7 +21,7 @@ Server without SFTP, FTP on :21 instead: `tester`/`hunter2` on :2224.
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
 
 ## Settings
-Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on Windows). Everything is saved as you change it to `settings.toml` in the data folder (see Data locations; all keys optional):
+Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on Windows and Linux). Everything is saved as you change it to `settings.toml` in the data folder (see Data locations; all keys optional):
 
 | Area | Keys |
 |---|---|
@@ -79,11 +79,26 @@ On first contact Wiz asks whether to trust the host's key, and asks again with b
 - Big SFTP transfers (500+ files or 1 GB+) show a hint with a ready-made `rsync` command. rsync must be installed on the server too.
 - Directory symlinks are skipped by transfers so link loops cannot run forever. File symlinks are followed.
 
-## macOS and Windows
-macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
+## macOS, Windows and Linux
+macOS is the main platform. Everything that differs lives in `crates/app/src/platform/` (`macos.rs`, `windows.rs`, `linux.rs`, with what Windows and Linux share in `ctrl.rs`) and behind `cfg(target_os = "macos")` in the core's secret store. On Windows:
 - Shortcuts use Ctrl+Shift (Ctrl+Shift+D split, Ctrl+Shift+S split with another server, Ctrl+Shift+M tab menu, Ctrl+Shift+K quick connect, Ctrl+Shift+J snippets, Ctrl+Shift+W close, Ctrl+Shift+L tab bar, Alt+Left and Alt+Right split panes, Ctrl+, settings), because plain Ctrl+D/W/K belong to the shell. In the terminal, copy, paste, select all and find are Ctrl+Shift+C/V/A/F; Ctrl+Shift+Alt+P types the saved password. Ctrl-click opens links. Alt+F4 quits (with the same open-session check).
 - Missing on purpose: the Keychain (passwords always live in the encrypted secrets file), rsync transfers and the rsync hint (files go over SFTP), and the installed-editor picks (the editor setting takes a program name or path; empty opens Notepad, never the file's default app).
 - Build on Windows with `cargo build --release -p ssh-app` (gives `target\release\wiz.exe`), or run the "Windows build" workflow (`gh workflow run windows.yml`), which tests on Windows and uploads `Wiz.exe` as an artifact. Release builds compile GPUI's shaders with `fxc.exe` from the Windows SDK. From a Mac, `cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu` checks the Windows side (needs `brew install mingw-w64` and `rustup target add x86_64-pc-windows-gnu`).
+
+
+On Linux (Wayland or X11):
+- Shortcuts are the Windows ones (Ctrl+Shift+D split, Ctrl+Shift+C/V copy and paste in the terminal, and so on). Shift+Insert also pastes; plain Ctrl+V stays with the shell. Alt+F4 or the window manager's close key quits, with the same open-session check.
+- Wiz draws its own title bar and resize borders. Drag the empty part of the tab bar to move the window, double-click it to maximize.
+- Missing on purpose, like on Windows: the Keychain (passwords live in the encrypted secrets file) and rsync transfers. The editor setting picks an installed editor found on `PATH` (VS Code, Zed, Kate, GNOME Text Editor, ...) or takes a program; empty uses the first installed one, never `xdg-open`.
+- Needs a Vulkan driver (`vulkan-radeon`, `vulkan-intel` or `nvidia-utils` on Arch), `libxkbcommon`, `wayland` or `libxcb`, and `fontconfig`.
+- Run the "Linux build" workflow (`gh workflow run linux.yml`), which tests on Linux and uploads `wiz-linux-x86_64.tar.gz` (the `wiz` binary, a `.desktop` file and the icon). To install for one user:
+  ```sh
+  tar -xzf wiz-linux-x86_64.tar.gz && cd wiz
+  install -Dm755 wiz ~/.local/bin/wiz
+  install -Dm644 software.pocus.wiz.desktop ~/.local/share/applications/software.pocus.wiz.desktop
+  install -Dm644 software.pocus.wiz.png ~/.local/share/icons/hicolor/512x512/apps/software.pocus.wiz.png
+  ```
+- Building on Linux needs the development packages of the above (Arch: `base-devel vulkan-icd-loader libxkbcommon wayland libxcb fontconfig`).
 
 ## Building
 - `cargo build -p ssh-app` for development (incremental, a couple of seconds).
@@ -92,7 +107,7 @@ macOS is the main platform. Everything that differs lives in `crates/app/src/pla
 - SSH crypto uses `ring` (russh's default `aws-lc` compiles a large C library).
 
 ## Data locations
-Hosts, snippets, known hosts and settings live in `~/Library/Application Support/software.pocus.wiz/` on macOS and `%APPDATA%\software.pocus.wiz\` on Windows. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
+Hosts, snippets, known hosts and settings live in `~/Library/Application Support/software.pocus.wiz/` on macOS, `%APPDATA%\software.pocus.wiz\` on Windows and `~/.config/software.pocus.wiz/` on Linux. Passwords and key passphrases are in the Keychain, or in `secrets.toml` when the encrypted file store is picked (always on Windows and Linux). Set `SSHC_CONFIG_DIR` to use a different folder (handy for testing without touching real data). If `hosts.toml` can't be parsed, a copy is kept as `hosts.toml.bak` before anything is overwritten.
 
 ## Versioning
 The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scripts/version.sh` prints it, `scripts/version.sh 0.2.0` sets it; then commit and tag `v0.2.0`. The app shows the version and build commit at the bottom of Settings, and `scripts/bundle.sh` writes it into `Info.plist` (build number = commit count).
@@ -104,4 +119,4 @@ The version lives only in `[workspace.package]` in `Cargo.toml` (semver). `scrip
 Masks hostnames, usernames, IPv4 and IPv6 addresses, ports (`host:2222`, `ssh -p 2222`, `Port 22`, `PORT=3000`, Docker port mappings), and the values in `PASSWORD=...` / `token: ...` style lines, in the hosts page, terminal output, container logs, SFTP paths, tab titles, messages and the trust dialog. File lists also leave out secret files (`.env`, `*.pem`, private keys, ... configurable patterns). Masking keeps text length, so layout and selections do not shift. Host, user and port fields in the add/edit form show bullets until focused. Copying still copies the real text.
 
 ## License
-Wiz is MIT licensed. The bundled fonts are not: IBM Plex Sans and JetBrains Mono are under the SIL Open Font License 1.1 (texts in `crates/app/assets/fonts/`). `scripts/bundle.sh` copies both texts into `Wiz.app/Contents/Resources`; a Windows build ships them next to `Wiz.exe`.
+Wiz is MIT licensed. The bundled fonts are not: IBM Plex Sans and JetBrains Mono are under the SIL Open Font License 1.1 (texts in `crates/app/assets/fonts/`). `scripts/bundle.sh` copies both texts into `Wiz.app/Contents/Resources`; a Windows build ships them next to `Wiz.exe`, a Linux build next to `wiz`.

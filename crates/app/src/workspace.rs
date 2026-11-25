@@ -790,6 +790,7 @@ impl Render for Workspace {
             .child(Self::window_controls())
             // Menus open next to the window buttons, so they go above them.
             .children(tab_menu)
+            .children(crate::platform::resize_handles(window))
     }
 }
 

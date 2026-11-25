@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Wiz
+Comment=SSH client with terminal, SFTP and Docker
+Exec=wiz
+Icon=software.pocus.wiz
+Terminal=false
+Categories=Network;RemoteAccess;
+StartupWMClass=software.pocus.wiz
