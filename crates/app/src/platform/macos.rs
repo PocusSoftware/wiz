@@ -32,7 +32,9 @@ pub const ZOOM_KEYS: &str = "⌘= and ⌘- change it, ⌘0 resets it.";
 
 /// Placeholder of the agent socket setting: what an empty one uses.
 pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
-pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add). For 1Password: ~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock";
+pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add).";
+pub const ONEPASSWORD_AGENT: Option<&str> =
+    Some("~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock");
 pub const EDITOR_HINT: &str = "App that opens files with Enter. Pick one below or type any app name. Empty uses the default text editor.";
 
 /// Cmd+1 to Cmd+9, which pick a tab. Literals because gpui only builds bindings from `&'static str`.

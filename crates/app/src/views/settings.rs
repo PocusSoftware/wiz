@@ -87,6 +87,7 @@ pub struct SettingsView {
     patterns: Entity<TextInput>,
     editor: Entity<TextInput>,
     agent_socket: Entity<TextInput>,
+    onepassword: Option<&'static str>,
     /// Filters the list on the shortcuts page.
     shortcut_search: Entity<TextInput>,
     picker: accent::Picker,
@@ -130,6 +131,8 @@ impl SettingsView {
             patterns: make(".env, *.pem", cx),
             editor: make("System default", cx),
             agent_socket: make(crate::platform::AGENT_DEFAULT, cx),
+            onepassword: crate::platform::ONEPASSWORD_AGENT
+                .filter(|p| ssh_core::config::expand_home(p).exists()),
             shortcut_search: make("Search shortcuts", cx),
             accent: make("#f05a29", cx),
             picker: Default::default(),
@@ -503,7 +506,28 @@ impl SettingsView {
                 controls,
             ));
         }
-        d.child(self.text("SSH agent", crate::platform::AGENT_HINT, &self.agent_socket))
+        let socket = self.agent_socket.read(cx).value().trim();
+        let offer = self.onepassword.filter(|p| *p != socket);
+        d.child(Self::row(
+            "SSH agent",
+            crate::platform::AGENT_HINT,
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(div().w(px(320.)).child(self.agent_socket.clone()))
+                .when_some(offer, |d, p| {
+                    d.child(
+                        button("s-1password", "Use 1Password")
+                            .on_click(cx.listener(move |t, _, _, cx| t.use_agent(p, cx))),
+                    )
+                }),
+        ))
+    }
+
+    fn use_agent(&mut self, socket: &str, cx: &mut Context<Self>) {
+        self.agent_socket.update(cx, |i, _| i.set_value(socket));
+        self.sync_inputs(cx);
     }
 
     fn text(&self, label: &str, desc: &str, input: &Entity<TextInput>) -> gpui::Div {

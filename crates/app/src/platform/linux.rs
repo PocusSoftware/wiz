@@ -26,7 +26,8 @@ pub const LOGO_KEY: &str = "Super+";
 pub const QUIT_KEYS: &str = "Alt+F4";
 
 pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
-pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add). For 1Password: ~/.1password/agent.sock";
+pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add).";
+pub const ONEPASSWORD_AGENT: Option<&str> = Some("~/.1password/agent.sock");
 pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type a program name or path. Empty uses the first installed one below.";
 
 /// Ctrl+V is the shell's literal-next, so only Shift+Insert pastes outside the chord.

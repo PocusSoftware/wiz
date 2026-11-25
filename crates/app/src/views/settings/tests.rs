@@ -71,3 +71,42 @@ fn search_matches_are_found_case_insensitively() {
     assert_eq!(at("Next pane", ""), None);
     assert_eq!(at("Next pane", "tab"), None);
 }
+
+#[gpui::test]
+fn offers_the_1password_agent_once_its_socket_exists(cx: &mut TestAppContext) {
+    let Some(socket) = crate::platform::ONEPASSWORD_AGENT else {
+        return;
+    };
+    let _g = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = tempfile::tempdir().unwrap();
+    let old_home = std::env::var_os("HOME");
+    // SAFETY: GLOBALS is held, no other test reads the environment meanwhile.
+    unsafe {
+        std::env::set_var("SSHC_CONFIG_DIR", dir.path());
+        std::env::set_var("HOME", dir.path());
+    }
+    prefs::update(|s| s.agent_socket = None).unwrap();
+
+    let view = cx.new(SettingsView::new);
+    view.read_with(cx, |v, _| assert_eq!(v.onepassword, None));
+
+    let path = ssh_core::config::expand_home(socket);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "").unwrap();
+    let view = cx.new(SettingsView::new);
+    view.update(cx, |v, cx| {
+        assert_eq!(v.onepassword, Some(socket));
+        v.use_agent(socket, cx);
+    });
+    assert_eq!(prefs::get().agent_socket(), socket);
+
+    // SAFETY: as above.
+    unsafe {
+        match old_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+}
