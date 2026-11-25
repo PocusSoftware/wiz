@@ -52,10 +52,10 @@ fn clashes_are_found_and_the_command_itself_is_not_one() {
 
 #[test]
 fn only_single_normalized_keystrokes_are_valid() {
-    assert!(is_valid("cmd-shift-d"));
-    assert!(!is_valid("cmd-k cmd-d"));
+    assert!(is_valid("ctrl-shift-d"));
+    assert!(!is_valid("ctrl-k ctrl-d"));
     assert!(!is_valid(""));
-    assert!(!is_valid("shift-cmd-d"));
+    assert!(!is_valid("shift-ctrl-d"));
 }
 
 #[test]

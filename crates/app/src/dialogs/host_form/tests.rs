@@ -1,11 +1,25 @@
 //! Tests for the host form: what the fields turn into when left empty.
 
+use std::sync::{MutexGuard, PoisonError};
+
 use gpui::TestAppContext;
 
 use super::*;
 
+fn unlocked() -> (MutexGuard<'static, ()>, tempfile::TempDir) {
+    let guard = crate::testing::GLOBALS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let dir = tempfile::tempdir().unwrap();
+    // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
+    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    secrets::unlock("masterpass1").unwrap();
+    (guard, dir)
+}
+
 #[gpui::test]
 fn only_the_host_is_required(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), Vec::new(), cx));
     let err = form.update(cx, |f, cx| f.try_save(cx).err());
     assert_eq!(err.as_deref(), Some("Host is required."));
@@ -22,6 +36,7 @@ fn only_the_host_is_required(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let old = Host {
         name: "web".into(),
         host: "example.com".into(),
@@ -48,6 +63,7 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let old = Host {
         name: "web".into(),
         host: "example.com".into(),
@@ -82,6 +98,7 @@ fn enter_in_logo_search_picks_the_first_match(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn tags_are_split_trimmed_and_deduplicated(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), Vec::new(), cx));
     form.update(cx, |f, cx| {
         f.mode = Mode::Agent;
@@ -100,6 +117,7 @@ fn existing_folders_are_listed_once() {
 
 #[gpui::test]
 fn picked_folder_is_saved(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let form = cx.new(|cx| HostForm::new(Start::New, Vec::new(), vec!["Prod".into()], cx));
     form.update(cx, |f, cx| {
         f.mode = Mode::Agent;
@@ -118,6 +136,7 @@ fn picked_folder_is_saved(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn copy_starts_as_a_new_host_with_the_same_settings(cx: &mut TestAppContext) {
+    let _g = unlocked();
     let src = Host {
         name: "web".into(),
         host: "example.com".into(),

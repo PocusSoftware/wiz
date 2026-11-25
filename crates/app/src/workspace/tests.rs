@@ -1013,6 +1013,7 @@ fn login_question_is_asked_and_answered(cx: &mut TestAppContext) {
 #[gpui::test]
 fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext) {
     let _g = setup();
+    secrets::unlock("masterpass1").unwrap();
     let (root, cx) = open_root(cx);
     let bastion = test_host("jumper");
     let inner = Host {
@@ -1249,6 +1250,7 @@ fn hosts_page_click_picks_wide_and_opens_narrow(cx: &mut TestAppContext) {
 #[gpui::test]
 fn host_list_menus(cx: &mut TestAppContext) {
     let _g = setup();
+    secrets::unlock("masterpass1").unwrap();
     let (root, cx) = open_root(cx);
     root.update(cx, |r, cx| {
         r.cfg.hosts = vec![named("a", "a", None, false)];
