@@ -8,7 +8,7 @@ use ssh_core::os::{LOGOS, Logo, logo};
 
 use super::HostForm;
 use crate::theme::*;
-use crate::widgets::{icon, keyboard, label};
+use crate::widgets::{icon, keyboard, label, surface};
 
 impl HostForm {
     /// A button showing the current choice, opening the list of every logo.
@@ -125,11 +125,7 @@ impl HostForm {
             .w(px(240.))
             .flex()
             .flex_col()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
+            .map(surface)
             .occlude()
             .on_mouse_down_out(cx.listener(|t, _, w, cx| t.close_logos(None, w, cx)))
             .child(div().p_1().child(self.logo_search.clone()))

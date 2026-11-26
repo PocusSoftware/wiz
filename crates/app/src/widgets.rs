@@ -115,6 +115,31 @@ pub fn icon_button(
         .child(icon(name, 13., color))
 }
 
+pub fn surface<E: Styled>(el: E) -> E {
+    el.rounded(px(3.))
+        .bg(c(palette().elevated))
+        .border_1()
+        .border_color(c(palette().border))
+        .shadow_lg()
+}
+
+pub fn dialog<E: Styled>(el: E, width: f32) -> E {
+    surface(el.w(px(width)).p_3().flex().flex_col().gap_2())
+}
+
+pub fn dialog_header(title: impl IntoElement, close: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .child(div().text_sm().child(title))
+        .child(close)
+}
+
+pub fn close_button(id: impl Into<ElementId>, tooltip: &'static str) -> Stateful<Div> {
+    icon_button(id, "x", tooltip, palette().muted).tab_index(1)
+}
+
 fn base(id: impl Into<ElementId>, text: &str, bg: u32, fg: u32, hover: u32) -> Stateful<Div> {
     keyboard(div().id(id))
         .px_3()

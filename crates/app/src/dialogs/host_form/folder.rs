@@ -7,7 +7,7 @@ use gpui::{
 use super::HostForm;
 use crate::privacy;
 use crate::theme::*;
-use crate::widgets::{icon, icon_button, label};
+use crate::widgets::{icon, icon_button, label, surface};
 
 /// Folder names sorted and without twins that differ only in case.
 pub(super) fn folder_names(mut names: Vec<String>) -> Vec<String> {
@@ -77,11 +77,7 @@ impl HostForm {
             .w(px(200.))
             .flex()
             .flex_col()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
+            .map(surface)
             .occlude()
             .on_mouse_down_out(cx.listener(|t, _, _, cx| t.close_folders(None, cx)))
             .child(

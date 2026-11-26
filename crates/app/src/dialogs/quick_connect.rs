@@ -3,7 +3,7 @@
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    Render, SharedString, Window, div, prelude::*, px,
+    Render, SharedString, Window, div, prelude::*,
 };
 use ssh_core::config::{AuthMethod, Host, parse_target};
 use ssh_core::secrets::Secret;
@@ -11,7 +11,9 @@ use ssh_core::session::Credentials;
 
 use crate::theme::*;
 use crate::widgets::input::{Hide, TextInput};
-use crate::widgets::{button, checkbox, icon_button, label, primary_button};
+use crate::widgets::{
+    button, checkbox, close_button, dialog, dialog_header, label, primary_button,
+};
 
 pub enum QuickEvent {
     Connect {
@@ -179,28 +181,12 @@ impl Render for QuickConnect {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(380.))
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().child("Quick connect"))
-                    .child(
-                        icon_button("qc-close", "x", "Close (Esc)", palette().muted)
-                            .tab_index(1)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(QuickEvent::Cancelled))),
-                    ),
-            )
+            .map(|d| dialog(d, 380.))
+            .child(dialog_header(
+                "Quick connect",
+                close_button("qc-close", "Close (Esc)")
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(QuickEvent::Cancelled))),
+            ))
             .child(field("Target", &self.target))
             .child(
                 div()

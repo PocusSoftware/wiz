@@ -3,13 +3,13 @@
 
 use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Render,
-    SharedString, Window, div, prelude::*, px,
+    SharedString, Window, div, prelude::*,
 };
 use ssh_core::session::Question;
 
 use crate::theme::*;
 use crate::widgets::input::TextInput;
-use crate::widgets::{button, icon_button, label, primary_button};
+use crate::widgets::{button, close_button, dialog, dialog_header, label, primary_button};
 
 pub enum CodeEvent {
     Answered(Vec<String>),
@@ -106,32 +106,12 @@ impl Render for CodeDialog {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(360.))
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(format!("{} asks for more", self.host)),
-                    )
-                    .child(
-                        icon_button("code-close", "x", "Cancel login (Esc)", palette().muted)
-                            .tab_index(1)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(CodeEvent::Cancelled))),
-                    ),
-            )
+            .map(|d| dialog(d, 360.))
+            .child(dialog_header(
+                format!("{} asks for more", self.host),
+                close_button("code-close", "Cancel login (Esc)")
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(CodeEvent::Cancelled))),
+            ))
             .when(!self.text.is_empty(), |d| {
                 d.child(
                     div()

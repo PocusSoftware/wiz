@@ -15,7 +15,7 @@ use ssh_core::secrets::{self, Kind};
 
 use crate::theme::*;
 use crate::widgets::input::{Hide, InputEvent, TextInput};
-use crate::widgets::{button, icon_button, label, primary_button};
+use crate::widgets::{button, close_button, dialog, dialog_header, label, primary_button};
 
 /// How the host logs in, as picked in the form.
 #[derive(Clone, Copy, PartialEq)]
@@ -410,32 +410,12 @@ impl Render for HostForm {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(340.))
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().child(if self.index.is_some() {
+            .map(|d| dialog(d, 340.))
+            .child(dialog_header(if self.index.is_some() {
                         "Edit host"
                     } else {
                         "Add host"
-                    }))
-                    .child(
-                        icon_button("form-close", "x", "Close (Esc)", palette().muted)
-                            .tab_index(1)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
-                    ),
-            )
+                    }, close_button("form-close", "Close (Esc)").on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled)))))
             .child(
                 div()
                     .flex()

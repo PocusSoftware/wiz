@@ -3,13 +3,13 @@
 
 use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Render,
-    SharedString, Window, div, prelude::*, px,
+    SharedString, Window, div, prelude::*,
 };
 use ssh_core::secrets;
 
 use crate::theme::*;
 use crate::widgets::input::TextInput;
-use crate::widgets::{button, icon_button, label, primary_button};
+use crate::widgets::{button, close_button, dialog, dialog_header, label, primary_button};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum UnlockMode {
@@ -152,28 +152,12 @@ impl Render for UnlockDialog {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(360.))
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().child(title))
-                    .child(
-                        icon_button("unlock-close", "x", "Close (Esc)", palette().muted)
-                            .tab_index(1)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(UnlockEvent::Cancelled))),
-                    ),
-            )
+            .map(|d| dialog(d, 360.))
+            .child(dialog_header(
+                title,
+                close_button("unlock-close", "Close (Esc)")
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(UnlockEvent::Cancelled))),
+            ))
             .child(div().text_xs().text_color(c(palette().muted)).child(hint))
             .child(
                 div()

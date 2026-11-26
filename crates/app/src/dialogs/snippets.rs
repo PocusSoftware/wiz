@@ -12,7 +12,7 @@ use ssh_core::config::{Snippet, Snippets};
 use crate::privacy;
 use crate::theme::*;
 use crate::widgets::input::{InputEvent, TextInput};
-use crate::widgets::{button, icon_button, keyboard, label, primary_button};
+use crate::widgets::{button, close_button, dialog, icon_button, keyboard, label, primary_button};
 
 pub enum SnippetEvent {
     /// The command to paste (without Enter, so it can be read first).
@@ -257,16 +257,7 @@ impl Render for SnippetPicker {
                 }
                 cx.stop_propagation();
             }))
-            .w(px(440.))
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .shadow_lg()
+            .map(|d| dialog(d, 440.))
             .child(
                 div()
                     .flex()
@@ -287,8 +278,7 @@ impl Render for SnippetPicker {
                         )
                     })
                     .child(
-                        icon_button("snip-close", "x", "Close (Esc)", palette().muted)
-                            .tab_index(1)
+                        close_button("snip-close", "Close (Esc)")
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(SnippetEvent::Cancelled))),
                     ),
             )
