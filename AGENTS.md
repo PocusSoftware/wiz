@@ -87,8 +87,10 @@ the checks at the end pass.
   rsync) rather than faked. In core, gate with `cfg(target_os = "macos")`.
 - **New setting:** add an `Option` field to `Settings`, a default in the `getters!`
   macro, a row in `views/settings.rs`, and a line in the README settings table.
-- **Split modules** (`workspace`, `views/sftp`, `views/terminal`): shared types live in
-  the parent file, so every submodule can reach their fields. Behavior lives in the
+- **Split modules** (`workspace`, `views/sftp`, `views/terminal`): types several
+  submodules use live in the parent file, so every submodule can reach their fields. A
+  type only one concern uses (a sub-struct of `Workspace`, say) lives with its methods in
+  that concern's submodule, `pub(super)` where the parent needs it. Behavior lives in the
   submodule for its concern. Methods used across submodules are `pub(super)`,
   everything else stays private.
 - **Tests:** unit tests go at the bottom of the file in `#[cfg(test)] mod tests { use
