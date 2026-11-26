@@ -597,6 +597,35 @@ fn a_tab_moves_into_its_own_window_and_back(cx: &mut TestAppContext) {
     assert_eq!(cx.read(|cx| cx.windows().len()), 1);
 }
 
+#[test]
+fn help_lists_every_bound_command_once() {
+    let _g = setup();
+    let sections = help::sections();
+    for (id, name) in crate::shortcuts::COMMANDS {
+        let found = sections
+            .iter()
+            .flat_map(|(_, rows)| rows)
+            .filter(|r| r.name == *name)
+            .count();
+        let expected = usize::from(crate::shortcuts::keys(id).is_some());
+        assert_eq!(found, expected, "{id}");
+    }
+    for (group, rows) in &sections {
+        assert!(!rows.is_empty(), "{group}");
+        assert!(rows.iter().all(|r| !r.keys.is_empty()), "{group}");
+    }
+}
+
+#[gpui::test]
+fn help_opens_from_its_shortcut_and_closes_with_escape(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.dispatch_action(ShowHelp);
+    assert!(root.read_with(cx, |r, _| r.help));
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, _| !r.help));
+}
+
 fn labels(root: &Entity<Workspace>, cx: &mut VisualTestContext) -> Vec<String> {
     root.read_with(cx, |r, _| {
         r.tabs.iter().map(|t| t.label.to_string()).collect()
@@ -873,7 +902,7 @@ fn tab_moves_between_controls_and_stays_in_dialogs(cx: &mut TestAppContext) {
         assert!(steps < 10, "Tab never reached the page");
     }
     // A mouse click on a title bar button leaves focus there.
-    cx.simulate_click(gpui::point(px(1238.), px(15.)), gpui::Modifiers::default());
+    cx.simulate_click(gpui::point(px(1213.), px(15.)), gpui::Modifiers::default());
     assert!(crate::prefs::get().hide_sensitive());
     assert!(focused(cx, &view));
     root.update(cx, Workspace::toggle_hide);

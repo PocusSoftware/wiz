@@ -179,3 +179,21 @@ pub fn checkbox(id: impl Into<ElementId>, checked: bool, text: &str) -> Stateful
         )
         .child(text.to_string())
 }
+
+pub fn keycap(text: String, lit: bool) -> Div {
+    div()
+        .min_w(px(24.))
+        .h(px(24.))
+        .px_1p5()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(4.))
+        .border_1()
+        .border_b_2()
+        .border_color(c(if lit { accent() } else { palette().border }))
+        .bg(c(palette().element))
+        .text_sm()
+        .text_color(c(if lit { accent_text() } else { palette().text }))
+        .child(text)
+}

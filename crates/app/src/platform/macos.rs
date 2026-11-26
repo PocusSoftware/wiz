@@ -86,6 +86,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
         "new_host" => "cmd-n",
         "settings" => "cmd-,",
         "close_tab" => "cmd-w",
+        "help" => "cmd-/",
         _ => return None,
     })
 }
@@ -115,6 +116,12 @@ pub fn format_keys(keys: &str) -> String {
 pub fn view_shortcut(shift: bool, key: &str) -> String {
     format!("{}⌘{key}", if shift { "⇧" } else { "" })
 }
+
+pub fn terminal_shortcut(variant: bool, key: &str) -> String {
+    view_shortcut(variant, key)
+}
+
+pub const PASTE_KEYS: &[&str] = &[];
 
 /// Terminal shortcuts (copy, paste, find, ...) use Cmd, which never reaches the shell.
 /// `Some(shift)` when the chord is held, `shift` picking the variant (previous match,

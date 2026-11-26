@@ -310,6 +310,13 @@ impl Workspace {
                 )),
             )
         });
+        let help = self.help.then(|| {
+            overlay(
+                "help",
+                self.help_view(cx),
+                Some(Box::new(cx.listener(|t, _, w, cx| t.close_help(w, cx)))),
+            )
+        });
         let mut open: Vec<AnyElement> = [
             trust_dialog.map(IntoElement::into_any_element),
             form.map(IntoElement::into_any_element),
@@ -320,6 +327,7 @@ impl Workspace {
             confirm_dialog.map(IntoElement::into_any_element),
             delete_dialog.map(IntoElement::into_any_element),
             quit_dialog.map(IntoElement::into_any_element),
+            help.map(IntoElement::into_any_element),
         ]
         .into_iter()
         .flatten()

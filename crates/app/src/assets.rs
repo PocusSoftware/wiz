@@ -26,6 +26,7 @@ icons!(
     "play",
     "stop",
     "terminal",
+    "keyboard",
     "logs",
     "container",
     "server",

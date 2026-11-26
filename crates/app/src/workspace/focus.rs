@@ -21,6 +21,7 @@ impl Workspace {
             || self.confirm.is_some()
             || self.confirm_delete.is_some()
             || self.quit_notice.is_some()
+            || self.help
     }
 
     /// Tab and Shift+Tab: focus the next or previous control. With a dialog open, controls

@@ -4,6 +4,7 @@
 mod connect;
 mod credentials;
 mod focus;
+mod help;
 mod home;
 mod hosts;
 mod latency;
@@ -75,7 +76,8 @@ actions!(
         PrevPane,
         ZoomIn,
         ZoomOut,
-        ResetZoom
+        ResetZoom,
+        ShowHelp
     ]
 );
 
@@ -271,6 +273,7 @@ pub struct Workspace {
     confirm: Option<(u64, Option<usize>)>,
     /// Quit was refused because this many sessions are open.
     quit_notice: Option<usize>,
+    help: bool,
     /// A host delete waiting for "are you sure": index into the host list.
     confirm_delete: Option<usize>,
     tab_scroll: gpui::ScrollHandle,
@@ -419,6 +422,7 @@ impl Workspace {
             confirm: None,
             confirm_delete: None,
             quit_notice: None,
+            help: false,
             tab_scroll: gpui::ScrollHandle::new(),
             selected: None,
             search,
@@ -659,6 +663,13 @@ impl Render for Workspace {
                     cx.stop_propagation();
                     return;
                 }
+                if t.help {
+                    if ev.keystroke.key == "escape" {
+                        t.close_help(w, cx);
+                        cx.stop_propagation();
+                    }
+                    return;
+                }
                 if t.quit_notice.is_some() {
                     if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
                         t.dismiss_quit_notice(w, cx);
@@ -695,6 +706,7 @@ impl Render for Workspace {
                 }
             }))
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
+            .on_action(cx.listener(|t, _: &ShowHelp, w, cx| t.toggle_help(w, cx)))
             .on_action(cx.listener(|t, _: &SplitMenu, w, cx| t.open_split_menu(None, w, cx)))
             .on_action(cx.listener(|t, _: &TabMenu, w, cx| t.open_active_tab_menu(w, cx)))
             .on_action(cx.listener(|t, _: &CloseTab, w, cx| match t.page {

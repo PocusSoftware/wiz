@@ -21,7 +21,7 @@ Server without SFTP, FTP on :21 instead: `tester`/`hunter2` on :2224.
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
 
 ## Settings
-Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on Windows and Linux). Everything is saved as you change it to `settings.toml` in the data folder (see Data locations; all keys optional):
+Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on Windows and Linux). The keyboard icon next to it (⌘/, F1 on Windows and Linux) lists every shortcut. Everything is saved as you change it to `settings.toml` in the data folder (see Data locations; all keys optional):
 
 | Area | Keys |
 |---|---|

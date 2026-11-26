@@ -3,43 +3,8 @@
 use gpui::{FontWeight, HighlightStyle, Keystroke, StyledText};
 
 use super::*;
-use crate::shortcuts::{self, COMMANDS};
-
-/// Commands by section, in the order shown. Every id in `COMMANDS` appears once.
-pub(super) const GROUPS: &[(&str, &[&str])] = &[
-    ("Splits", &["split", "split_menu", "next_pane", "prev_pane"]),
-    (
-        "Tabs",
-        &[
-            "tab_menu",
-            "next_tab",
-            "prev_tab",
-            "focus_tabs",
-            "close_tab",
-        ],
-    ),
-    (
-        "App",
-        &["quick_connect", "snippets", "new_host", "settings"],
-    ),
-];
-
-/// A shortcut as one cap per key: "⇧⌘D" gives ⇧ ⌘ D, "Ctrl+Shift+D" gives Ctrl Shift D.
-pub(super) fn keycaps(label: &str) -> Vec<String> {
-    if !label.contains('+') {
-        return label.chars().map(String::from).collect();
-    }
-    let mut caps: Vec<String> = label
-        .split('+')
-        .filter(|k| !k.is_empty())
-        .map(String::from)
-        .collect();
-    // "Ctrl++" is Ctrl and the plus key.
-    if label.ends_with('+') {
-        caps.push("+".into());
-    }
-    caps
-}
+use crate::shortcuts::{self, COMMANDS, GROUPS, keycaps};
+use crate::widgets::keycap;
 
 /// Byte range of `query` (already lowercase) in `name`, ignoring case.
 pub(super) fn match_range(name: &str, query: &str) -> Option<std::ops::Range<usize>> {
@@ -63,24 +28,6 @@ fn highlighted(name: &str, query: &str) -> StyledText {
             },
         )
     }))
-}
-
-fn keycap(text: String, lit: bool) -> gpui::Div {
-    div()
-        .min_w(px(24.))
-        .h(px(24.))
-        .px_1p5()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(4.))
-        .border_1()
-        .border_b_2()
-        .border_color(c(if lit { accent() } else { palette().border }))
-        .bg(c(palette().element))
-        .text_sm()
-        .text_color(c(if lit { accent_text() } else { palette().text }))
-        .child(text)
 }
 
 impl SettingsView {

@@ -9,7 +9,7 @@ use gpui::{Action, App, KeyBinding, Keystroke};
 use crate::platform;
 use crate::workspace::{
     CloseTab, FocusTabs, NewHost, NextPane, NextTab, OpenSettings, PrevPane, PrevTab, QuickConnect,
-    Snippets, SplitMenu, SplitPane, TabMenu,
+    ShowHelp, Snippets, SplitMenu, SplitPane, TabMenu,
 };
 
 /// Commands the user can rebind: id (the key in `settings.toml`) and the name shown.
@@ -27,7 +27,52 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("new_host", "New host"),
     ("settings", "Settings"),
     ("close_tab", "Close tab or pane"),
+    ("help", "Keyboard shortcuts"),
 ];
+
+/// Commands by section, in the order shown. Every id in `COMMANDS` appears once.
+pub const GROUPS: &[(&str, &[&str])] = &[
+    ("Splits", &["split", "split_menu", "next_pane", "prev_pane"]),
+    (
+        "Tabs",
+        &[
+            "tab_menu",
+            "next_tab",
+            "prev_tab",
+            "focus_tabs",
+            "close_tab",
+        ],
+    ),
+    (
+        "App",
+        &["quick_connect", "snippets", "new_host", "settings", "help"],
+    ),
+];
+
+/// A shortcut as one cap per key: "⇧⌘D" gives ⇧ ⌘ D, "Ctrl+Shift+D" gives Ctrl Shift D.
+pub fn keycaps(label: &str) -> Vec<String> {
+    if !label.contains('+') {
+        let key = label.trim_start_matches(['⌃', '⌥', '⇧', '⌘']);
+        let mut caps: Vec<String> = label[..label.len() - key.len()]
+            .chars()
+            .map(String::from)
+            .collect();
+        if !key.is_empty() {
+            caps.push(key.to_string());
+        }
+        return caps;
+    }
+    let mut caps: Vec<String> = label
+        .split('+')
+        .filter(|k| !k.is_empty())
+        .map(String::from)
+        .collect();
+    // "Ctrl++" is Ctrl and the plus key.
+    if label.ends_with('+') {
+        caps.push("+".into());
+    }
+    caps
+}
 
 /// The keystrokes for command `id`: the user's choice, else the platform default, `None`
 /// when it has neither.
@@ -76,6 +121,7 @@ fn binding(id: &str, keys: &str, cx: &App) -> Option<KeyBinding> {
         "new_host" => Box::new(NewHost),
         "settings" => Box::new(OpenSettings),
         "close_tab" => Box::new(CloseTab),
+        "help" => Box::new(ShowHelp),
         _ => return None,
     };
     KeyBinding::load(keys, action, None, false, None, cx).ok()

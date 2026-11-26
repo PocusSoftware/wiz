@@ -501,6 +501,19 @@ impl Workspace {
                     })
                     .child(
                         icon_button(
+                            "help-btn",
+                            "keyboard",
+                            format!("Keyboard shortcuts ({})", crate::shortcuts::label("help")),
+                            if self.help {
+                                accent_text()
+                            } else {
+                                palette().muted
+                            },
+                        )
+                        .on_click(cx.listener(|t, _, w, cx| t.toggle_help(w, cx))),
+                    )
+                    .child(
+                        icon_button(
                             "settings-btn",
                             "sliders",
                             if self.page == Page::Settings {

@@ -51,7 +51,7 @@ fn reset_restores_defaults_and_closes_the_prompt(cx: &mut TestAppContext) {
 
 #[test]
 fn every_shortcut_is_in_one_section_and_keys_split_into_caps() {
-    use super::shortcuts::{GROUPS, keycaps};
+    use crate::shortcuts::{GROUPS, keycaps};
     let mut grouped: Vec<_> = GROUPS.iter().flat_map(|g| g.1.iter().copied()).collect();
     let mut all: Vec<_> = crate::shortcuts::COMMANDS.iter().map(|c| c.0).collect();
     grouped.sort_unstable();

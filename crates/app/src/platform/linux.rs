@@ -14,8 +14,10 @@ use gpui::{
 
 pub use super::ctrl::{
     MODIFIER_HINT, ZOOM_KEYS, default_shortcut, fixed_bindings, font_exists, format_keys, is_fixed,
-    link_click, on_window_open, terminal_chord, view_shortcut,
+    link_click, on_window_open, terminal_chord, terminal_shortcut, view_shortcut,
 };
+
+pub const PASTE_KEYS: &[&str] = &["Shift+Insert"];
 
 pub const RSYNC: bool = false;
 

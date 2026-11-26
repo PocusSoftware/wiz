@@ -62,6 +62,7 @@ pub fn default_shortcut(id: &str) -> Option<&'static str> {
         "new_host" => "ctrl-shift-n",
         "settings" => "ctrl-,",
         "close_tab" => "ctrl-shift-w",
+        "help" => "f1",
         _ => return None,
     })
 }
@@ -92,6 +93,10 @@ pub fn format_keys(keys: &str) -> String {
 /// Label of a shortcut inside a view (files, logs), like "Ctrl+R" or "Ctrl+Shift+N".
 pub fn view_shortcut(shift: bool, key: &str) -> String {
     format!("Ctrl+{}{key}", if shift { "Shift+" } else { "" })
+}
+
+pub fn terminal_shortcut(variant: bool, key: &str) -> String {
+    format!("Ctrl+Shift+{}{key}", if variant { "Alt+" } else { "" })
 }
 
 /// Terminal shortcuts (copy, paste, find, ...) are Ctrl+Shift+key, so plain Ctrl+key still
