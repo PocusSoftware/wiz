@@ -27,4 +27,12 @@ fn main() {
     }
     let commit = git(&["rev-parse", "--short=7", "HEAD"]).unwrap_or_default();
     println!("cargo:rustc-env=WIZ_COMMIT={commit}");
+
+    let target = |key: &str| std::env::var(key).unwrap_or_default();
+    if target("CARGO_CFG_TARGET_OS") == "windows" && target("CARGO_CFG_TARGET_ENV") == "msvc" {
+        println!("cargo:rerun-if-changed=assets/windows/wiz.ico");
+        embed_resource::compile("assets/windows/wiz.rc", embed_resource::NONE)
+            .manifest_optional()
+            .expect("the icon resource compiles with the Windows SDK's rc.exe");
+    }
 }

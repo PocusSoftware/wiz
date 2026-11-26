@@ -65,7 +65,7 @@ impl SettingsView {
                     v if v < 1024 => format!("{v} KB/s"),
                     v => format!("{} MB/s", v / 1024),
                 }, |s, v| s.transfer_limit_kbps = Some(v), cx))
-                .child(self.text("Editor for server files", crate::platform::EDITOR_HINT, &self.editor))
+                .child(self.editor_field(cx))
                 .child(self.editor_picks(&s.editor_app(), cx))
                 .child(self.toggle("f-autoup", "Upload edited files on save", "Files opened from a server are uploaded again each time they are saved.", s.auto_upload_edits(), |s, v| s.auto_upload_edits = Some(v), cx))
                 .child(self.stepper("f-par", "Parallel transfers", "More than this wait in the queue. Pause and resume are on each transfer.", s.max_transfers(), (1, 8, 1), "", |s, v| s.max_transfers = Some(v), cx))

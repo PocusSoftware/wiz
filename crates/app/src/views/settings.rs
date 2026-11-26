@@ -10,7 +10,7 @@ mod tests;
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
-    KeyDownEvent, Render, SharedString, Window, div, prelude::*, px,
+    KeyDownEvent, PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
 use ssh_core::config::{Appearance, Contrast, Settings, Snippet, WindowControls};
 use ssh_core::secrets::{self, Store};
@@ -110,6 +110,12 @@ pub struct SettingsView {
     editing: Option<usize>,
 }
 
+fn unquote(s: &str) -> &str {
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
+}
+
 fn split_list(s: &str) -> Vec<String> {
     s.split(',')
         .map(|p| p.trim().to_string())
@@ -191,7 +197,11 @@ impl SettingsView {
         let term = self.terminal_font.read(cx).value().trim().to_string();
         let extra = split_list(self.extra_mask.read(cx).value());
         let pats = split_list(self.patterns.read(cx).value());
-        let editor = self.editor.read(cx).value().trim().to_string();
+        let typed = self.editor.read(cx).value().trim().to_string();
+        let editor = unquote(&typed).to_string();
+        if editor != typed {
+            self.editor.update(cx, |i, _| i.set_value(&editor));
+        }
         let socket = self.agent_socket.read(cx).value().trim().to_string();
         // Half-typed colors wait until they are complete.
         let accent = parse_hex(self.accent.read(cx).value());
@@ -418,6 +428,44 @@ impl SettingsView {
                     ),
                 ),
         )
+    }
+
+    fn editor_field(&self, cx: &mut Context<Self>) -> gpui::Div {
+        Self::row(
+            "Editor for server files",
+            crate::platform::EDITOR_HINT,
+            div()
+                .w(px(320.))
+                .flex()
+                .gap_1()
+                .child(div().flex_1().min_w_0().child(self.editor.clone()))
+                .child(
+                    button("ed-browse", "Browse")
+                        .on_click(cx.listener(|t, _, _, cx| t.browse_editor(cx))),
+                ),
+        )
+    }
+
+    fn browse_editor(&mut self, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Choose editor".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = rx.await
+                && let Some(p) = paths.first()
+            {
+                let path = p.to_string_lossy().into_owned();
+                this.update(cx, |t, cx| {
+                    t.editor.update(cx, |i, _| i.set_value(&path));
+                    t.sync_inputs(cx);
+                })
+                .ok();
+            }
+        })
+        .detach();
     }
 
     /// Quick picks for the editor field: the system default plus installed known editors.

@@ -43,7 +43,7 @@ pub const QUIT_KEYS: &str = "Alt+F4";
 pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
 pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent pipe, which 1Password takes over once Settings, Developer, Use the SSH agent is on in 1Password and the OpenSSH Authentication Agent service is disabled.";
 pub const ONEPASSWORD_AGENT: Option<&str> = None;
-pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
+pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below, browse, or type the full path to any .exe. Empty uses Notepad.";
 
 /// Ctrl+V and Shift+Insert paste in the terminal, like Windows Terminal, even though plain
 /// Ctrl otherwise belongs to the shell. AltGr arrives as Ctrl+Alt, so Alt rules it out.

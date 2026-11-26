@@ -72,6 +72,16 @@ fn search_matches_are_found_case_insensitively() {
     assert_eq!(at("Next pane", "tab"), None);
 }
 
+#[test]
+fn strips_the_quotes_of_copy_as_path() {
+    assert_eq!(
+        unquote(r#""C:\Program Files\Ed\ed.exe""#),
+        r"C:\Program Files\Ed\ed.exe"
+    );
+    assert_eq!(unquote("code"), "code");
+    assert_eq!(unquote("\""), "\"");
+}
+
 #[gpui::test]
 fn offers_the_1password_agent_once_its_socket_exists(cx: &mut TestAppContext) {
     let Some(socket) = crate::platform::ONEPASSWORD_AGENT else {

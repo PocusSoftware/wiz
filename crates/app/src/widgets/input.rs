@@ -1,5 +1,8 @@
 //! Single-line text input with a real selection (no IME).
 
+#[cfg(test)]
+mod tests;
+
 use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
@@ -50,6 +53,21 @@ pub struct TextInput {
     font: Font,
     font_size: Pixels,
     dragging: bool,
+    view_width: Rc<Cell<Pixels>>,
+    scroll: Pixels,
+}
+
+const CARET_ROOM: Pixels = px(2.);
+
+fn scroll_to_show(caret: Pixels, text: Pixels, view: Pixels, scroll: Pixels) -> Pixels {
+    let scroll = if caret < scroll {
+        caret
+    } else if caret + CARET_ROOM > scroll + view {
+        caret + CARET_ROOM - view
+    } else {
+        scroll
+    };
+    scroll.min(text + CARET_ROOM - view).max(px(0.))
 }
 
 fn is_word(c: char) -> bool {
@@ -71,6 +89,8 @@ impl TextInput {
             font: gpui::font(ui()),
             font_size: px(12.),
             dragging: false,
+            view_width: Rc::new(Cell::new(px(0.))),
+            scroll: px(0.),
         }
     }
 
@@ -211,12 +231,7 @@ impl TextInput {
         self.text.to_string()
     }
 
-    /// Byte index in `text` for a window x coordinate.
-    fn index_for_x(&self, window: &Window, x: Pixels) -> usize {
-        let shown = self.display(true);
-        if shown.is_empty() {
-            return 0;
-        }
+    fn shape(&self, window: &Window, shown: &str) -> gpui::ShapedLine {
         let run = TextRun {
             len: shown.len(),
             font: self.font.clone(),
@@ -225,10 +240,18 @@ impl TextInput {
             underline: None,
             strikethrough: None,
         };
-        let line =
-            window
-                .text_system()
-                .shape_line(shown.clone().into(), self.font_size, &[run], None);
+        window
+            .text_system()
+            .shape_line(shown.to_string().into(), self.font_size, &[run], None)
+    }
+
+    /// Byte index in `text` for a window x coordinate.
+    fn index_for_x(&self, window: &Window, x: Pixels) -> usize {
+        let shown = self.display(true);
+        if shown.is_empty() {
+            return 0;
+        }
+        let line = self.shape(window, &shown);
         let local = (x - self.text_bounds.get().origin.x).max(px(0.));
         let di = line.closest_index_for_x(local);
         if self.masked {
@@ -420,6 +443,13 @@ impl Render for TextInput {
                 to_shown(self.cursor),
             )
         };
+        let view = self.view_width.get();
+        self.scroll = if focused && !hidden && !shown.is_empty() && view > px(0.) {
+            let line = self.shape(window, &shown);
+            scroll_to_show(line.x_for_index(caret_at), line.width(), view, self.scroll)
+        } else {
+            px(0.)
+        };
         let caret = || {
             div().w(px(1.)).h(px(13.)).flex_none().bg(c(if focused {
                 accent_text()
@@ -466,6 +496,10 @@ impl Render for TextInput {
         )
         .absolute()
         .size_full();
+        let width = self.view_width.clone();
+        let viewport = canvas(move |b, _, _| width.set(b.size.width), |_, _, _, _| {})
+            .absolute()
+            .size_full();
 
         div()
             .track_focus(&self.focus)
@@ -496,6 +530,23 @@ impl Render for TextInput {
                 c(palette().border)
             })
             .text_color(c(palette().text))
-            .child(div().relative().child(recorder).child(row))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .relative()
+                    .overflow_hidden()
+                    .child(viewport)
+                    .child(
+                        div()
+                            .relative()
+                            .left(-self.scroll)
+                            .child(recorder)
+                            .child(row),
+                    ),
+            )
     }
 }

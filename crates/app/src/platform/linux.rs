@@ -28,7 +28,7 @@ pub const QUIT_KEYS: &str = "Alt+F4";
 pub const AGENT_DEFAULT: &str = "SSH_AUTH_SOCK";
 pub const AGENT_HINT: &str = "Socket of the agent used by hosts that log in with the SSH agent. Empty uses the system agent (ssh-add).";
 pub const ONEPASSWORD_AGENT: Option<&str> = Some("~/.1password/agent.sock");
-pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type a program name or path. Empty uses the first installed one below.";
+pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below, browse, or type a program name or path. Empty uses the first installed one below.";
 
 /// Ctrl+V is the shell's literal-next, so only Shift+Insert pastes outside the chord.
 pub fn terminal_paste(m: Modifiers, key: &str) -> bool {

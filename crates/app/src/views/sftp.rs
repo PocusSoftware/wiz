@@ -16,8 +16,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, Render, ScrollStrategy, SharedString,
-    UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
+    KeyDownEvent, MouseButton, MouseDownEvent, NavigationDirection, Render, ScrollStrategy,
+    SharedString, UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
 };
 use ssh_core::config::Host;
 use ssh_core::sftp::{self, Entry, Progress, Sftp, local};

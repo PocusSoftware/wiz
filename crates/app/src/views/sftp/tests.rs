@@ -64,3 +64,41 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
     cx.simulate_click(point(px(20.), px(11.)), Modifiers::default());
     assert!(cx.update(|w, _| left.is_focused(w)));
 }
+
+#[gpui::test]
+fn mouse_back_button_goes_back_in_history(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = tempfile::tempdir().unwrap();
+    let inner = dir.path().join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    let open = |cx: &mut gpui::VisualTestContext, path: &std::path::Path| {
+        let path = path.to_string_lossy().into_owned();
+        view.update(cx, |v, cx| v.go(Side::Left, path, true, cx));
+        settle(cx, &view);
+    };
+    settle(cx, &view);
+    open(cx, dir.path());
+    open(cx, &inner);
+    let start = view.read_with(cx, |v, _| v.left.history.last().cloned());
+    cx.simulate_mouse_down(
+        point(px(200.), px(300.)),
+        MouseButton::Navigate(NavigationDirection::Back),
+        Modifiers::default(),
+    );
+    settle(cx, &view);
+    view.read_with(cx, |v, _| assert_eq!(Some(v.left.path.clone()), start));
+}
+
+fn settle(cx: &mut gpui::VisualTestContext, view: &Entity<SftpView>) {
+    for _ in 0..500 {
+        cx.run_until_parked();
+        if view.read_with(cx, |v, _| !v.left.loading && !v.right.loading) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("listing never finished");
+}

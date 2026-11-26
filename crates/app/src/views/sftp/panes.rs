@@ -337,6 +337,10 @@ impl SftpView {
                 MouseButton::Left,
                 cx.listener(move |t, _, w, cx| w.focus(&t.pane(side).focus, cx)),
             )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(move |t, _, _, cx| t.back(side, cx)),
+            )
             .relative()
             .flex_1()
             .min_w_0()
