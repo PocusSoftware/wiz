@@ -1,9 +1,6 @@
 //! Icons, brand images and fonts compiled into the binary. Icons are served to gpui by
 //! path, fonts are added to the text system at startup.
 
-#[cfg(test)]
-mod tests;
-
 use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
@@ -171,5 +168,26 @@ impl AssetSource for Assets {
             .filter(|(p, _)| p.starts_with(path))
             .map(|(p, _)| (*p).into())
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Compiled-in assets.
+
+    use super::*;
+
+    #[test]
+    fn every_os_logo_is_compiled_in_and_used() {
+        for slug in ssh_core::os::LOGOS.iter().map(|l| l.slug) {
+            let path = format!("icons/os/{slug}.svg");
+            assert!(ICONS.iter().any(|(p, _)| *p == path), "no logo for {slug}");
+        }
+        for (path, _) in ICONS {
+            if let Some(slug) = path.strip_prefix("icons/os/") {
+                let slug = slug.trim_end_matches(".svg");
+                assert!(ssh_core::os::logo(slug).is_some(), "{slug} is never shown");
+            }
+        }
     }
 }

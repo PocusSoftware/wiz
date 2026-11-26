@@ -62,10 +62,11 @@ the checks at the end pass.
 - **Docs:** every file starts with a `//!` line saying what it is for. Public items and
   non-obvious private ones get `///`.
 - **Modules:** a module with submodules is `foo.rs` next to a `foo/` folder (no `mod.rs`).
-  `mod` lines come first, then `use`. Re-export (`pub use`) to keep public paths short,
+  `mod` lines come first, then `use` (an inline `mod tests` goes at the bottom). Re-export (`pub use`) to keep public paths short,
   as `ssh_core::config` does.
 - **Size:** split a file by concern once it passes roughly 500 lines (see
-  `crates/app/src/views/sftp/`). Functions over about 80 lines usually hide a helper.
+  `crates/app/src/views/sftp/`); inline tests don't count. Functions over about 80 lines
+  usually hide a helper.
 
 ## 4. Project conventions
 
@@ -88,9 +89,10 @@ the checks at the end pass.
   the parent file, so every submodule can reach their fields. Behavior lives in the
   submodule for its concern. Methods used across submodules are `pub(super)`,
   everything else stays private.
-- **Tests:** unit tests live in a `tests.rs` next to the code, declared with
-  `#[cfg(test)] mod tests;` (for `foo.rs` that is `foo/tests.rs`), never inline in the
-  source file. Backend tests that only need the public API go in `crates/core/tests/`.
+- **Tests:** unit tests go at the bottom of the file in `#[cfg(test)] mod tests { use
+  super::*; ... }`. Only when `foo.rs` already has a `foo/` folder for submodules do they
+  go in `foo/tests.rs`, declared with `#[cfg(test)] mod tests;`. Never add a folder just
+  for tests. Backend tests that only need the public API go in `crates/core/tests/`.
   Tests that change process-wide state hold `testing::GLOBALS`. Tests that need the SSH
   servers check `SSHC_DOCKER_TESTS`.
 - **Text:** UI text uses sentence case and plain words. No em dashes anywhere (code,

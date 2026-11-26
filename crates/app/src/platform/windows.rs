@@ -2,9 +2,6 @@
 //! switching), native title bar areas, installed editors, Notepad or a named program for
 //! files. No Keychain or rsync.
 
-#[cfg(test)]
-mod tests;
-
 use std::path::{Path, PathBuf};
 
 use gpui::{
@@ -257,4 +254,34 @@ pub fn system_look(window: &Window) -> (bool, bool) {
         dark,
         read.is_ok() && hc.dwFlags.contains(HCF_HIGHCONTRASTON),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    //! Tests for `platform::windows`.
+
+    use gpui::Modifiers;
+
+    use super::terminal_paste;
+
+    fn mods(control: bool, shift: bool, alt: bool) -> Modifiers {
+        Modifiers {
+            control,
+            shift,
+            alt,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn paste_keys() {
+        assert!(terminal_paste(mods(true, false, false), "v"));
+        assert!(terminal_paste(mods(false, true, false), "insert"));
+        // Ctrl+Shift+V goes through the terminal chord; AltGr (Ctrl+Alt) types a character.
+        assert!(!terminal_paste(mods(true, true, false), "v"));
+        assert!(!terminal_paste(mods(true, false, true), "v"));
+        // Plain Insert and other Ctrl keys still reach the shell.
+        assert!(!terminal_paste(Modifiers::default(), "insert"));
+        assert!(!terminal_paste(mods(true, false, false), "c"));
+    }
 }
