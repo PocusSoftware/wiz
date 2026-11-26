@@ -27,7 +27,7 @@ fn setup(f: impl FnOnce(&mut Settings)) {
 fn privacy_engine() {
     let _g = crate::testing::GLOBALS
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+        .unwrap_or_else(PoisonError::into_inner);
     // Off: nothing changes.
     configure(&Settings::default());
     assert_eq!(redact("tester@10.0.0.5"), "tester@10.0.0.5");

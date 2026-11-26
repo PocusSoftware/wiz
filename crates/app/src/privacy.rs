@@ -6,8 +6,8 @@
 
 use std::borrow::Cow;
 use std::ops::Range;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{PoisonError, RwLock};
 
 use ssh_core::config::Settings;
 
@@ -61,7 +61,7 @@ pub fn hide() -> bool {
 /// Apply the privacy-related settings.
 pub fn configure(s: &Settings) {
     HIDE.store(s.hide_sensitive(), Ordering::Relaxed);
-    let mut c = CONFIG.write().unwrap();
+    let mut c = CONFIG.write().unwrap_or_else(PoisonError::into_inner);
     c.ipv4 = s.mask_ipv4();
     c.ipv6 = s.mask_ipv6();
     c.ports = s.mask_ports();
@@ -89,7 +89,7 @@ fn tokens(items: impl IntoIterator<Item = String>) -> Vec<Vec<char>> {
 
 /// Hostnames, usernames and names of the saved hosts (plus the local user) to mask.
 pub fn set_known(hosts: Vec<String>, users: Vec<String>, names: Vec<String>) {
-    let mut c = CONFIG.write().unwrap();
+    let mut c = CONFIG.write().unwrap_or_else(PoisonError::into_inner);
     c.host_tokens = tokens(hosts);
     c.user_tokens = tokens(users);
     c.name_tokens = tokens(names);
@@ -381,7 +381,7 @@ fn secret_ranges(chars: &[char]) -> Vec<Range<usize>> {
 
 /// Char ranges of `chars` that must be masked.
 pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
-    let cfg = CONFIG.read().unwrap();
+    let cfg = CONFIG.read().unwrap_or_else(PoisonError::into_inner);
     let mut out: Vec<Range<usize>> = Vec::new();
     let mut i = 0;
     while i < chars.len() {
@@ -495,7 +495,7 @@ pub fn mask_char() -> char {
 
 /// True when port numbers should be shown masked.
 pub fn hides_ports() -> bool {
-    hide() && CONFIG.read().unwrap().ports
+    hide() && CONFIG.read().unwrap_or_else(PoisonError::into_inner).ports
 }
 
 /// `text` (a port, or a list/range of them) with each number masked when ports are hidden.
@@ -554,7 +554,7 @@ pub fn file_hidden(name: &str) -> bool {
     if !hide() {
         return false;
     }
-    let cfg = CONFIG.read().unwrap();
+    let cfg = CONFIG.read().unwrap_or_else(PoisonError::into_inner);
     cfg.files && cfg.patterns.iter().any(|p| glob(p.trim(), name))
 }
 

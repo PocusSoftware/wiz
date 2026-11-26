@@ -70,7 +70,7 @@ fn scroll_to_show(caret: Pixels, text: Pixels, view: Pixels, scroll: Pixels) -> 
     scroll.min(text + CARET_ROOM - view).max(px(0.))
 }
 
-fn is_word(c: char) -> bool {
+pub fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '-'
 }
 

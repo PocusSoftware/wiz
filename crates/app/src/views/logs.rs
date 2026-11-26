@@ -14,6 +14,7 @@ use ssh_core::docker::Backend;
 
 use crate::runtime;
 use crate::theme::*;
+use crate::widgets::input::is_word;
 use crate::widgets::{checkbox, icon_button};
 
 const ROW_H: f32 = 18.0;
@@ -91,10 +92,6 @@ fn timestamp_len(line: &str) -> usize {
         [b'[', _, _, b':', _, _, b':', _, _, b']', b' ', ..] => TS_LEN,
         _ => 0,
     }
-}
-
-fn is_word(c: char) -> bool {
-    c.is_alphanumeric() || c == '_' || c == '-'
 }
 
 impl LogView {

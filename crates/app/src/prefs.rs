@@ -1,7 +1,7 @@
 //! Process-wide settings: loaded once, changed through `update`, which applies the effects
 //! (privacy engine, secret store) and saves `settings.toml`.
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use ssh_core::config::Settings;
 
@@ -24,12 +24,16 @@ fn apply(s: &Settings) {
 
 pub fn init(s: Settings) {
     apply(&s);
-    *PREFS.write().unwrap() = Some(Arc::new(s));
+    *PREFS.write().unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(s));
 }
 
 /// Cheap snapshot of the current settings.
 pub fn get() -> Arc<Settings> {
-    PREFS.read().unwrap().clone().unwrap_or_default()
+    PREFS
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+        .unwrap_or_default()
 }
 
 /// Change settings, apply them and write the file. The in-memory change sticks even if the
@@ -38,6 +42,6 @@ pub fn update(f: impl FnOnce(&mut Settings)) -> ssh_core::Result<()> {
     let mut s = (*get()).clone();
     f(&mut s);
     apply(&s);
-    *PREFS.write().unwrap() = Some(Arc::new(s.clone()));
+    *PREFS.write().unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(s.clone()));
     s.save()
 }
