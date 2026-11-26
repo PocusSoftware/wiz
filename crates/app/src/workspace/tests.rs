@@ -598,17 +598,23 @@ fn a_tab_moves_into_its_own_window_and_back(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn help_lists_every_bound_command_once() {
+fn help_lists_every_bound_command() {
     let _g = setup();
     let sections = help::sections();
     for (id, name) in crate::shortcuts::COMMANDS {
-        let found = sections
+        let rows: Vec<_> = sections
             .iter()
             .flat_map(|(_, rows)| rows)
             .filter(|r| r.name == *name)
-            .count();
-        let expected = usize::from(crate::shortcuts::keys(id).is_some());
-        assert_eq!(found, expected, "{id}");
+            .collect();
+        assert!(rows.len() <= 1, "{id}");
+        if crate::shortcuts::keys(id).is_some() {
+            assert!(
+                rows.first()
+                    .is_some_and(|r| r.keys.contains(&crate::shortcuts::label(id))),
+                "{id}"
+            );
+        }
     }
     for (group, rows) in &sections {
         assert!(!rows.is_empty(), "{group}");
