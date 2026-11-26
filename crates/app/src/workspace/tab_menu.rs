@@ -223,7 +223,7 @@ impl Workspace {
     }
 
     /// A row of a menu.
-    fn menu_item(id: impl Into<ElementId>, text: impl Into<SharedString>) -> gpui::Stateful<Div> {
+    fn menu_item(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Stateful<Div> {
         keyboard(div().id(id))
             .focus(|s| s.bg(c(palette().hover)))
             .h(px(26.))
@@ -500,7 +500,7 @@ impl Workspace {
         icon_name: &str,
         text: impl Into<SharedString>,
         note: impl Into<SharedString>,
-    ) -> gpui::Stateful<Div> {
+    ) -> Stateful<Div> {
         keyboard(div().id(id))
             .focus(|s| s.bg(c(palette().hover)))
             .h(px(28.))

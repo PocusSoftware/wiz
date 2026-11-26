@@ -241,7 +241,7 @@ impl Workspace {
 
 /// A big icon button for what can be opened on the host. The terminal, the usual pick,
 /// is filled with the accent.
-fn action(id: &'static str, name: &str, tooltip: &str, main: bool) -> gpui::Stateful<gpui::Div> {
+fn action(id: &'static str, name: &str, tooltip: &str, main: bool) -> Stateful<Div> {
     let (bg, fg, hover) = if main {
         (accent(), on_accent(), accent_text())
     } else {

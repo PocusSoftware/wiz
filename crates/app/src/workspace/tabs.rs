@@ -605,7 +605,7 @@ fn win_button(
     hover: u32,
     area: WindowControlArea,
     action: impl Fn(&mut Window, &mut App) + 'static,
-) -> gpui::Stateful<gpui::Div> {
+) -> Stateful<Div> {
     let el = keyboard(div().id(id))
         .focus(move |s| s.bg(c(hover)))
         .w(px(40.))

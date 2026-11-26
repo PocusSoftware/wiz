@@ -385,7 +385,7 @@ impl Workspace {
         picked: bool,
         wide: bool,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> Stateful<Div> {
         let h = &self.cfg.hosts[ix];
         let account = h.account();
         let live = self

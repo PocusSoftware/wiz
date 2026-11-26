@@ -29,8 +29,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Focusable, FontWeight, IntoElement,
-    Pixels, Render, SharedString, Window, actions, div, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, FontWeight,
+    IntoElement, Pixels, Render, SharedString, Stateful, Window, actions, div, prelude::*, px,
 };
 use ssh_core::config::{AuthMethod, Config, Host};
 use ssh_core::docker::{self, Backend};
@@ -482,6 +482,26 @@ impl Workspace {
         .detach();
     }
 
+    fn status_line(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let (msg, err) = self.status.clone()?;
+        Some(
+            keyboard(div().id("status"))
+                .px_2()
+                .py(px(3.))
+                .border_t_1()
+                .border_color(c(palette().border_variant))
+                .text_color(c(if err { palette().red } else { palette().muted }))
+                .focus(|s| s.bg(c(palette().hover)))
+                .cursor_pointer()
+                .tooltip(crate::widgets::tip("Click to dismiss"))
+                .on_click(cx.listener(|t, _, _, cx| {
+                    t.status = None;
+                    cx.notify();
+                }))
+                .child(privacy::redact(&msg).into_owned()),
+        )
+    }
+
     /// Hosts and users to mask: saved hosts and quick connect hosts. Views drawn from
     /// the last frame do not see the new list, so every window is drawn again.
     fn refresh_tokens(&self, cx: &mut App) {
@@ -635,76 +655,7 @@ impl Render for Workspace {
             .id("root")
             .track_focus(&self.focus)
             .key_context("Workspace")
-            .on_key_down(cx.listener(|t, ev: &gpui::KeyDownEvent, w, cx| {
-                // Reaches here only when nothing focused took it: the shell and the file
-                // panes keep Tab.
-                let m = &ev.keystroke.modifiers;
-                if ev.keystroke.key == "tab" && !(m.control || m.platform || m.alt) {
-                    t.move_focus(m.shift, w, cx);
-                    cx.stop_propagation();
-                    return;
-                }
-                if t.renaming.is_some() {
-                    match ev.keystroke.key.as_str() {
-                        "enter" => t.finish_rename(true, w, cx),
-                        "escape" => t.finish_rename(false, w, cx),
-                        _ => return,
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
-                if t.menu_open() {
-                    match ev.keystroke.key.as_str() {
-                        "escape" => t.close_tab_menu(w, cx),
-                        "up" => t.move_focus(true, w, cx),
-                        "down" => t.move_focus(false, w, cx),
-                        _ => return,
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
-                if t.help {
-                    if ev.keystroke.key == "escape" {
-                        t.close_help(w, cx);
-                        cx.stop_propagation();
-                    }
-                    return;
-                }
-                if t.quit_notice.is_some() {
-                    if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
-                        t.dismiss_quit_notice(w, cx);
-                        cx.stop_propagation();
-                    }
-                    return;
-                }
-                if t.confirm_delete.is_some() {
-                    match ev.keystroke.key.as_str() {
-                        "enter" => t.answer_delete_host(true, w, cx),
-                        "escape" => t.answer_delete_host(false, w, cx),
-                        _ => return,
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
-                if t.confirm.is_some() {
-                    match ev.keystroke.key.as_str() {
-                        "enter" => t.answer_close(true, w, cx),
-                        "escape" => t.answer_close(false, w, cx),
-                        _ => return,
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
-                // No Enter here: trusting a new key takes a deliberate press of the button.
-                if !t.trust.is_empty() && ev.keystroke.key == "escape" {
-                    t.answer_trust(false, w, cx);
-                    cx.stop_propagation();
-                    return;
-                }
-                if t.page == Page::Home && !t.modal_open() && t.home_key(ev, w, cx) {
-                    cx.stop_propagation();
-                }
-            }))
+            .on_key_down(cx.listener(Self::on_root_key))
             .on_action(cx.listener(|t, _: &SplitPane, w, cx| t.split(w, cx)))
             .on_action(cx.listener(|t, _: &ShowHelp, w, cx| t.toggle_help(w, cx)))
             .on_action(cx.listener(|t, _: &SplitMenu, w, cx| t.open_split_menu(None, w, cx)))
@@ -770,55 +721,8 @@ impl Render for Workspace {
                                     .size_full(),
                             )
                     })
-                    .children(self.pending.iter().map(|p| {
-                        let account = p.account.clone();
-                        div()
-                            .px_2()
-                            .py(px(1.))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .border_t_1()
-                            .border_color(c(palette().border_variant))
-                            .text_color(c(palette().muted))
-                            .child(div().size(px(7.)).bg(c(dot_color(palette().yellow))))
-                            .child(
-                                div().flex_1().child(
-                                    privacy::redact(&format!("Connecting to {}...", p.name))
-                                        .into_owned(),
-                                ),
-                            )
-                            .child(
-                                icon_button(
-                                    ("cancel-connect", p.id as usize),
-                                    "x",
-                                    "Cancel",
-                                    palette().muted,
-                                )
-                                .size(px(18.))
-                                .on_click(
-                                    cx.listener(move |t, _, _, cx| t.cancel_connect(&account, cx)),
-                                ),
-                            )
-                    }))
-                    .when_some(self.status.clone(), |d, (msg, err)| {
-                        d.child(
-                            keyboard(div().id("status"))
-                                .px_2()
-                                .py(px(3.))
-                                .border_t_1()
-                                .border_color(c(palette().border_variant))
-                                .text_color(c(if err { palette().red } else { palette().muted }))
-                                .focus(|s| s.bg(c(palette().hover)))
-                                .cursor_pointer()
-                                .tooltip(crate::widgets::tip("Click to dismiss"))
-                                .on_click(cx.listener(|t, _, _, cx| {
-                                    t.status = None;
-                                    cx.notify();
-                                }))
-                                .child(privacy::redact(&msg).into_owned()),
-                        )
-                    }),
+                    .children(self.pending_rows(cx))
+                    .children(self.status_line(cx)),
             )
             .children(overlays)
             .child(Self::window_controls())

@@ -391,11 +391,7 @@ impl Workspace {
     }
 
     /// A draggable split divider: vertical between columns, horizontal between rows.
-    pub(super) fn divider(
-        &self,
-        which: Divider,
-        cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    pub(super) fn divider(&self, which: Divider, cx: &mut Context<Self>) -> Stateful<Div> {
         let dragging = self.pane_drag.as_ref().is_some_and(|d| d.divider == which);
         let line = c(if dragging { accent() } else { palette().border });
         let id = match which {
@@ -445,7 +441,7 @@ impl Workspace {
         p: &PaneView,
         focused: bool,
         cx: &mut Context<Self>,
-    ) -> gpui::Div {
+    ) -> Div {
         let title = p.title(cx);
         let focus = p.focus_handle(cx);
         let tab = self.tabs[tab_ix].id;

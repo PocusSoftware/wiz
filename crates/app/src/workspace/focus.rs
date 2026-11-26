@@ -9,6 +9,82 @@ use super::*;
 const MAX_STEPS: usize = 500;
 
 impl Workspace {
+    pub(super) fn on_root_key(
+        &mut self,
+        ev: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Reaches here only when nothing focused took it: the shell and the file
+        // panes keep Tab.
+        let m = &ev.keystroke.modifiers;
+        if ev.keystroke.key == "tab" && !(m.control || m.platform || m.alt) {
+            self.move_focus(m.shift, window, cx);
+            cx.stop_propagation();
+            return;
+        }
+        if self.renaming.is_some() {
+            match ev.keystroke.key.as_str() {
+                "enter" => self.finish_rename(true, window, cx),
+                "escape" => self.finish_rename(false, window, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+            return;
+        }
+        if self.menu_open() {
+            match ev.keystroke.key.as_str() {
+                "escape" => self.close_tab_menu(window, cx),
+                "up" => self.move_focus(true, window, cx),
+                "down" => self.move_focus(false, window, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+            return;
+        }
+        if self.help {
+            if ev.keystroke.key == "escape" {
+                self.close_help(window, cx);
+                cx.stop_propagation();
+            }
+            return;
+        }
+        if self.quit_notice.is_some() {
+            if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
+                self.dismiss_quit_notice(window, cx);
+                cx.stop_propagation();
+            }
+            return;
+        }
+        if self.confirm_delete.is_some() {
+            match ev.keystroke.key.as_str() {
+                "enter" => self.answer_delete_host(true, window, cx),
+                "escape" => self.answer_delete_host(false, window, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+            return;
+        }
+        if self.confirm.is_some() {
+            match ev.keystroke.key.as_str() {
+                "enter" => self.answer_close(true, window, cx),
+                "escape" => self.answer_close(false, window, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+            return;
+        }
+        // No Enter here: trusting a new key takes a deliberate press of the button.
+        if !self.trust.is_empty() && ev.keystroke.key == "escape" {
+            self.answer_trust(false, window, cx);
+            cx.stop_propagation();
+            return;
+        }
+        if self.page == Page::Home && !self.modal_open() && self.home_key(ev, window, cx) {
+            cx.stop_propagation();
+        }
+    }
+
     /// A dialog or the tab menu is open, so Tab stays inside it.
     pub(super) fn modal_open(&self) -> bool {
         self.menu_open()

@@ -372,6 +372,38 @@ impl Workspace {
         .detach();
     }
 
+    pub(super) fn pending_rows(&self, cx: &mut Context<Self>) -> Vec<Div> {
+        self.pending
+            .iter()
+            .map(|p| {
+                let account = p.account.clone();
+                div()
+                    .px_2()
+                    .py(px(1.))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .border_t_1()
+                    .border_color(c(palette().border_variant))
+                    .text_color(c(palette().muted))
+                    .child(div().size(px(7.)).bg(c(dot_color(palette().yellow))))
+                    .child(div().flex_1().child(
+                        privacy::redact(&format!("Connecting to {}...", p.name)).into_owned(),
+                    ))
+                    .child(
+                        icon_button(
+                            ("cancel-connect", p.id as usize),
+                            "x",
+                            "Cancel",
+                            palette().muted,
+                        )
+                        .size(px(18.))
+                        .on_click(cx.listener(move |t, _, _, cx| t.cancel_connect(&account, cx))),
+                    )
+            })
+            .collect()
+    }
+
     /// Stop connecting to `account`. The task notices its cancel sender is gone.
     pub(super) fn cancel_connect(&mut self, account: &str, cx: &mut Context<Self>) {
         if let Some(pos) = self.pending.iter().position(|p| p.account == account) {
