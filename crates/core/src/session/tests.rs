@@ -2,6 +2,24 @@
 
 use super::*;
 
+#[test]
+fn a_missing_agent_points_to_the_1password_switch() {
+    let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
+    let e = agent::agent_error(&russh::keys::Error::IO(missing), "/tmp/agent.sock");
+    assert!(
+        e.to_string()
+            .contains("no SSH agent is running at /tmp/agent.sock")
+    );
+    assert!(e.to_string().contains("Use the SSH agent"));
+
+    let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+    let e = agent::agent_error(&russh::keys::Error::IO(denied), "/tmp/agent.sock");
+    assert!(
+        e.to_string()
+            .contains("can't reach the SSH agent at /tmp/agent.sock")
+    );
+}
+
 /// Logging in through a throwaway ssh-agent against the docker key server (`docker/`).
 mod agent_login {
     use std::path::PathBuf;

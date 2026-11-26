@@ -41,7 +41,7 @@ pub const QUIT_KEYS: &str = "Alt+F4";
 
 /// Placeholder of the agent socket setting: what an empty one uses.
 pub const AGENT_DEFAULT: &str = "Windows OpenSSH agent";
-pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent; 1Password uses that pipe too when its agent is on.";
+pub const AGENT_HINT: &str = "Pipe of the agent used by hosts that log in with the SSH agent. Empty uses the Windows OpenSSH agent pipe, which 1Password takes over once Settings, Developer, Use the SSH agent is on in 1Password and the OpenSSH Authentication Agent service is disabled.";
 pub const ONEPASSWORD_AGENT: Option<&str> = None;
 pub const EDITOR_HINT: &str = "Program that opens files with Enter. Pick one below or type the full path to any .exe. Empty uses Notepad.";
 

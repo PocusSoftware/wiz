@@ -36,22 +36,44 @@ pub(super) async fn open(handle: &client::Handle<Handler>) -> Result<Agent> {
         .read()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
+    let at = socket
+        .as_deref()
+        .map_or_else(|| DEFAULT.to_string(), |p| p.display().to_string());
     #[cfg(unix)]
     let agent = match socket {
         Some(p) => AgentClient::connect_uds(p).await,
         None => AgentClient::connect_env().await,
     };
     #[cfg(windows)]
-    let agent = AgentClient::connect_named_pipe(
-        socket.unwrap_or_else(|| PathBuf::from(r"\\.\pipe\openssh-ssh-agent")),
-    )
-    .await;
-    let mut agent = agent.map_err(|_| Error::NoCredentials("no SSH agent found".into()))?;
+    let agent =
+        AgentClient::connect_named_pipe(socket.unwrap_or_else(|| PathBuf::from(DEFAULT))).await;
+    let mut agent = agent.map_err(|e| agent_error(&e, &at))?;
     if let Some(binding) = handle.agent_session_binding() {
         // Older and third-party agents don't know this; they work without it.
         let _ = agent.bind_session(binding, false).await;
     }
     Ok(agent)
+}
+
+#[cfg(unix)]
+const DEFAULT: &str = "SSH_AUTH_SOCK";
+#[cfg(windows)]
+const DEFAULT: &str = r"\\.\pipe\openssh-ssh-agent";
+
+pub(super) fn agent_error(e: &russh::keys::Error, at: &str) -> Error {
+    use russh::keys::Error as E;
+    let missing = match e {
+        E::IO(io) => io.kind() == std::io::ErrorKind::NotFound,
+        E::EnvVar(_) | E::BadAuthSock => true,
+        _ => false,
+    };
+    Error::NoCredentials(if missing {
+        format!(
+            "no SSH agent is running at {at}. For 1Password, turn on Settings, Developer, Use the SSH agent"
+        )
+    } else {
+        format!("can't reach the SSH agent at {at}: {e}")
+    })
 }
 
 /// The public keys the agent holds. Certificates are left out: logging in with them is
