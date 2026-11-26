@@ -5,8 +5,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ssh_core::session::Connection;
-use ssh_core::sftp::Progress;
+use crate::session::Connection;
+use crate::sftp::Progress;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::*;
@@ -73,7 +73,7 @@ pub async fn run(
     names: &[String],
     dst_dir: &str,
     progress: Arc<Progress>,
-) -> ssh_core::Result<()> {
+) -> crate::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let sock = std::env::temp_dir().join(format!(
         "wiz-rsync-{}-{}.sock",
@@ -124,7 +124,7 @@ async fn run_rsync(
     dst_dir: &str,
     progress: &Progress,
     moved: &AtomicU64,
-) -> ssh_core::Result<()> {
+) -> crate::Result<()> {
     // Tests run as the test harness, so they point this at the real app binary.
     let exe = match std::env::var_os("WIZ_RSH_EXE") {
         Some(p) => std::path::PathBuf::from(p),
@@ -158,7 +158,7 @@ async fn run_rsync(
                 _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {
                     if progress.cancel.load(Ordering::Relaxed) {
                         let _ = child.kill().await;
-                        return Err(ssh_core::Error::Cancelled);
+                        return Err(crate::Error::Cancelled);
                     }
                     let total = progress.total.load(Ordering::Relaxed);
                     let n = moved.load(Ordering::Relaxed);
@@ -176,7 +176,7 @@ async fn run_rsync(
                 .rev()
                 .find(|l| !l.trim().is_empty())
                 .unwrap_or("");
-            return Err(ssh_core::Error::Remote(format!(
+            return Err(crate::Error::Remote(format!(
                 "rsync failed ({status}){}{last}",
                 if last.is_empty() { "" } else { ": " }
             )));
@@ -232,13 +232,13 @@ async fn serve(
     progress: &Progress,
     upload: bool,
     token: &str,
-) -> ssh_core::Result<()> {
+) -> crate::Result<()> {
     if read_line(&mut sock).await? != token {
-        return Err(ssh_core::Error::Remote("rsync bridge: bad token".into()));
+        return Err(crate::Error::Remote("rsync bridge: bad token".into()));
     }
     let command = read_line(&mut sock).await?;
     if !allowed(&command) {
-        return Err(ssh_core::Error::Remote(
+        return Err(crate::Error::Remote(
             "rsync bridge: not an rsync command".into(),
         ));
     }
@@ -355,10 +355,10 @@ mod tests {
             eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
             return;
         }
-        use ssh_core::config::{AuthMethod, Host};
-        use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-        use ssh_core::secrets::Secret;
-        use ssh_core::session::Credentials;
+        use crate::config::{AuthMethod, Host};
+        use crate::hostkey::{HostKeyVerifier, TrustPrompt};
+        use crate::secrets::Secret;
+        use crate::session::Credentials;
         struct TrustAll;
         impl TrustPrompt for TrustAll {
             fn trust_new_host(&self, _: &str, _: u16, _: &str) -> bool {

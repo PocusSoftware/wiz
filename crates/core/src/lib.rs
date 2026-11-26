@@ -7,6 +7,7 @@ pub mod error;
 pub mod hostkey;
 pub mod os;
 pub mod privacy;
+pub mod rsync;
 pub mod secrets;
 pub mod session;
 pub mod sftp;

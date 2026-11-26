@@ -74,11 +74,12 @@ the checks at the end pass.
 - **Layout:**
   - `crates/core/src`: `config/` (hosts, settings, quick connect targets), `secrets/`
     (Keychain, encrypted file), `session`, `hostkey`, `sftp`, `docker`, `terminal`,
-    `privacy` (masking).
+    `privacy` (masking), `rsync` (command lines and the bridge over an SSH connection,
+    unix only).
   - `crates/app/src`: `workspace/` (the window: tabs, splits, connecting, dialogs on top),
     `views/` (what a tab or page shows), `dialogs/` (forms shown over the window),
     `widgets/` (buttons, text input, animations), `platform/` (what differs per OS), plus
-    `prefs`, `rsync`, `runtime`, `theme`, `assets` at the top.
+    `prefs`, `runtime`, `theme`, `assets` at the top.
 - **Platforms:** macOS is the main platform and must keep behaving the same. Anything
   OS-specific goes in `platform/macos.rs`, `platform/windows.rs` and `platform/linux.rs`,
   with the same functions in each (what Windows and Linux share lives in `platform/ctrl.rs`); the rest of the app calls `crate::platform::...` and never checks the

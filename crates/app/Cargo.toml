@@ -18,14 +18,11 @@ gpui = { package = "gpui-fast", version = "=0.1.19" }
 gpui_platform = { package = "gpui-fast-platform", version = "=0.1.19", features = ["font-kit"] }
 jiff = "1.0.3"
 ssh-core = { path = "../core" }
-tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net"] }
 zeroize = "1.9.2"
 
 [build-dependencies]
 embed-resource = "3.0.12"
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2.191"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
