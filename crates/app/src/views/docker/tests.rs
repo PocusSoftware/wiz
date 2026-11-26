@@ -2,10 +2,8 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use gpui::{Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, TestAppContext, point, size};
-use ssh_core::docker;
 
 use super::*;
 
@@ -40,13 +38,8 @@ fn click(cx: &mut gpui::VisualTestContext, x: f32, y: f32, count: usize) {
 
 #[gpui::test]
 fn double_click_opens_logs(cx: &mut TestAppContext) {
-    // The view needs a Docker client; without one there is nothing to show.
-    let Ok(local) = docker::Local::new() else {
-        return;
-    };
     cx.executor().allow_parking();
-    let (view, cx) =
-        cx.add_window_view(|_, cx| DockerView::new(Backend::Local(Arc::new(local)), false, cx));
+    let (view, cx) = cx.add_window_view(|_, cx| DockerView::new(Backend::Local, false, cx));
     cx.simulate_resize(size(px(800.), px(400.)));
     // Let the first listing finish (it runs on the network runtime) so it can't replace
     // the rows below mid-test.

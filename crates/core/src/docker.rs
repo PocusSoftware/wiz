@@ -1,15 +1,13 @@
-//! Docker management: local daemon via bollard, remote via `docker` CLI over SSH exec.
+//! Docker management through the `docker` CLI, run locally or on a host over SSH exec.
 
-use std::sync::Arc;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::{Arc, OnceLock};
 
-use bollard::Docker;
-use bollard::query_parameters::{
-    ListContainersOptionsBuilder, RestartContainerOptions, StartContainerOptions,
-    StopContainerOptions,
-};
 use serde::Deserialize;
 
-use crate::session::Connection;
+use crate::session::{Connection, ExecOutput};
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,91 +47,11 @@ impl Action {
     }
 }
 
-// ---------- local (bollard) ----------
-
-pub struct Local {
-    docker: Docker,
-}
-
-impl Local {
-    /// Connects to the default socket. Lazy: no I/O until the first call.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            docker: Docker::connect_with_local_defaults()?,
-        })
-    }
-
-    pub async fn list(&self) -> Result<Vec<Container>> {
-        let opts = ListContainersOptionsBuilder::default().all(true).build();
-        let list = self.docker.list_containers(Some(opts)).await?;
-        Ok(list
-            .into_iter()
-            .map(|c| Container {
-                id: c.id.unwrap_or_default(),
-                name: c
-                    .names
-                    .and_then(|n| n.into_iter().next())
-                    .unwrap_or_default()
-                    .trim_start_matches('/')
-                    .to_string(),
-                image: c.image.unwrap_or_default(),
-                state: c.state.map(|s| s.to_string()).unwrap_or_default(),
-                status: c.status.unwrap_or_default(),
-                ports: c
-                    .ports
-                    .unwrap_or_default()
-                    .iter()
-                    .filter_map(|p| p.public_port.map(|pp| format!("{pp}->{}", p.private_port)))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            })
-            .collect())
-    }
-
-    pub async fn logs(&self, id: &str, tail: u32) -> Result<String> {
-        use bollard::query_parameters::LogsOptionsBuilder;
-        use futures_util::StreamExt;
-        let opts = LogsOptionsBuilder::default()
-            .stdout(true)
-            .stderr(true)
-            .timestamps(true)
-            .tail(&tail.to_string())
-            .build();
-        let mut stream = self.docker.logs(id, Some(opts));
-        let mut out = String::new();
-        while let Some(chunk) = stream.next().await {
-            out.push_str(&chunk?.to_string());
-        }
-        Ok(out)
-    }
-
-    pub async fn act(&self, id: &str, action: Action) -> Result<()> {
-        match action {
-            Action::Start => {
-                self.docker
-                    .start_container(id, None::<StartContainerOptions>)
-                    .await?
-            }
-            Action::Stop => {
-                self.docker
-                    .stop_container(id, None::<StopContainerOptions>)
-                    .await?
-            }
-            Action::Restart => {
-                self.docker
-                    .restart_container(id, None::<RestartContainerOptions>)
-                    .await?
-            }
-            Action::Remove => self.docker.remove_container(id, None).await?,
-        }
-        Ok(())
-    }
-}
-
-// ---------- remote (docker CLI over ssh exec) ----------
-
-pub struct Remote<'a> {
-    conn: &'a Connection,
+/// Either the local daemon or a remote host reached over an existing SSH connection.
+#[derive(Clone)]
+pub enum Backend {
+    Local,
+    Remote(Arc<Connection>),
 }
 
 #[derive(Deserialize)]
@@ -158,89 +76,156 @@ fn check_ref(s: &str) -> Result<&str> {
     if ok {
         Ok(s)
     } else {
-        Err(Error::Remote(format!("invalid container reference: {s:?}")))
+        Err(Error::Docker(format!("invalid container reference: {s:?}")))
     }
-}
-
-impl<'a> Remote<'a> {
-    pub fn new(conn: &'a Connection) -> Self {
-        Self { conn }
-    }
-
-    pub async fn list(&self) -> Result<Vec<Container>> {
-        let out = self
-            .conn
-            .exec("docker ps -a --no-trunc --format '{{json .}}'")
-            .await?;
-        if out.status != Some(0) {
-            return Err(Error::Remote(
-                String::from_utf8_lossy(&out.stderr).trim().to_string(),
-            ));
-        }
-        parse_cli_list(&out.stdout_str())
-    }
-
-    pub async fn act(&self, id: &str, action: Action) -> Result<()> {
-        let id = check_ref(id)?;
-        let out = self
-            .conn
-            .exec(&format!("docker {} {id}", action.verb()))
-            .await?;
-        if out.status == Some(0) {
-            Ok(())
-        } else {
-            Err(Error::Remote(
-                String::from_utf8_lossy(&out.stderr).trim().to_string(),
-            ))
-        }
-    }
-
-    pub async fn logs(&self, id: &str, tail: u32) -> Result<String> {
-        let id = check_ref(id)?;
-        let out = self
-            .conn
-            .exec(&format!("docker logs --timestamps --tail {tail} {id} 2>&1"))
-            .await?;
-        Ok(out.stdout_str())
-    }
-
-    /// Command line for an interactive shell inside a container, for `Connection::open_shell`.
-    pub fn exec_shell_command(id: &str) -> Result<String> {
-        let id = check_ref(id)?;
-        Ok(format!(
-            "docker exec -it {id} sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
-        ))
-    }
-}
-
-/// Either the local daemon or a remote host reached over an existing SSH connection.
-#[derive(Clone)]
-pub enum Backend {
-    Local(Arc<Local>),
-    Remote(Arc<Connection>),
 }
 
 impl Backend {
     pub async fn list(&self) -> Result<Vec<Container>> {
-        match self {
-            Backend::Local(l) => l.list().await,
-            Backend::Remote(c) => Remote::new(c).list().await,
-        }
+        let out = self
+            .run(&["ps", "-a", "--no-trunc", "--format", "{{json .}}"], false)
+            .await?;
+        parse_cli_list(&check_status(out)?.stdout_str())
     }
 
     pub async fn act(&self, id: &str, action: Action) -> Result<()> {
-        match self {
-            Backend::Local(l) => l.act(id, action).await,
-            Backend::Remote(c) => Remote::new(c).act(id, action).await,
-        }
+        let out = self.run(&[action.verb(), check_ref(id)?], false).await?;
+        check_status(out).map(drop)
     }
 
     pub async fn logs(&self, id: &str, tail: u32) -> Result<String> {
+        let tail = tail.to_string();
+        let out = self
+            .run(
+                &["logs", "--timestamps", "--tail", &tail, check_ref(id)?],
+                true,
+            )
+            .await?;
+        Ok(out.stdout_str())
+    }
+
+    async fn run(&self, args: &[&str], merge: bool) -> Result<ExecOutput> {
         match self {
-            Backend::Local(l) => l.logs(id, tail).await,
-            Backend::Remote(c) => Remote::new(c).logs(id, tail).await,
+            Backend::Local => {
+                let args: Vec<String> = args.iter().map(ToString::to_string).collect();
+                tokio::task::spawn_blocking(move || run_local(&args, merge))
+                    .await
+                    .map_err(|e| Error::Docker(e.to_string()))?
+            }
+            Backend::Remote(conn) => conn.exec(&remote_command(args, merge)).await,
         }
     }
+}
+
+/// Command line for an interactive shell inside a container, for `Connection::open_shell`.
+pub fn exec_shell_command(id: &str) -> Result<String> {
+    let id = check_ref(id)?;
+    Ok(format!(
+        "docker exec -it {id} sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
+    ))
+}
+
+fn check_status(out: ExecOutput) -> Result<ExecOutput> {
+    if out.status == Some(0) {
+        Ok(out)
+    } else {
+        Err(Error::Docker(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+fn remote_command(args: &[&str], merge: bool) -> String {
+    let mut cmd = String::from("docker");
+    for a in args {
+        if a.contains(['{', ' ']) {
+            cmd.push_str(&format!(" '{a}'"));
+        } else {
+            cmd.push(' ');
+            cmd.push_str(a);
+        }
+    }
+    if merge {
+        cmd.push_str(" 2>&1");
+    }
+    cmd
+}
+
+fn run_local(args: &[String], merge: bool) -> Result<ExecOutput> {
+    let mut cmd = Command::new(docker_bin());
+    cmd.args(args).stdin(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let not_found = |e: std::io::Error| match e.kind() {
+        std::io::ErrorKind::NotFound => Error::Docker("docker command not found".into()),
+        _ => e.into(),
+    };
+    let (stdout, stderr, status) = if merge {
+        let (mut reader, writer) = std::io::pipe()?;
+        cmd.stdout(writer.try_clone()?).stderr(writer);
+        let mut child = cmd.spawn().map_err(not_found)?;
+        drop(cmd);
+        let mut stdout = Vec::new();
+        reader.read_to_end(&mut stdout)?;
+        (stdout, Vec::new(), child.wait()?)
+    } else {
+        let out = cmd.output().map_err(not_found)?;
+        (out.stdout, out.stderr, out.status)
+    };
+    Ok(ExecOutput {
+        stdout,
+        stderr,
+        status: status.code().and_then(|c| u32::try_from(c).ok()),
+    })
+}
+
+fn docker_bin() -> &'static Path {
+    static BIN: OnceLock<PathBuf> = OnceLock::new();
+    BIN.get_or_init(|| {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let dirs = std::env::split_paths(&path).chain(install_dirs());
+        find_bin(dirs, DOCKER).unwrap_or_else(|| PathBuf::from(DOCKER))
+    })
+}
+
+const DOCKER: &str = if cfg!(windows) {
+    "docker.exe"
+} else {
+    "docker"
+};
+
+fn find_bin(dirs: impl IntoIterator<Item = PathBuf>, name: &str) -> Option<PathBuf> {
+    dirs.into_iter().map(|d| d.join(name)).find(|p| p.is_file())
+}
+
+#[cfg(target_os = "macos")]
+fn install_dirs() -> Vec<PathBuf> {
+    let home = std::env::home_dir().unwrap_or_default();
+    vec![
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        home.join(".orbstack/bin"),
+        home.join(".docker/bin"),
+        home.join(".rd/bin"),
+        PathBuf::from("/Applications/Docker.app/Contents/Resources/bin"),
+    ]
+}
+
+#[cfg(windows)]
+fn install_dirs() -> Vec<PathBuf> {
+    std::env::var_os("ProgramFiles")
+        .map(|p| PathBuf::from(p).join(r"Docker\Docker\resources\bin"))
+        .into_iter()
+        .collect()
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn install_dirs() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 fn parse_cli_list(s: &str) -> Result<Vec<Container>> {
@@ -248,7 +233,7 @@ fn parse_cli_list(s: &str) -> Result<Vec<Container>> {
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
             let r: CliRow = serde_json::from_str(l)
-                .map_err(|e| Error::Remote(format!("bad docker output: {e}")))?;
+                .map_err(|e| Error::Docker(format!("bad docker output: {e}")))?;
             Ok(Container {
                 id: r.id,
                 name: r.names,

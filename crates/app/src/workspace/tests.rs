@@ -531,8 +531,7 @@ fn status_messages_hide_after_a_while(cx: &mut TestAppContext) {
 /// Open a tab that needs no server: container logs (fetching them fails quietly here).
 fn logs_tab(root: &Entity<Workspace>, cx: &mut VisualTestContext, name: &str) {
     root.update_in(cx, |r, w, cx| {
-        let local = Arc::new(docker::Local::new().unwrap());
-        let view = cx.new(|cx| LogView::new(Backend::Local(local), name.into(), cx));
+        let view = cx.new(|cx| LogView::new(Backend::Local, name.into(), cx));
         r.push_tab(name.into(), TabKind::Logs(view), None, w, cx);
     });
 }

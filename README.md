@@ -6,7 +6,7 @@ A fast SSH client for macOS, Windows and Linux in Rust (terminal, SFTP, Docker).
 - Done: password, key (ed25519/RSA, encrypted), ssh-agent and keyboard-interactive auth with one-time codes, jump hosts, Keychain secrets,
   known_hosts verification (TOFU, hard fail on changed key, OpenSSH host key rotation), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
-  (remote over SSH, local via bollard).
+  (through the `docker` CLI, remote over SSH or local).
 - SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop between panes and from Finder or Explorer, conflict prompts, rsync hint for big transfers.
 - Todo: startup time measurement.
 

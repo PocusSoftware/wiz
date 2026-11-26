@@ -249,7 +249,7 @@ impl Workspace {
                 let Some((host, conn, pw)) = remote else {
                     return;
                 };
-                match docker::Remote::exec_shell_command(id) {
+                match docker::exec_shell_command(id) {
                     Ok(cmd) => {
                         self.open_shell(format!("{host} · {name}"), conn, pw, Some(cmd), window, cx)
                     }
@@ -274,31 +274,17 @@ impl Workspace {
     }
 
     pub(super) fn open_local_docker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        cx.spawn_in(window, async move |this, cx| {
-            let r = runtime::spawn(async { docker::Local::new() }).await;
-            this.update_in(cx, |this, window, cx| match r {
-                Ok(local) => {
-                    let view =
-                        cx.new(|cx| DockerView::new(Backend::Local(Arc::new(local)), false, cx));
-                    cx.subscribe_in(&view, window, |this, _, ev: &DockerEvent, window, cx| {
-                        this.on_docker_event(ev, None, window, cx)
-                    })
-                    .detach();
-                    this.push_tab(
-                        "Local Docker".into(),
-                        TabKind::Docker(view),
-                        None,
-                        window,
-                        cx,
-                    );
-                }
-                Err(e) => {
-                    this.set_status(format!("Docker: {e}"), true);
-                    cx.notify();
-                }
-            })
-            .ok();
+        let view = cx.new(|cx| DockerView::new(Backend::Local, false, cx));
+        cx.subscribe_in(&view, window, |this, _, ev: &DockerEvent, window, cx| {
+            this.on_docker_event(ev, None, window, cx)
         })
         .detach();
+        self.push_tab(
+            "Local Docker".into(),
+            TabKind::Docker(view),
+            None,
+            window,
+            cx,
+        );
     }
 }

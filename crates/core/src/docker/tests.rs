@@ -15,3 +15,25 @@ fn rejects_shell_metachars() {
     assert!(check_ref("a; rm -rf /").is_err());
     assert!(check_ref("web-1_a.b").is_ok());
 }
+
+#[test]
+fn remote_command_quotes_only_the_template() {
+    assert_eq!(
+        remote_command(&["ps", "-a", "--format", "{{json .}}"], false),
+        "docker ps -a --format '{{json .}}'"
+    );
+    assert_eq!(
+        remote_command(&["logs", "--tail", "5", "web"], true),
+        "docker logs --tail 5 web 2>&1"
+    );
+}
+
+#[test]
+fn finds_docker_in_install_dirs() {
+    let empty = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    std::fs::write(bin.path().join(DOCKER), "").unwrap();
+    let dirs = [empty.path().to_path_buf(), bin.path().to_path_buf()];
+    assert_eq!(find_bin(dirs, DOCKER), Some(bin.path().join(DOCKER)));
+    assert_eq!(find_bin([empty.path().to_path_buf()], DOCKER), None);
+}

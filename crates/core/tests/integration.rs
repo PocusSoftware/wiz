@@ -333,17 +333,19 @@ async fn remote_docker_list_and_exec_shell() {
         path: keys().join("ed25519"),
         passphrase: None,
     };
-    let c = Connection::connect(&h, &creds, verifier(&d, Arc::new(TrustAll)))
-        .await
-        .unwrap();
-    let list = docker::Remote::new(&c).list().await.unwrap();
+    let c = Arc::new(
+        Connection::connect(&h, &creds, verifier(&d, Arc::new(TrustAll)))
+            .await
+            .unwrap(),
+    );
+    let list = docker::Backend::Remote(c.clone()).list().await.unwrap();
     let pw = list
         .iter()
         .find(|x| x.name == "sshc-password")
         .expect("sshc-password listed");
     assert!(pw.is_running());
 
-    let cmd = docker::Remote::exec_shell_command(&pw.id).unwrap();
+    let cmd = docker::exec_shell_command(&pw.id).unwrap();
     let mut sh = c.open_shell(80, 24, Some(&cmd)).await.unwrap();
     let mut term = Terminal::new(80, 24);
     sh.send("hostname; echo EXEC_$?\n").await;
@@ -353,8 +355,13 @@ async fn remote_docker_list_and_exec_shell() {
 #[tokio::test]
 async fn local_docker_list() {
     gate!();
-    let list = docker::Local::new().unwrap().list().await.unwrap();
+    let list = docker::Backend::Local.list().await.unwrap();
     assert!(list.iter().any(|c| c.name == "sshc-key"));
+    let logs = docker::Backend::Local
+        .logs("sshc-missing", 5)
+        .await
+        .unwrap();
+    assert!(logs.contains("sshc-missing"), "{logs}");
 }
 
 #[cfg(target_os = "macos")]
