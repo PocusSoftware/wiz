@@ -2,13 +2,33 @@
 //! Password host:  cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2
 //! Key host:       cargo run -p ssh-core --example connect -- tester@127.0.0.1:2223 --key docker/keys/ed25519
 use std::io::{Read, Write};
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, size};
 use ssh_core::config::{AuthMethod, Host};
 use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
 use ssh_core::secrets::Secret;
 use ssh_core::session::{Connection, Credentials, ShellEvent, ShellInput};
+
+fn stty(args: &[&str]) -> Option<String> {
+    let out = Command::new("stty")
+        .args(args)
+        .stdin(Stdio::inherit())
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn size() -> (u16, u16) {
+    stty(&["size"])
+        .and_then(|s| {
+            let (rows, cols) = s.split_once(' ')?;
+            Some((cols.parse().ok()?, rows.parse().ok()?))
+        })
+        .unwrap_or((80, 24))
+}
 
 struct Tofu;
 impl TrustPrompt for Tofu {
@@ -72,10 +92,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         prompt: Arc::new(Tofu),
     };
     let conn = Connection::connect(&host, &creds, verifier).await?;
-    let (cols, rows) = size()?;
+    let (cols, rows) = size();
     let mut shell = conn.open_shell(cols, rows, None).await?;
 
-    enable_raw_mode()?;
+    let saved = stty(&["-g"]);
+    stty(&["raw", "-echo"]);
     let input = shell.input.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 1024];
@@ -100,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Some(ShellEvent::Data(d)) => { out.write_all(&d)?; out.flush()?; }
                     _ => break,
                 },
-                _ = winch.recv() => { let (c, r) = size()?; shell.resize(c, r).await; }
+                _ = winch.recv() => { let (c, r) = size(); shell.resize(c, r).await; }
             }
         }
     }
@@ -110,6 +131,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         out.write_all(&d)?;
         out.flush()?;
     }
-    disable_raw_mode()?;
+    if let Some(saved) = saved {
+        stty(&[&saved]);
+    }
     Ok(())
 }

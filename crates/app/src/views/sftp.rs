@@ -344,7 +344,7 @@ struct Edit {
     /// Modification time last synced, to spot a save.
     mtime: Option<SystemTime>,
     state: EState,
-    synced_at: Option<chrono::DateTime<chrono::Local>>,
+    synced_at: Option<jiff::ZonedDateTime>,
 }
 
 fn human_size(n: u64) -> String {

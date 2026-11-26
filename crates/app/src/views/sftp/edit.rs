@@ -94,7 +94,7 @@ impl SftpView {
                         e.mtime = std::fs::metadata(&e.local).and_then(|m| m.modified()).ok();
                         e.downloaded = true;
                         e.state = EState::Synced;
-                        e.synced_at = Some(chrono::Local::now());
+                        e.synced_at = Some(jiff::ZonedDateTime::now());
                         let local = e.local.clone();
                         t.launch_editor(side, &local, cx);
                     }
@@ -150,7 +150,7 @@ impl SftpView {
                         Ok(()) => {
                             e.mtime = mtime;
                             e.state = EState::Synced;
-                            e.synced_at = Some(chrono::Local::now());
+                            e.synced_at = Some(jiff::ZonedDateTime::now());
                         }
                         Err(err) => {
                             // Remember the mtime so a failure isn't retried every tick.
@@ -186,8 +186,8 @@ impl SftpView {
             let (status, color): (String, u32) = match &e.state {
                 EState::Downloading => ("Downloading...".into(), palette().muted),
                 EState::Synced => (
-                    match e.synced_at {
-                        Some(t) => format!("In sync, {}", t.format("%H:%M:%S")),
+                    match &e.synced_at {
+                        Some(t) => format!("In sync, {}", t.strftime("%H:%M:%S")),
                         None => "In sync".into(),
                     },
                     palette().green,

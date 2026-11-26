@@ -475,7 +475,7 @@ pub mod local {
     use super::*;
 
     pub fn home() -> PathBuf {
-        dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+        std::env::home_dir().unwrap_or_else(|| PathBuf::from("/"))
     }
 
     pub fn list(path: &Path) -> Result<Vec<Entry>> {

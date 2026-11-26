@@ -12,11 +12,11 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-alacritty_terminal = "0.26"
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+alacritty_terminal = { version = "0.26.0", default-features = false }
 gpui = { package = "gpui-fast", version = "=0.1.19" }
 # font-kit is the macOS text system; without it no text is drawn.
 gpui_platform = { package = "gpui-fast-platform", version = "=0.1.19", features = ["font-kit"] }
+jiff = "1.0.3"
 ssh-core = { path = "../core" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }
 zeroize = "1.9.2"

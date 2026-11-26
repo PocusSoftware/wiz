@@ -24,12 +24,9 @@ impl Render for DragLabel {
 }
 
 fn fmt_time(t: Option<SystemTime>) -> String {
-    match t {
-        Some(t) => chrono::DateTime::<chrono::Local>::from(t)
-            .format("%Y-%m-%d %H:%M")
-            .to_string(),
-        None => String::new(),
-    }
+    t.and_then(|t| jiff::ZonedDateTime::try_from(t).ok())
+        .map(|z| z.strftime("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_default()
 }
 
 impl SftpView {

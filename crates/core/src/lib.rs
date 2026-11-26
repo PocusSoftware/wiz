@@ -29,9 +29,29 @@ pub fn config_dir() -> Result<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("SSHC_CONFIG_DIR") {
         return Ok(d.into());
     }
-    dirs::config_dir()
+    platform_config_dir()
         .map(|d| d.join(APP_ID))
         .ok_or_else(|| Error::Config("no config dir".into()))
+}
+
+#[cfg(target_os = "macos")]
+fn platform_config_dir() -> Option<std::path::PathBuf> {
+    Some(std::env::home_dir()?.join("Library/Application Support"))
+}
+
+#[cfg(windows)]
+fn platform_config_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn platform_config_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| Some(std::env::home_dir()?.join(".config")))
 }
 
 /// Write `bytes` to `path` through a temp file and a rename, so a crash never leaves it half
