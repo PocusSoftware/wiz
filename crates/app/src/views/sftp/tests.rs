@@ -66,7 +66,7 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn mouse_back_button_goes_back_in_history(cx: &mut TestAppContext) {
+fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let dir = tempfile::tempdir().unwrap();
     let inner = dir.path().join("inner");
@@ -76,7 +76,7 @@ fn mouse_back_button_goes_back_in_history(cx: &mut TestAppContext) {
     cx.simulate_resize(size(px(1000.), px(600.)));
     let open = |cx: &mut gpui::VisualTestContext, path: &std::path::Path| {
         let path = path.to_string_lossy().into_owned();
-        view.update(cx, |v, cx| v.go(Side::Left, path, true, cx));
+        view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
         settle(cx, &view);
     };
     settle(cx, &view);
@@ -90,6 +90,26 @@ fn mouse_back_button_goes_back_in_history(cx: &mut TestAppContext) {
     );
     settle(cx, &view);
     view.read_with(cx, |v, _| assert_eq!(Some(v.left.path.clone()), start));
+    cx.simulate_mouse_down(
+        point(px(200.), px(300.)),
+        MouseButton::Navigate(NavigationDirection::Forward),
+        Modifiers::default(),
+    );
+    settle(cx, &view);
+    let inner = std::fs::canonicalize(&inner).unwrap();
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.left.path, inner.to_string_lossy());
+        assert!(v.left.forward.is_empty());
+    });
+    cx.simulate_mouse_down(
+        point(px(200.), px(300.)),
+        MouseButton::Navigate(NavigationDirection::Back),
+        Modifiers::default(),
+    );
+    settle(cx, &view);
+    view.read_with(cx, |v, _| assert_eq!(v.left.forward.len(), 1));
+    open(cx, &inner);
+    view.read_with(cx, |v, _| assert!(v.left.forward.is_empty()));
 }
 
 fn settle(cx: &mut gpui::VisualTestContext, view: &Entity<SftpView>) {

@@ -260,7 +260,7 @@ impl SftpView {
             )
             .child(
                 icon_button((side.tag(), 1002usize), "home", "Home", palette().muted)
-                    .on_click(cx.listener(move |t, _, _, cx| t.go(side, "~".into(), true, cx))),
+                    .on_click(cx.listener(move |t, _, _, cx| t.go(side, "~".into(), Nav::New, cx))),
             )
             .child(div().flex_1().min_w_0().child(p.input.clone()))
             .child(
@@ -340,6 +340,10 @@ impl SftpView {
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
                 cx.listener(move |t, _, _, cx| t.back(side, cx)),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(move |t, _, _, cx| t.forward(side, cx)),
             )
             .relative()
             .flex_1()

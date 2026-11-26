@@ -3,13 +3,7 @@
 use super::*;
 
 impl SftpView {
-    pub(super) fn go(
-        &mut self,
-        side: Side,
-        path: String,
-        push_history: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn go(&mut self, side: Side, path: String, how: Nav, cx: &mut Context<Self>) {
         let p = self.pane_mut(side);
         let source = p.source.clone();
         p.nav += 1;
@@ -27,8 +21,16 @@ impl SftpView {
                 p.loading = false;
                 match r {
                     Ok((canon, list)) => {
-                        if push_history && !prev.is_empty() && prev != canon {
-                            p.history.push(prev);
+                        if !prev.is_empty() && prev != canon {
+                            match how {
+                                Nav::New => {
+                                    p.history.push(prev);
+                                    p.forward.clear();
+                                }
+                                Nav::Back => p.forward.push(prev),
+                                Nav::Forward => p.history.push(prev),
+                                Nav::Reload => {}
+                            }
                         }
                         p.path = canon.clone();
                         p.raw = list;
@@ -56,19 +58,25 @@ impl SftpView {
     pub(super) fn refresh(&mut self, side: Side, cx: &mut Context<Self>) {
         let path = self.pane(side).path.clone();
         if !path.is_empty() {
-            self.go(side, path, false, cx);
+            self.go(side, path, Nav::Reload, cx);
         }
     }
 
     pub(super) fn up(&mut self, side: Side, cx: &mut Context<Self>) {
         let p = self.pane(side);
         let parent = p.source.parent(&p.path);
-        self.go(side, parent, true, cx);
+        self.go(side, parent, Nav::New, cx);
     }
 
     pub(super) fn back(&mut self, side: Side, cx: &mut Context<Self>) {
         if let Some(prev) = self.pane_mut(side).history.pop() {
-            self.go(side, prev, false, cx);
+            self.go(side, prev, Nav::Back, cx);
+        }
+    }
+
+    pub(super) fn forward(&mut self, side: Side, cx: &mut Context<Self>) {
+        if let Some(next) = self.pane_mut(side).forward.pop() {
+            self.go(side, next, Nav::Forward, cx);
         }
     }
 
@@ -80,7 +88,7 @@ impl SftpView {
         };
         let target = p.source.join(&p.path, &e.name);
         if e.is_dir {
-            self.go(side, target, true, cx);
+            self.go(side, target, Nav::New, cx);
         } else {
             let (name, size) = (e.name.clone(), e.size);
             self.open_file(side, name, target, size, cx);
@@ -90,7 +98,7 @@ impl SftpView {
     pub(super) fn submit_path(&mut self, side: Side, cx: &mut Context<Self>) {
         let v = self.pane(side).input.read(cx).value().trim().to_string();
         if !v.is_empty() {
-            self.go(side, v, true, cx);
+            self.go(side, v, Nav::New, cx);
         }
     }
 
@@ -178,6 +186,7 @@ impl SftpView {
             "backspace" => self.up(side, cx),
             "delete" => self.ask_delete(side, window, cx),
             "left" if m.secondary(cx) => self.back(side, cx),
+            "right" if m.secondary(cx) => self.forward(side, cx),
             // Tab goes on to the buttons, so the arrows switch panes.
             dir @ ("left" | "right") if !m.modified() => {
                 let to = if dir == "left" {

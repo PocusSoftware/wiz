@@ -29,6 +29,14 @@ use crate::widgets::anim::{fade_in, pop_in};
 use crate::widgets::input::{Hide, TextInput};
 use crate::widgets::{button, icon, icon_button, keyboard, primary_button};
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Nav {
+    New,
+    Back,
+    Forward,
+    Reload,
+}
+
 /// Which pane. Each pane can browse the local disk or any connected server.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Side {
@@ -151,6 +159,7 @@ struct Pane {
     cursor: usize,
     anchor: usize,
     history: Vec<String>,
+    forward: Vec<String>,
     loading: bool,
     error: Option<SharedString>,
     focus: FocusHandle,
@@ -180,6 +189,7 @@ impl Pane {
             cursor: 0,
             anchor: 0,
             history: vec![],
+            forward: vec![],
             loading: false,
             error: None,
             // Reachable with Tab.
@@ -452,8 +462,8 @@ impl SftpView {
     }
 
     pub fn load(&mut self, cx: &mut Context<Self>) {
-        self.go(Side::Left, "~".into(), false, cx);
-        self.go(Side::Right, "~".into(), false, cx);
+        self.go(Side::Left, "~".into(), Nav::Reload, cx);
+        self.go(Side::Right, "~".into(), Nav::Reload, cx);
     }
 
     /// Point a pane at a different local/remote source and open its home.
@@ -462,12 +472,13 @@ impl SftpView {
         p.source = source;
         p.path.clear();
         p.history.clear();
+        p.forward.clear();
         p.raw.clear();
         p.entries.clear();
         p.selected.clear();
         p.error = None;
         self.menu = None;
-        self.go(side, "~".into(), false, cx);
+        self.go(side, "~".into(), Nav::Reload, cx);
     }
 
     fn pane(&self, s: Side) -> &Pane {
