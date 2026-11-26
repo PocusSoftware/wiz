@@ -203,18 +203,20 @@ impl SftpView {
                 .child(cancel)
                 .into_any_element(),
             Prompt::Conflict {
-                from,
+                origin,
+                to,
                 names,
                 existing,
             } => {
-                let (from, names, existing) = (*from, names.clone(), existing.clone());
-                let (n2, e2) = (names.clone(), existing.clone());
+                let (to, names, existing) = (*to, names.clone(), existing.clone());
+                let (n2, e2, o2) = (names.clone(), existing.clone(), origin.clone());
+                let origin = origin.clone();
                 let preview: Vec<String> = existing.iter().take(3).cloned().collect();
                 bar.child(div().child(format!(
                     "{} already exist{} in {}: {}{}",
                     existing.len(),
                     if existing.len() == 1 { "s" } else { "" },
-                    self.pane(from.other()).source.label(),
+                    self.pane(to).source.label(),
                     preview.join(", "),
                     if existing.len() > 3 { ", ..." } else { "" }
                 )))
@@ -223,7 +225,7 @@ impl SftpView {
                     move |t, _, w, cx| {
                         let n = names.clone();
                         t.close_prompt(w, cx);
-                        t.run_transfer(from, n, cx);
+                        t.run_transfer(origin.clone(), to, n, cx);
                     },
                 )))
                 .child(button("p-skip", "Skip existing").on_click(cx.listener(
@@ -231,7 +233,7 @@ impl SftpView {
                         let n: Vec<String> =
                             n2.iter().filter(|x| !e2.contains(x)).cloned().collect();
                         t.close_prompt(w, cx);
-                        t.run_transfer(from, n, cx);
+                        t.run_transfer(o2.clone(), to, n, cx);
                     },
                 )))
                 .child(cancel)

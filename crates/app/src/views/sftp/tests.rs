@@ -2,7 +2,7 @@
 
 use gpui::{Modifiers, TestAppContext, point, px, size};
 
-use super::transfers::self_copy_error;
+use super::transfers::{group_by_folder, self_copy_error};
 use super::*;
 
 fn n(v: &[&str]) -> Vec<String> {
@@ -110,6 +110,58 @@ fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     view.read_with(cx, |v, _| assert_eq!(v.left.forward.len(), 1));
     open(cx, &inner);
     view.read_with(cx, |v, _| assert!(v.left.forward.is_empty()));
+}
+
+#[test]
+fn dropped_paths_are_grouped_by_folder() {
+    let p = |s: &str| PathBuf::from(s);
+    let groups = group_by_folder(&[p("/a/x"), p("/b/y"), p("/a/z"), p("/")]);
+    assert_eq!(
+        groups,
+        [
+            ("/a".to_string(), n(&["x", "z"])),
+            ("/b".to_string(), n(&["y"]))
+        ]
+    );
+}
+
+#[gpui::test]
+fn files_dropped_from_another_app_are_copied_into_the_pane(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let src = tempfile::tempdir().unwrap();
+    let dst = tempfile::tempdir().unwrap();
+    std::fs::write(src.path().join("one.txt"), "1").unwrap();
+    std::fs::create_dir(src.path().join("dir")).unwrap();
+    std::fs::write(src.path().join("dir/two.txt"), "2").unwrap();
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    settle(cx, &view);
+    let dst_path = dst.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Right, dst_path, Nav::New, cx));
+    settle(cx, &view);
+
+    let at = point(px(750.), px(300.));
+    let paths = ExternalPaths(
+        [src.path().join("one.txt"), src.path().join("dir")]
+            .into_iter()
+            .collect(),
+    );
+    cx.simulate_event(gpui::FileDropEvent::Entered {
+        position: at,
+        paths,
+    });
+    cx.simulate_event(gpui::FileDropEvent::Submit { position: at });
+
+    let copied = dst.path().join("dir/two.txt");
+    for _ in 0..500 {
+        cx.run_until_parked();
+        if copied.exists() && dst.path().join("one.txt").exists() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("dropped files were not copied");
 }
 
 fn settle(cx: &mut gpui::VisualTestContext, view: &Entity<SftpView>) {

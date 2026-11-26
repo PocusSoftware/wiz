@@ -369,6 +369,12 @@ impl SftpView {
                     t.begin_transfer_names(d.from, d.names.clone(), cx);
                 }
             }))
+            .drag_over::<ExternalPaths>(|s, _, _, _| {
+                s.border_color(c(accent())).bg(accent_alpha(0.08))
+            })
+            .on_drop(cx.listener(move |t, d: &ExternalPaths, _, cx| {
+                t.drop_paths(side, d.paths(), cx);
+            }))
             .child(
                 div()
                     .h(px(22.))

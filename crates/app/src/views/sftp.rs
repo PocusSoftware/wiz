@@ -15,9 +15,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use gpui::{
-    ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, NavigationDirection, Render, ScrollStrategy,
-    SharedString, UniformListScrollHandle, Window, div, prelude::*, px, uniform_list,
+    ClickEvent, Context, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, FontWeight,
+    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, NavigationDirection, Render,
+    ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, prelude::*, px,
+    uniform_list,
 };
 use ssh_core::config::Host;
 use ssh_core::sftp::{self, Entry, Progress, Sftp, local};
@@ -253,10 +254,17 @@ enum Prompt {
     Rename(Side, String),
     Delete(Side, Vec<String>),
     Conflict {
-        from: Side,
+        origin: Origin,
+        to: Side,
         names: Vec<String>,
         existing: Vec<String>,
     },
+}
+
+#[derive(Clone)]
+struct Origin {
+    source: Source,
+    dir: String,
 }
 
 enum TState {

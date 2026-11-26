@@ -22,6 +22,24 @@ pub(super) fn self_copy_error(
         .map(|n| format!("Cannot copy {n} into itself."))
 }
 
+pub(super) fn group_by_folder(paths: &[PathBuf]) -> Vec<(String, Vec<String>)> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for p in paths {
+        let (Some(dir), Some(name)) = (p.parent(), p.file_name()) else {
+            continue;
+        };
+        let (dir, name) = (
+            dir.to_string_lossy().into_owned(),
+            name.to_string_lossy().into_owned(),
+        );
+        match groups.iter_mut().find(|g| g.0 == dir) {
+            Some(g) => g.1.push(name),
+            None => groups.push((dir, vec![name])),
+        }
+    }
+    groups
+}
+
 impl SftpView {
     /// Copy the selection of `from` into the other pane's directory.
     pub(super) fn begin_transfer(&mut self, from: Side, cx: &mut Context<Self>) {
@@ -35,18 +53,32 @@ impl SftpView {
         names: Vec<String>,
         cx: &mut Context<Self>,
     ) {
+        let origin = Origin {
+            source: self.pane(from).source.clone(),
+            dir: self.pane(from).path.clone(),
+        };
+        self.begin_copy(origin, from.other(), names, cx);
+    }
+
+    pub(super) fn drop_paths(&mut self, to: Side, paths: &[PathBuf], cx: &mut Context<Self>) {
+        for (dir, names) in group_by_folder(paths) {
+            let origin = Origin {
+                source: Source::Local,
+                dir,
+            };
+            self.begin_copy(origin, to, names, cx);
+        }
+    }
+
+    fn begin_copy(&mut self, origin: Origin, to: Side, names: Vec<String>, cx: &mut Context<Self>) {
         if names.is_empty() {
             return;
         }
-        let to = from.other();
         let dest_dir = self.pane(to).path.clone();
         let dest = self.pane(to).source.clone();
-        if let Some(msg) = self_copy_error(
-            self.pane(from).source.same_fs(&dest),
-            &self.pane(from).path,
-            &dest_dir,
-            &names,
-        ) {
+        if let Some(msg) =
+            self_copy_error(origin.source.same_fs(&dest), &origin.dir, &dest_dir, &names)
+        {
             self.pane_mut(to).error = Some(msg.into());
             cx.notify();
             return;
@@ -77,10 +109,11 @@ impl SftpView {
             };
             this.update(cx, |t, cx| {
                 if existing.is_empty() {
-                    t.run_transfer(from, names, cx);
+                    t.run_transfer(origin, to, names, cx);
                 } else {
                     t.prompt = Some(Prompt::Conflict {
-                        from,
+                        origin,
+                        to,
                         names,
                         existing,
                     });
@@ -92,14 +125,21 @@ impl SftpView {
         .detach();
     }
 
-    pub(super) fn run_transfer(&mut self, from: Side, names: Vec<String>, cx: &mut Context<Self>) {
+    pub(super) fn run_transfer(
+        &mut self,
+        origin: Origin,
+        to: Side,
+        names: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         if names.is_empty() {
             return;
         }
-        let to = from.other();
-        let src_dir = self.pane(from).path.clone();
+        let Origin {
+            source: from_src,
+            dir: src_dir,
+        } = origin;
         let dst_dir = self.pane(to).path.clone();
-        let from_src = self.pane(from).source.clone();
         let to_src = self.pane(to).source.clone();
         // A copied command would need the jump hosts and their keys too: none then.
         let through_jump = [&from_src, &to_src]
