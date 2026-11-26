@@ -14,33 +14,33 @@ workspace = true
 [dependencies]
 alacritty_terminal = "0.26"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-gpui = { package = "gpui-fast", version = "=0.1.13" }
+gpui = { package = "gpui-fast", version = "=0.1.19" }
 # font-kit is the macOS text system; without it no text is drawn.
-gpui_platform = { package = "gpui-fast-platform", version = "=0.1.13", features = ["font-kit"] }
+gpui_platform = { package = "gpui-fast-platform", version = "=0.1.19", features = ["font-kit"] }
 ssh-core = { path = "../core" }
-tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }
-zeroize = "1.9.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net", "process"] }
+zeroize = "1.9.2"
 
 [build-dependencies]
 embed-resource = "3.0.12"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = "0.2.191"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["NSWindow", "NSEvent", "NSApplication", "NSResponder", "NSView", "NSImage", "NSAppearance", "NSAccessibility", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSArray", "NSString"] }
-raw-window-handle = "0.6"
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWindow", "NSEvent", "NSApplication", "NSResponder", "NSView", "NSImage", "NSAppearance", "NSAccessibility", "NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData", "NSArray", "NSString"] }
+raw-window-handle = "0.6.2"
 
 # GPUI's Linux backends are off by default.
 [target.'cfg(target_os = "linux")'.dependencies]
-gpui_platform = { package = "gpui-fast-platform", version = "=0.1.13", features = ["wayland", "x11"] }
+gpui_platform = { package = "gpui-fast-platform", version = "=0.1.19", features = ["wayland", "x11"] }
 
 [target.'cfg(windows)'.dependencies]
-raw-window-handle = "0.6"
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+raw-window-handle = "0.6.2"
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
-gpui = { package = "gpui-fast", version = "=0.1.13", features = ["test-support"] }
+gpui = { package = "gpui-fast", version = "=0.1.19", features = ["test-support"] }
 tempfile = "3.27.0"
