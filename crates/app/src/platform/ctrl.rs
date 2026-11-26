@@ -124,8 +124,7 @@ pub fn on_window_open(window: &mut Window, workspace: &Entity<Workspace>, cx: &m
     let workspace = workspace.downgrade();
     window.on_window_should_close(cx, move |window, cx| {
         workspace
-            .update(cx, |w, cx| w.request_quit(window, cx))
-            .ok();
-        false
+            .update(cx, |w, cx| w.should_close_window(window, cx))
+            .unwrap_or(true)
     });
 }

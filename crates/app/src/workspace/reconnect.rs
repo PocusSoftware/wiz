@@ -15,6 +15,9 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.pane_of(&view).is_none() {
+            return;
+        }
         match ev {
             TerminalEvent::Ended(status) => self.on_shell_ended(view, *status, window, cx),
             TerminalEvent::Retry if !secrets::ready() => self.with_secrets(

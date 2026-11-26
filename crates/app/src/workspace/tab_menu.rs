@@ -333,6 +333,24 @@ impl Workspace {
                 })),
             );
         }
+        items.push(
+            Self::menu_item("tm-window", "Open in new window").on_click(cx.listener(
+                move |t, _, w, cx| {
+                    t.tab_menu = None;
+                    t.pop_out(id, w, cx);
+                },
+            )),
+        );
+        if let Some(main) = self.other_windows(cx).into_iter().next() {
+            items.push(
+                Self::menu_item("tm-back", "Move to other window").on_click(cx.listener(
+                    move |t, _, w, cx| {
+                        t.tab_menu = None;
+                        t.move_to(id, main, w, cx);
+                    },
+                )),
+            );
+        }
         items.push(Self::menu_item("tm-close", "Close").on_click(cx.listener(
             move |t, _, w, cx| {
                 t.tab_menu = None;

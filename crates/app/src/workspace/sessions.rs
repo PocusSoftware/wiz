@@ -48,15 +48,7 @@ impl Workspace {
                         v.command = saved_command;
                         v
                     });
-                    cx.observe(&view, |_, _, cx| cx.notify()).detach();
-                    cx.subscribe_in(
-                        &view,
-                        window,
-                        |this, view, ev: &TerminalEvent, window, cx| {
-                            this.on_terminal_event(view.downgrade(), ev, window, cx)
-                        },
-                    )
-                    .detach();
+                    this.watch_terminal(&view, window, cx);
                     let pane = Pane {
                         view,
                         conn,

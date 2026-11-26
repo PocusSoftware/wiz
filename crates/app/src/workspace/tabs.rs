@@ -150,7 +150,7 @@ impl Workspace {
     }
 
     /// Tabs on a server (terminal, files, remote Docker) hold an SSH session.
-    fn holds_session(tab: &Tab, cx: &App) -> bool {
+    pub(super) fn holds_session(tab: &Tab, cx: &App) -> bool {
         match &tab.kind {
             TabKind::Terminal(t) => t.panes.iter().any(|p| match p {
                 PaneView::Shell(_) => true,
@@ -164,11 +164,7 @@ impl Workspace {
 
     /// Quit, unless the setting is on and sessions are still open.
     pub fn request_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let open = self
-            .tabs
-            .iter()
-            .filter(|t| Self::holds_session(t, cx))
-            .count();
+        let open = self.open_sessions(cx);
         if open > 0 && crate::prefs::get().block_quit() {
             self.quit_notice = Some(open);
             window.focus(&self.focus, cx);
@@ -535,9 +531,11 @@ impl Workspace {
         let max = win_button("win-max", "maximize", palette().active, Max, |w, _| {
             w.zoom_window()
         });
-        // Closing the window quits, so it goes through the same check.
+        // Closing the last window quits, so it goes through the same check.
         let close = win_button("win-close", "x", palette().red, Close, |w, cx| {
-            w.dispatch_action(gpui::Action::boxed_clone(&Quit), cx)
+            if let Some(Some(root)) = w.root::<Workspace>() {
+                root.update(cx, |r, cx| r.close_window(w, cx));
+            }
         });
         div()
             .absolute()

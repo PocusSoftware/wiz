@@ -17,6 +17,7 @@ mod tab_menu;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod windows;
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -305,6 +306,7 @@ pub struct Workspace {
     home_focus: FocusHandle,
     /// Around the dialog or menu on top, to keep Tab inside it.
     modal_focus: FocusHandle,
+    window: gpui::AnyWindowHandle,
 }
 
 /// Width of the window buttons: three 40 px buttons and their border.
@@ -391,6 +393,7 @@ impl Workspace {
         })
         .detach();
         Self {
+            window: window.window_handle(),
             cfg,
             quick: HashMap::new(),
             quick_form: None,
@@ -547,6 +550,14 @@ impl Workspace {
     /// views read the live settings (theme, privacy) outside of any entity.
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         crate::shortcuts::apply(cx);
+        self.refresh_file_lists(cx);
+        for w in self.other_windows(cx) {
+            w.update(cx, |ws, _, cx| ws.refresh_file_lists(cx)).ok();
+        }
+        cx.refresh_windows();
+    }
+
+    fn refresh_file_lists(&self, cx: &mut Context<Self>) {
         for tab in &self.tabs {
             let nested = match &tab.kind {
                 TabKind::Terminal(t) => t.panes.iter().filter_map(PaneView::tab).collect(),
@@ -558,7 +569,6 @@ impl Workspace {
                 }
             }
         }
-        cx.refresh_windows();
     }
 
     /// Quick switch for the privacy master setting.

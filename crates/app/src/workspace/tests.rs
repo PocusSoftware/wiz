@@ -562,6 +562,41 @@ fn any_tabs_merge_into_a_split_and_come_apart_again(cx: &mut TestAppContext) {
     });
 }
 
+#[gpui::test]
+fn a_tab_moves_into_its_own_window_and_back(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    logs_tab(&root, cx, "web");
+    logs_tab(&root, cx, "db");
+    let db = root.read_with(cx, |r, _| r.tabs[1].id);
+    root.update_in(cx, |r, w, cx| r.pop_out(db, w, cx));
+    cx.run_until_parked();
+    let main = cx.window_handle().downcast::<Workspace>().unwrap();
+    let popped = cx.read(|cx| {
+        cx.windows()
+            .into_iter()
+            .filter(|w| w.window_id() != main.window_id())
+            .find_map(|w| w.downcast::<Workspace>())
+    });
+    let popped = popped.expect("a second window");
+    assert_eq!(labels(&root, cx), ["web"]);
+    let tabs = |cx: &mut VisualTestContext| {
+        cx.read(|cx| {
+            popped
+                .read(cx)
+                .map(|w| w.tabs.iter().map(|t| t.id).collect::<Vec<_>>())
+        })
+    };
+    let ids = tabs(cx).unwrap();
+    assert_eq!(ids.len(), 1);
+    popped
+        .update(cx, |w, window, cx| w.move_to(ids[0], main, window, cx))
+        .unwrap();
+    cx.run_until_parked();
+    assert_eq!(labels(&root, cx), ["web", "db"]);
+    assert_eq!(cx.read(|cx| cx.windows().len()), 1);
+}
+
 fn labels(root: &Entity<Workspace>, cx: &mut VisualTestContext) -> Vec<String> {
     root.read_with(cx, |r, _| {
         r.tabs.iter().map(|t| t.label.to_string()).collect()
