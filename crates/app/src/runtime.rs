@@ -1,4 +1,4 @@
-//! Lazily started tokio runtime. russh and bollard need one, the UI does not,
+//! Lazily started tokio runtime. russh needs one, the UI does not,
 //! so nothing is spawned until the first connection.
 
 use std::future::Future;
