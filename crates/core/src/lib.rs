@@ -6,6 +6,7 @@ pub mod docker;
 pub mod error;
 pub mod hostkey;
 pub mod os;
+pub mod privacy;
 pub mod secrets;
 pub mod session;
 pub mod sftp;

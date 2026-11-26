@@ -6,7 +6,6 @@ mod assets;
 mod dialogs;
 mod platform;
 mod prefs;
-mod privacy;
 mod rsync;
 mod runtime;
 mod shortcuts;
@@ -18,6 +17,7 @@ mod widgets;
 mod workspace;
 
 use gpui::{App, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size};
+use ssh_core::privacy;
 
 use workspace::{
     CloseTab, NewHost, OpenSettings, QuickConnect, Quit, Snippets, SplitPane, Workspace,

@@ -17,7 +17,7 @@ the checks at the end pass.
   (`ssh_core::secrets`), never in `hosts.toml`, `settings.toml`, logs, status messages or
   error text. Error messages never repeat what the user typed into a masked field.
 - **Privacy masking.** Any host, user, address or port shown in the UI goes through
-  `privacy::redact` / `privacy::port`.
+  `ssh_core::privacy::redact` / `privacy::port`.
 - **Files.** Config and secrets are written to a temp file and renamed into place. Secret
   files are created with mode 0600. Code honors `SSHC_CONFIG_DIR`, and tests always set it
   to a temporary folder.
@@ -73,11 +73,12 @@ the checks at the end pass.
 - `crates/core` must build without the UI. GPUI code lives only in `crates/app`.
 - **Layout:**
   - `crates/core/src`: `config/` (hosts, settings, quick connect targets), `secrets/`
-    (Keychain, encrypted file), `session`, `hostkey`, `sftp`, `docker`, `terminal`.
+    (Keychain, encrypted file), `session`, `hostkey`, `sftp`, `docker`, `terminal`,
+    `privacy` (masking).
   - `crates/app/src`: `workspace/` (the window: tabs, splits, connecting, dialogs on top),
     `views/` (what a tab or page shows), `dialogs/` (forms shown over the window),
     `widgets/` (buttons, text input, animations), `platform/` (what differs per OS), plus
-    `prefs`, `privacy`, `rsync`, `runtime`, `theme`, `assets` at the top.
+    `prefs`, `rsync`, `runtime`, `theme`, `assets` at the top.
 - **Platforms:** macOS is the main platform and must keep behaving the same. Anything
   OS-specific goes in `platform/macos.rs`, `platform/windows.rs` and `platform/linux.rs`,
   with the same functions in each (what Windows and Linux share lives in `platform/ctrl.rs`); the rest of the app calls `crate::platform::...` and never checks the
