@@ -166,7 +166,7 @@ impl Workspace {
                     }
                     self.clear_search(cx);
                     self.open_quick(window, cx);
-                    if let Some(d) = &self.quick_form {
+                    if let Some(Overlay::Quick(d)) = &self.overlay {
                         d.update(cx, |d, cx| d.set_target(&typed, cx));
                     }
                 }

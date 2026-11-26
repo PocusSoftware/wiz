@@ -236,15 +236,25 @@ struct Tab {
 /// Runs once the secrets file is unlocked.
 type AfterUnlock = Box<dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>)>;
 
+enum Overlay {
+    Form(Entity<HostForm>),
+    Quick(Entity<QuickDialog>),
+    Snippets(Entity<SnippetPicker>),
+    Unlock(Entity<UnlockDialog>),
+    /// A close waiting for "are you sure": tab id, and the pane for a split.
+    ConfirmClose(u64, Option<usize>),
+    /// A host delete waiting for "are you sure": index into the host list.
+    ConfirmDelete(usize),
+    Help,
+}
+
 pub struct Workspace {
     cfg: Config,
     /// Hosts opened with quick connect (not saved), by account, with the credentials typed
     /// for them, so a dropped terminal can reconnect.
     quick: HashMap<String, (Host, Credentials)>,
-    quick_form: Option<Entity<QuickDialog>>,
-    snippet_picker: Option<Entity<SnippetPicker>>,
-    /// Master password dialog, and what to do once it succeeds.
-    unlock: Option<Entity<UnlockDialog>>,
+    overlay: Option<Overlay>,
+    /// What to do once the master password dialog succeeds.
     after_unlock: Option<AfterUnlock>,
     cfg_path: PathBuf,
     conns: HashMap<String, Live>,
@@ -269,13 +279,8 @@ pub struct Workspace {
     pane_drag: Option<PaneDrag>,
     /// Where the page content (below the tab bar) was drawn last frame.
     content_bounds: Rc<Cell<gpui::Bounds<Pixels>>>,
-    /// A close waiting for "are you sure": tab id, and the pane for a split.
-    confirm: Option<(u64, Option<usize>)>,
     /// Quit was refused because this many sessions are open.
     quit_notice: Option<usize>,
-    help: bool,
-    /// A host delete waiting for "are you sure": index into the host list.
-    confirm_delete: Option<usize>,
     tab_scroll: gpui::ScrollHandle,
     next_pending: u64,
     next_tab: u64,
@@ -288,7 +293,6 @@ pub struct Workspace {
     folded: HashSet<String>,
     /// Bumped whenever the visible page changes, to replay the page fade.
     epoch: u64,
-    form: Option<Entity<HostForm>>,
     /// Host key prompts, one shown at a time. A queue, so connecting to several new
     /// servers at once asks about each of them in turn.
     trust: VecDeque<TrustRequest>,
@@ -399,9 +403,7 @@ impl Workspace {
             window: window.window_handle(),
             cfg,
             quick: HashMap::new(),
-            quick_form: None,
-            snippet_picker: None,
-            unlock: None,
+            overlay: None,
             after_unlock: None,
             cfg_path,
             conns: HashMap::new(),
@@ -419,16 +421,12 @@ impl Workspace {
             next_tab: 0,
             pane_drag: None,
             content_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
-            confirm: None,
-            confirm_delete: None,
             quit_notice: None,
-            help: false,
             tab_scroll: gpui::ScrollHandle::new(),
             selected: None,
             search,
             folded: HashSet::new(),
             epoch: 0,
-            form: None,
             trust: VecDeque::new(),
             trust_tx,
             codes: VecDeque::new(),

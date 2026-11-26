@@ -140,95 +140,90 @@ impl Workspace {
                     None,
                 )
             });
-        let form = self.form.clone().map(|f| {
-            let cancel = f.clone();
-            overlay(
-                "form",
-                f.into_any_element(),
-                Some(Box::new(cx.listener(move |_, _, _, cx| {
-                    cancel.update(cx, |_, cx| cx.emit(FormEvent::Cancelled))
-                }))),
-            )
-        });
-        let quick_form = self.quick_form.clone().map(|f| {
-            let cancel = f.clone();
-            overlay(
-                "quick",
-                f.into_any_element(),
-                Some(Box::new(cx.listener(move |_, _, _, cx| {
-                    cancel.update(cx, |_, cx| cx.emit(QuickEvent::Cancelled))
-                }))),
-            )
-        });
-        let snippets = self.snippet_picker.clone().map(|f| {
-            let cancel = f.clone();
-            overlay(
-                "snippets",
-                f.into_any_element(),
-                Some(Box::new(cx.listener(move |_, _, _, cx| {
-                    cancel.update(cx, |_, cx| cx.emit(SnippetEvent::Cancelled))
-                }))),
-            )
-        });
-        // No dismissing by a click outside: that would cancel the login by accident.
-        let code = self
-            .code
-            .clone()
-            .map(|d| overlay("code", d.into_any_element(), None));
-        let unlock = self.unlock.clone().map(|f| {
-            let cancel = f.clone();
-            overlay(
-                "unlock",
-                f.into_any_element(),
-                Some(Box::new(cx.listener(move |_, _, _, cx| {
-                    cancel.update(cx, |_, cx| cx.emit(UnlockEvent::Cancelled))
-                }))),
-            )
-        });
-        let delete_dialog = self.confirm_delete.and_then(|ix| {
-            let h = self.cfg.hosts.get(ix)?;
-            Some(overlay(
-                "confirm-delete",
-                div()
-                    .w(px(340.))
-                    .p_3()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .rounded(px(3.))
-                    .bg(c(palette().elevated))
-                    .border_1()
-                    .border_color(c(palette().border))
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(format!("Delete {}?", privacy::redact(&h.name))),
-                    )
-                    .child(
-                        div()
-                            .text_color(c(palette().muted))
-                            .child("This removes the host and its saved passwords."),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .child(button("del-no", "Cancel").on_click(
-                                cx.listener(|t, _, w, cx| t.answer_delete_host(false, w, cx)),
-                            ))
-                            .child(primary_button("del-yes", "Delete").on_click(
-                                cx.listener(|t, _, w, cx| t.answer_delete_host(true, w, cx)),
-                            )),
-                    )
-                    .into_any_element(),
-                Some(Box::new(
-                    cx.listener(|t, _, w, cx| t.answer_delete_host(false, w, cx)),
-                )),
-            ))
-        });
-        let confirm_dialog =
-            self.confirm.and_then(|(id, pane)| {
+        let top = self.overlay.as_ref().and_then(|o| match o {
+            Overlay::Form(f) => {
+                let cancel = f.clone();
+                Some(overlay(
+                    "form",
+                    f.clone().into_any_element(),
+                    Some(Box::new(cx.listener(move |_, _, _, cx| {
+                        cancel.update(cx, |_, cx| cx.emit(FormEvent::Cancelled))
+                    }))),
+                ))
+            }
+            Overlay::Quick(f) => {
+                let cancel = f.clone();
+                Some(overlay(
+                    "quick",
+                    f.clone().into_any_element(),
+                    Some(Box::new(cx.listener(move |_, _, _, cx| {
+                        cancel.update(cx, |_, cx| cx.emit(QuickEvent::Cancelled))
+                    }))),
+                ))
+            }
+            Overlay::Snippets(f) => {
+                let cancel = f.clone();
+                Some(overlay(
+                    "snippets",
+                    f.clone().into_any_element(),
+                    Some(Box::new(cx.listener(move |_, _, _, cx| {
+                        cancel.update(cx, |_, cx| cx.emit(SnippetEvent::Cancelled))
+                    }))),
+                ))
+            }
+            Overlay::Unlock(f) => {
+                let cancel = f.clone();
+                Some(overlay(
+                    "unlock",
+                    f.clone().into_any_element(),
+                    Some(Box::new(cx.listener(move |_, _, _, cx| {
+                        cancel.update(cx, |_, cx| cx.emit(UnlockEvent::Cancelled))
+                    }))),
+                ))
+            }
+            &Overlay::ConfirmDelete(ix) => {
+                let h = self.cfg.hosts.get(ix)?;
+                Some(overlay(
+                    "confirm-delete",
+                    div()
+                        .w(px(340.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded(px(3.))
+                        .bg(c(palette().elevated))
+                        .border_1()
+                        .border_color(c(palette().border))
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(format!("Delete {}?", privacy::redact(&h.name))),
+                        )
+                        .child(
+                            div()
+                                .text_color(c(palette().muted))
+                                .child("This removes the host and its saved passwords."),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_2()
+                                .child(button("del-no", "Cancel").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_delete_host(false, w, cx)),
+                                ))
+                                .child(primary_button("del-yes", "Delete").on_click(
+                                    cx.listener(|t, _, w, cx| t.answer_delete_host(true, w, cx)),
+                                )),
+                        )
+                        .into_any_element(),
+                    Some(Box::new(
+                        cx.listener(|t, _, w, cx| t.answer_delete_host(false, w, cx)),
+                    )),
+                ))
+            }
+            &Overlay::ConfirmClose(id, pane) => {
                 let tab = self.tabs.iter().find(|t| t.id == id)?;
                 let what = match pane {
                     Some(_) => "this terminal pane",
@@ -273,8 +268,18 @@ impl Workspace {
                         cx.listener(|t, _, w, cx| t.answer_close(false, w, cx)),
                     )),
                 ))
-            });
-
+            }
+            Overlay::Help => Some(overlay(
+                "help",
+                self.help_view(cx),
+                Some(Box::new(cx.listener(|t, _, w, cx| t.close_help(w, cx)))),
+            )),
+        });
+        // No dismissing by a click outside: that would cancel the login by accident.
+        let code = self
+            .code
+            .clone()
+            .map(|d| overlay("code", d.into_any_element(), None));
         let quit_dialog = self.quit_notice.map(|n| {
             overlay(
                 "quit-notice",
@@ -310,24 +315,11 @@ impl Workspace {
                 )),
             )
         });
-        let help = self.help.then(|| {
-            overlay(
-                "help",
-                self.help_view(cx),
-                Some(Box::new(cx.listener(|t, _, w, cx| t.close_help(w, cx)))),
-            )
-        });
         let mut open: Vec<AnyElement> = [
             trust_dialog.map(IntoElement::into_any_element),
-            form.map(IntoElement::into_any_element),
-            quick_form.map(IntoElement::into_any_element),
-            snippets.map(IntoElement::into_any_element),
-            unlock.map(IntoElement::into_any_element),
+            top.map(IntoElement::into_any_element),
             code.map(IntoElement::into_any_element),
-            confirm_dialog.map(IntoElement::into_any_element),
-            delete_dialog.map(IntoElement::into_any_element),
             quit_dialog.map(IntoElement::into_any_element),
-            help.map(IntoElement::into_any_element),
         ]
         .into_iter()
         .flatten()

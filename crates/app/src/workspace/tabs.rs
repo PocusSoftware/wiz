@@ -140,7 +140,10 @@ impl Workspace {
             return;
         };
         if Self::holds_session(tab, cx) && crate::prefs::get().confirm_close() {
-            self.confirm = Some((tab.id, pane));
+            if self.overlay.is_some() {
+                return;
+            }
+            self.overlay = Some(Overlay::ConfirmClose(tab.id, pane));
             // Take keyboard focus from the terminal so Enter and Esc reach the dialog.
             window.focus(&self.focus, cx);
             cx.notify();
@@ -198,9 +201,10 @@ impl Workspace {
 
     /// Answer the close dialog.
     pub(super) fn answer_close(&mut self, yes: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((id, pane)) = self.confirm.take() else {
+        let Some(Overlay::ConfirmClose(id, pane)) = self.overlay else {
             return;
         };
+        self.overlay = None;
         let Some(ix) = self.tabs.iter().position(|t| t.id == id) else {
             cx.notify();
             return;
@@ -504,7 +508,7 @@ impl Workspace {
                             "help-btn",
                             "keyboard",
                             format!("Keyboard shortcuts ({})", crate::shortcuts::label("help")),
-                            if self.help {
+                            if matches!(self.overlay, Some(Overlay::Help)) {
                                 accent_text()
                             } else {
                                 palette().muted

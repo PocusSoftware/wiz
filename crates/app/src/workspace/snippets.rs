@@ -15,7 +15,7 @@ impl Workspace {
         }
         let picker = cx.new(SnippetPicker::new);
         cx.subscribe_in(&picker, window, |this, _, ev: &SnippetEvent, window, cx| {
-            this.snippet_picker = None;
+            this.overlay = None;
             this.select_tab(this.active, window, cx);
             if let SnippetEvent::Paste(command) = ev {
                 this.paste_into_focused(command, window, cx);
@@ -24,7 +24,7 @@ impl Workspace {
         })
         .detach();
         picker.update(cx, |d, cx| d.focus_first(window, cx));
-        self.snippet_picker = Some(picker);
+        self.overlay = Some(Overlay::Snippets(picker));
         cx.notify();
     }
 

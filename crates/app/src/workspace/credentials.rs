@@ -24,12 +24,16 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.overlay.is_some() {
+            self.after_unlock = None;
+            return;
+        }
         let dialog = cx.new(|cx| UnlockDialog::new(mode, cx));
         cx.subscribe_in(
             &dialog,
             window,
             move |this, _, ev: &UnlockEvent, window, cx| {
-                this.unlock = None;
+                this.overlay = None;
                 let then = this.after_unlock.take();
                 window.focus(&this.focus, cx);
                 if let UnlockEvent::Done = ev {
@@ -45,7 +49,7 @@ impl Workspace {
         )
         .detach();
         dialog.update(cx, |d, cx| d.focus_first(window, cx));
-        self.unlock = Some(dialog);
+        self.overlay = Some(Overlay::Unlock(dialog));
         cx.notify();
     }
 
@@ -96,9 +100,12 @@ impl Workspace {
     }
 
     pub(super) fn open_quick(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.overlay.is_some() {
+            return;
+        }
         let dialog = cx.new(QuickDialog::new);
         cx.subscribe_in(&dialog, window, |this, _, ev: &QuickEvent, window, cx| {
-            this.quick_form = None;
+            this.overlay = None;
             window.focus(&this.focus, cx);
             if let QuickEvent::Connect { host, creds, save } = ev {
                 this.quick_connect((**host).clone(), creds.clone(), *save, window, cx);
@@ -107,7 +114,7 @@ impl Workspace {
         })
         .detach();
         dialog.update(cx, |d, cx| d.focus_first(window, cx));
-        self.quick_form = Some(dialog);
+        self.overlay = Some(Overlay::Quick(dialog));
         cx.notify();
     }
 

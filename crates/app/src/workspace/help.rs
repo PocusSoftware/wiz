@@ -118,17 +118,19 @@ pub(super) fn sections() -> Vec<(&'static str, Vec<Row>)> {
 
 impl Workspace {
     pub(super) fn toggle_help(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.help {
+        if matches!(self.overlay, Some(Overlay::Help)) {
             self.close_help(window, cx);
         } else if !self.modal_open() {
-            self.help = true;
+            self.overlay = Some(Overlay::Help);
             window.focus(&self.modal_focus, cx);
             cx.notify();
         }
     }
 
     pub(super) fn close_help(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.help = false;
+        if matches!(self.overlay, Some(Overlay::Help)) {
+            self.overlay = None;
+        }
         if self.page == Page::Tab {
             self.select_tab(self.active, window, cx);
         } else {

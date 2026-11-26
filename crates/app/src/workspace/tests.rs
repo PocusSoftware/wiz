@@ -139,17 +139,35 @@ fn quick_connect_dialog_validates_input(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
     cx.dispatch_action(QuickConnect);
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))));
     // Enter with nothing typed: the dialog stays and nothing connects.
     cx.simulate_keystrokes("enter");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_some() && r.pending.is_empty()));
+    assert!(
+        root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))
+            && r.pending.is_empty())
+    );
     // Target but no password.
     type_text(cx, "tester@127.0.0.1:2222");
     cx.simulate_keystrokes("enter");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_some() && r.pending.is_empty()));
+    assert!(
+        root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))
+            && r.pending.is_empty())
+    );
     // Escape closes it.
     cx.simulate_keystrokes("escape");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Quick(_)))));
+}
+
+#[gpui::test]
+fn a_second_dialog_does_not_cover_the_first(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    cx.dispatch_action(NewHost);
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Form(_)))));
+    cx.dispatch_action(QuickConnect);
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Form(_)))));
+    cx.simulate_keystrokes("escape");
+    assert!(root.read_with(cx, |r, _| r.overlay.is_none()));
 }
 
 #[gpui::test]
@@ -157,7 +175,10 @@ fn snippets_need_a_terminal_in_front(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
     cx.dispatch_action(Snippets);
-    assert!(root.read_with(cx, |r, _| r.snippet_picker.is_none() && r.status.is_some()));
+    assert!(
+        root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Snippets(_)))
+            && r.status.is_some())
+    );
 }
 
 #[gpui::test]
@@ -173,7 +194,7 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("tab");
     type_text(cx, "hunter2");
     cx.simulate_keystrokes("enter");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Quick(_)))));
     wait(cx, &root, "the quick connect shell", |r, _| {
         term(r).is_some()
     });
@@ -298,7 +319,10 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
 
     // Opening the host first asks for a new master password.
     root.update_in(cx, |r, w, cx| r.open_host(0, Open::Shell, w, cx));
-    assert!(root.read_with(cx, |r, _| r.unlock.is_some() && r.pending.is_empty()));
+    assert!(
+        root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Unlock(_)))
+            && r.pending.is_empty())
+    );
     // Too short, or the two fields differ: nothing is created and the dialog stays.
     for (first, second) in [("short", "short"), ("longenough1", "longenough2")] {
         type_text(cx, first);
@@ -306,18 +330,23 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
         type_text(cx, second);
         cx.simulate_keystrokes("enter");
         cx.run_until_parked();
-        assert!(root.read_with(cx, |r, _| r.unlock.is_some()));
+        assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Unlock(_)))));
         assert!(!secrets::file_exists());
         // Escape cancels the open too; open again for a fresh dialog.
         cx.simulate_keystrokes("escape");
-        assert!(root.read_with(cx, |r, _| r.unlock.is_none() && r.pending.is_empty()));
+        assert!(
+            root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Unlock(_)))
+                && r.pending.is_empty())
+        );
         root.update_in(cx, |r, w, cx| r.open_host(0, Open::Shell, w, cx));
     }
     type_text(cx, "masterpass1");
     cx.simulate_keystrokes("tab");
     type_text(cx, "masterpass1");
     cx.simulate_keystrokes("enter");
-    wait(cx, &root, "the unlock", |r, _| r.unlock.is_none());
+    wait(cx, &root, "the unlock", |r, _| {
+        !matches!(r.overlay, Some(Overlay::Unlock(_)))
+    });
     assert!(secrets::file_exists() && secrets::is_unlocked());
     // The open went ahead after unlocking: no password saved yet, so it fails cleanly.
     wait(cx, &root, "the missing password error", |r, _| {
@@ -349,22 +378,29 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     type_text(cx, "wrongpass");
     cx.simulate_keystrokes("enter");
     cx.run_until_parked();
-    assert!(root.read_with(cx, |r, _| r.unlock.is_some()));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Unlock(_)))));
     assert!(!secrets::is_unlocked());
     type_text(cx, "masterpass1");
     cx.simulate_keystrokes("enter");
-    wait(cx, &root, "the unlock", |r, _| r.unlock.is_none());
+    wait(cx, &root, "the unlock", |r, _| {
+        !matches!(r.overlay, Some(Overlay::Unlock(_)))
+    });
     assert!(secrets::is_unlocked());
 
     // Locked, adding a host asks for the password before the form opens.
     secrets::lock();
     root.update_in(cx, |r, w, cx| r.open_form(None, w, cx));
-    assert!(root.read_with(cx, |r, _| r.unlock.is_some() && r.form.is_none()));
+    assert!(
+        root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Unlock(_)))
+            && !matches!(r.overlay, Some(Overlay::Form(_))))
+    );
     type_text(cx, "masterpass1");
     cx.simulate_keystrokes("enter");
-    wait(cx, &root, "the form", |r, _| r.form.is_some());
+    wait(cx, &root, "the form", |r, _| {
+        matches!(r.overlay, Some(Overlay::Form(_)))
+    });
     root.update_in(cx, |r, w, cx| {
-        r.form = None;
+        r.overlay = None;
         w.focus(&r.focus, cx);
     });
 
@@ -375,7 +411,9 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("tab");
     type_text(cx, "masterpass2");
     cx.simulate_keystrokes("enter");
-    wait(cx, &root, "the change", |r, _| r.unlock.is_none());
+    wait(cx, &root, "the change", |r, _| {
+        !matches!(r.overlay, Some(Overlay::Unlock(_)))
+    });
     assert!(status(&root, cx).contains("changed"));
     secrets::lock();
     assert!(matches!(
@@ -393,7 +431,7 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
 
     // Deleting the host removes its secret from the file.
     root.update_in(cx, |r, w, cx| {
-        r.confirm_delete = Some(0);
+        r.overlay = Some(Overlay::ConfirmDelete(0));
         r.answer_delete_host(true, w, cx);
     });
     assert!(secrets::get(Kind::Password, &acct).unwrap().is_none());
@@ -429,11 +467,13 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
         secrets::lock();
         settings.update(cx, |_, cx| cx.emit(SettingsEvent::SwitchStore(Store::File)));
         cx.run_until_parked();
-        assert!(root.read_with(cx, |r, _| r.unlock.is_some()));
+        assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Unlock(_)))));
         assert_eq!(secrets::store(), Store::Keychain);
         type_text(cx, "masterpass2");
         cx.simulate_keystrokes("enter");
-        wait(cx, &root, "the switch", |r, _| r.unlock.is_none());
+        wait(cx, &root, "the switch", |r, _| {
+            !matches!(r.overlay, Some(Overlay::Unlock(_)))
+        });
         assert_eq!(secrets::store(), Store::File);
         assert!(
             secrets::keychain::get(Kind::Password, &tacct)
@@ -626,9 +666,9 @@ fn help_opens_from_its_shortcut_and_closes_with_escape(cx: &mut TestAppContext) 
     let _g = setup();
     let (root, cx) = open_root(cx);
     cx.dispatch_action(ShowHelp);
-    assert!(root.read_with(cx, |r, _| r.help));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Help))));
     cx.simulate_keystrokes("escape");
-    assert!(root.read_with(cx, |r, _| !r.help));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Help))));
 }
 
 fn labels(root: &Entity<Workspace>, cx: &mut VisualTestContext) -> Vec<String> {
@@ -742,14 +782,14 @@ fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
     assert!(root.read_with(cx, |r, _| r.tab_menu.is_none()));
     // A click inside quick connect keeps it, a click outside closes it.
     cx.simulate_click(gpui::point(px(700.), px(450.)), gpui::Modifiers::default());
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))));
     cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Quick(_)))));
     // So does the delete question, but not for a press on the window buttons above it
     // (only pressed here: the test window can't really zoom).
     root.update(cx, |r, cx| {
         r.cfg.hosts.push(test_host("deluser"));
-        r.confirm_delete = Some(0);
+        r.overlay = Some(Overlay::ConfirmDelete(0));
         cx.notify();
     });
     cx.run_until_parked();
@@ -760,15 +800,20 @@ fn dialogs_block_clicks_behind_them(cx: &mut TestAppContext) {
         click_count: 1,
         first_mouse: false,
     });
-    assert!(root.read_with(cx, |r, _| r.confirm_delete.is_some()));
+    assert!(root.read_with(cx, |r, _| matches!(
+        r.overlay,
+        Some(Overlay::ConfirmDelete(_))
+    )));
     cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
-    assert!(root.read_with(cx, |r, _| r.confirm_delete.is_none()
-        && r.cfg.hosts.len() == 1));
+    assert!(root.read_with(cx, |r, _| !matches!(
+        r.overlay,
+        Some(Overlay::ConfirmDelete(_))
+    ) && r.cfg.hosts.len() == 1));
     // The master password dialog cancels the same way.
     root.update_in(cx, |r, w, cx| r.show_unlock(UnlockMode::for_file(), w, cx));
     cx.run_until_parked();
     cx.simulate_click(gpui::point(px(20.), px(800.)), gpui::Modifiers::default());
-    assert!(root.read_with(cx, |r, _| r.unlock.is_none()));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Unlock(_)))));
 }
 
 #[gpui::test]
@@ -915,7 +960,10 @@ fn tab_moves_between_controls_and_stays_in_dialogs(cx: &mut TestAppContext) {
     // In quick connect, Tab goes field to field, then over the buttons, and never leaves.
     cx.dispatch_action(QuickConnect);
     cx.run_until_parked();
-    let dialog = root.read_with(cx, |r, cx| r.quick_form.as_ref().unwrap().focus_handle(cx));
+    let dialog = root.read_with(cx, |r, cx| match &r.overlay {
+        Some(Overlay::Quick(d)) => d.focus_handle(cx),
+        _ => panic!("quick connect is not open"),
+    });
     // It opens on the target field.
     let target = cx.update(|w, cx| w.focused(cx)).unwrap();
     type_text(cx, "tester@127.0.0.1:2222");
@@ -942,7 +990,10 @@ fn tab_moves_between_controls_and_stays_in_dialogs(cx: &mut TestAppContext) {
     // Enter on Cancel cancels: the form's Enter (connect) does not run as well.
     cx.simulate_keystrokes("shift-tab shift-tab");
     press(cx, "enter");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_none() && r.pending.is_empty()));
+    assert!(
+        root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Quick(_)))
+            && r.pending.is_empty())
+    );
 }
 
 #[gpui::test]
@@ -986,9 +1037,9 @@ fn rebound_shortcut_replaces_the_default(cx: &mut TestAppContext) {
     root.update(cx, Workspace::settings_changed);
     // The old keys do nothing any more, the new ones open the dialog.
     cx.simulate_keystrokes(default);
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_none()));
+    assert!(root.read_with(cx, |r, _| !matches!(r.overlay, Some(Overlay::Quick(_)))));
     cx.simulate_keystrokes("ctrl-alt-j");
-    assert!(root.read_with(cx, |r, _| r.quick_form.is_some()));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))));
 }
 
 /// Open a terminal tab with quick connect on the first SSH test server.
@@ -1144,7 +1195,7 @@ fn deleting_a_jump_host_lets_its_users_connect_directly(cx: &mut TestAppContext)
     };
     root.update_in(cx, |r, w, cx| {
         r.cfg.hosts = vec![bastion, inner];
-        r.confirm_delete = Some(0);
+        r.overlay = Some(Overlay::ConfirmDelete(0));
         r.answer_delete_host(true, w, cx);
     });
     root.read_with(cx, |r, _| {
@@ -1326,8 +1377,10 @@ fn hosts_page_by_keyboard(cx: &mut TestAppContext) {
     assert_eq!(picked(cx), None);
     cx.simulate_keystrokes("enter");
     cx.run_until_parked();
-    assert!(root.read_with(cx, |r, cx| r.quick_form.is_some()
-        && r.search.read(cx).value().is_empty()));
+    assert!(
+        root.read_with(cx, |r, cx| matches!(r.overlay, Some(Overlay::Quick(_)))
+            && r.search.read(cx).value().is_empty())
+    );
 
     // Tabs opened for a host are listed with it.
     let b = root.read_with(cx, |r, _| r.cfg.hosts[1].account());
@@ -1403,7 +1456,8 @@ fn host_list_menus(cx: &mut TestAppContext) {
     assert_eq!(menu(cx), Some(None));
     cx.simulate_click(gpui::point(px(130.), px(514.)), gpui::Modifiers::default());
     cx.run_until_parked();
-    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none() && r.form.is_some()));
+    assert!(root.read_with(cx, |r, _| r.hosts_menu.is_none()
+        && matches!(r.overlay, Some(Overlay::Form(_)))));
 }
 
 #[gpui::test]

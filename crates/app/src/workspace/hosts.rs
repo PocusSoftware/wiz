@@ -40,6 +40,9 @@ impl Workspace {
     }
 
     fn show_form(&mut self, start: Start, window: &mut Window, cx: &mut Context<Self>) {
+        if self.overlay.is_some() {
+            return;
+        }
         let existing = match start {
             Start::Edit(i, _) => Some(i),
             Start::New | Start::Copy(_) => None,
@@ -75,13 +78,13 @@ impl Workspace {
                 }
                 FormEvent::Cancelled => {}
             }
-            this.form = None;
+            this.overlay = None;
             window.focus(&this.focus, cx);
             cx.notify();
         })
         .detach();
         form.update(cx, |d, cx| d.focus_first(window, cx));
-        self.form = Some(form);
+        self.overlay = Some(Overlay::Form(form));
         cx.notify();
     }
 
@@ -91,7 +94,10 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.confirm_delete = Some(ix);
+        if self.overlay.is_some() {
+            return;
+        }
+        self.overlay = Some(Overlay::ConfirmDelete(ix));
         // Take keyboard focus so Enter and Esc reach the dialog.
         window.focus(&self.focus, cx);
         cx.notify();
@@ -103,9 +109,10 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(ix) = self.confirm_delete.take() else {
+        let Some(Overlay::ConfirmDelete(ix)) = self.overlay else {
             return;
         };
+        self.overlay = None;
         if yes {
             // Its secrets go too, so the secrets file must be open.
             let acct = self.cfg.hosts.get(ix).map(Host::account);

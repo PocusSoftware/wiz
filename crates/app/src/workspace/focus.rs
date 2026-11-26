@@ -42,13 +42,6 @@ impl Workspace {
             cx.stop_propagation();
             return;
         }
-        if self.help {
-            if ev.keystroke.key == "escape" {
-                self.close_help(window, cx);
-                cx.stop_propagation();
-            }
-            return;
-        }
         if self.quit_notice.is_some() {
             if matches!(ev.keystroke.key.as_str(), "enter" | "escape") {
                 self.dismiss_quit_notice(window, cx);
@@ -56,23 +49,34 @@ impl Workspace {
             }
             return;
         }
-        if self.confirm_delete.is_some() {
-            match ev.keystroke.key.as_str() {
-                "enter" => self.answer_delete_host(true, window, cx),
-                "escape" => self.answer_delete_host(false, window, cx),
-                _ => return,
+        let key = ev.keystroke.key.as_str();
+        match self.overlay {
+            Some(Overlay::Help) => {
+                if key == "escape" {
+                    self.close_help(window, cx);
+                    cx.stop_propagation();
+                }
+                return;
             }
-            cx.stop_propagation();
-            return;
-        }
-        if self.confirm.is_some() {
-            match ev.keystroke.key.as_str() {
-                "enter" => self.answer_close(true, window, cx),
-                "escape" => self.answer_close(false, window, cx),
-                _ => return,
+            Some(Overlay::ConfirmDelete(_)) => {
+                match key {
+                    "enter" => self.answer_delete_host(true, window, cx),
+                    "escape" => self.answer_delete_host(false, window, cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+                return;
             }
-            cx.stop_propagation();
-            return;
+            Some(Overlay::ConfirmClose(..)) => {
+                match key {
+                    "enter" => self.answer_close(true, window, cx),
+                    "escape" => self.answer_close(false, window, cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+                return;
+            }
+            _ => {}
         }
         // No Enter here: trusting a new key takes a deliberate press of the button.
         if !self.trust.is_empty() && ev.keystroke.key == "escape" {
@@ -90,14 +94,8 @@ impl Workspace {
         self.menu_open()
             || !self.trust.is_empty()
             || self.code.is_some()
-            || self.form.is_some()
-            || self.quick_form.is_some()
-            || self.snippet_picker.is_some()
-            || self.unlock.is_some()
-            || self.confirm.is_some()
-            || self.confirm_delete.is_some()
+            || self.overlay.is_some()
             || self.quit_notice.is_some()
-            || self.help
     }
 
     /// Tab and Shift+Tab: focus the next or previous control. With a dialog open, controls
