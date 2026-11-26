@@ -15,7 +15,11 @@ impl Workspace {
             return None;
         }
         match &self.tabs.get(self.active)?.kind {
-            TabKind::Terminal(t) => t.panes.get(t.focused).map(|p| p.conn.clone()),
+            TabKind::Terminal(t) => t
+                .panes
+                .get(t.focused)
+                .and_then(PaneView::shell)
+                .map(|p| p.conn.clone()),
             _ => None,
         }
     }

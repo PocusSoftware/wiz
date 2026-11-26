@@ -118,7 +118,7 @@ impl Workspace {
     pub(super) fn focused_pane(t: &TermTab, window: &Window, cx: &App) -> usize {
         t.panes
             .iter()
-            .position(|p| p.view.focus_handle(cx).contains_focused(window, cx))
+            .position(|p| p.focus_handle(cx).contains_focused(window, cx))
             .unwrap_or(t.focused.min(t.panes.len().saturating_sub(1)))
     }
 
@@ -137,7 +137,7 @@ impl Workspace {
         let n = t.panes.len();
         let cur = Self::focused_pane(t, window, cx);
         let next = (if back { cur + n - 1 } else { cur + 1 }) % n;
-        window.focus(&t.panes[next].view.focus_handle(cx), cx);
+        window.focus(&t.panes[next].focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -149,23 +149,16 @@ impl Workspace {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(Tab {
-            kind: TabKind::Terminal(t),
-            ..
-        }) = self.tabs.get(ix)
-        else {
+        let Some(tab) = self.tabs.get(ix) else {
             return false;
         };
-        let n = t.panes.len() + extra;
+        let n = tab.pane_count() + extra;
         let area = self.area(window);
         if n > max_panes() {
-            self.set_status(
-                format!("A tab holds at most {} terminals.", max_panes()),
-                true,
-            );
+            self.set_status(format!("A tab holds at most {} panes.", max_panes()), true);
         } else if layout(n, area.0, area.1).is_none() {
             self.set_status(
-                "The window is too small for another terminal. Make it bigger or close a pane.",
+                "The window is too small for another pane. Make it bigger or close a pane.",
                 true,
             );
         } else {
@@ -189,7 +182,7 @@ impl Workspace {
         else {
             return;
         };
-        let Some(pane) = t.panes.get(t.focused).or(t.panes.first()) else {
+        let Some(pane) = t.focused_shell() else {
             return;
         };
         if pane.conn.is_closed() {
@@ -204,6 +197,37 @@ impl Workspace {
             pane.password.clone(),
         );
         self.spawn_shell(label, conn, pw, None, Some(id), window, cx);
+    }
+
+    pub(super) fn split_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
+            return;
+        }
+        let Some(Tab {
+            id,
+            kind: TabKind::Terminal(t),
+            ..
+        }) = self.tabs.get(self.active)
+        else {
+            return;
+        };
+        let Some(pane) = t.focused_shell() else {
+            return;
+        };
+        if pane.conn.is_closed() {
+            self.set_status("The connection for this pane has closed.", true);
+            cx.notify();
+            return;
+        }
+        let (id, conn) = (*id, pane.conn.clone());
+        let host = match self.cfg.hosts.iter().find(|h| h.account() == pane.account) {
+            Some(h) => h.clone(),
+            None => match self.quick.get(&pane.account) {
+                Some((h, _)) => h.clone(),
+                None => return,
+            },
+        };
+        self.open_sftp(host, conn, Some(id), window, cx);
     }
 
     /// Open a shell on saved host `host` as a new pane of the active tab.
@@ -228,23 +252,33 @@ impl Workspace {
         let (Some(from), Some(to)) = (at(&self.tabs, id), at(&self.tabs, into)) else {
             return;
         };
-        let (TabKind::Terminal(src), TabKind::Terminal(_)) =
-            (&self.tabs[from].kind, &self.tabs[to].kind)
-        else {
-            return;
-        };
-        if from == to || !self.room_for(to, src.panes.len(), window, cx) {
+        if from == to || !self.room_for(to, self.tabs[from].pane_count(), window, cx) {
             return;
         }
-        let TabKind::Terminal(src) = self.tabs.remove(from).kind else {
-            return;
-        };
+        let src = self.tabs.remove(from).into_panes();
         let Some(to) = at(&self.tabs, into) else {
             return;
         };
+        if !matches!(self.tabs[to].kind, TabKind::Terminal(_)) {
+            let old = self.tabs.remove(to);
+            let (id, label, pinned, name) =
+                (old.id, old.label.clone(), old.pinned, old.name.clone());
+            self.tabs.insert(
+                to,
+                Tab {
+                    id,
+                    label,
+                    kind: TabKind::Terminal(TermTab::new(old.into_panes())),
+                    pinned,
+                    name,
+                    focus: cx.focus_handle(),
+                    account: None,
+                },
+            );
+        }
         if let TabKind::Terminal(t) = &mut self.tabs[to].kind {
             t.focused = t.panes.len();
-            t.panes.extend(src.panes);
+            t.panes.extend(src);
         }
         self.select_tab(to, window, cx);
     }
@@ -271,6 +305,11 @@ impl Workspace {
         if pane < t.panes.len() {
             t.panes.remove(pane);
             t.focused = pane.min(t.panes.len() - 1);
+        }
+        if let [PaneView::View(_)] = t.panes.as_slice()
+            && let Some(PaneView::View(only)) = t.panes.pop()
+        {
+            self.tabs[ix] = *only;
         }
         self.select_tab(ix, window, cx);
     }
@@ -403,17 +442,12 @@ impl Workspace {
         &self,
         tab_ix: usize,
         i: usize,
-        p: &Entity<TerminalView>,
+        p: &PaneView,
         focused: bool,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let title = p
-            .read(cx)
-            .title()
-            .filter(|t| !t.is_empty())
-            .map(|t| privacy::redact(&t).into_owned())
-            .unwrap_or_else(|| "shell".into());
-        let pane = p.clone();
+        let title = p.title(cx);
+        let focus = p.focus_handle(cx);
         let tab = self.tabs[tab_ix].id;
         div()
             .min_w_0()
@@ -448,7 +482,7 @@ impl Workspace {
                     }))
                     .cursor_pointer()
                     .on_click(cx.listener(move |_, _, w, cx| {
-                        w.focus(&pane.focus_handle(cx), cx);
+                        w.focus(&focus, cx);
                         cx.notify();
                     }))
                     // Drag the header onto another pane to swap the two.
@@ -481,7 +515,7 @@ impl Workspace {
                     .min_h_0()
                     // Dim the panes that don't have the keyboard.
                     .when(!focused, |d| d.opacity(0.6))
-                    .child(p.clone()),
+                    .child(p.element()),
             )
     }
 
@@ -528,7 +562,7 @@ impl Workspace {
                     .map_or(0., |s| s.value);
                 if let Some(p) = t.panes.get(i) {
                     column = column.child(
-                        self.pane(tab_ix, i, &p.view, i == t.focused, cx)
+                        self.pane(tab_ix, i, p, i == t.focused, cx)
                             .flex_basis(gpui::relative(share))
                             .flex_shrink(1.)
                             .min_h_0(),

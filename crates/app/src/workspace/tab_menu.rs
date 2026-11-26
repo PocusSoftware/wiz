@@ -172,13 +172,10 @@ impl Workspace {
         else {
             return;
         };
-        let command = t
-            .panes
-            .get(t.focused)
-            .and_then(|p| p.view.read(cx).command.clone());
-        let Some(pane) = t.panes.get(t.focused) else {
+        let Some(pane) = t.focused_shell() else {
             return;
         };
+        let command = pane.view.read(cx).command.clone();
         let (label, conn, password) = (label.to_string(), pane.conn.clone(), pane.password.clone());
         self.open_shell(label, conn, password, command, window, cx);
     }
@@ -320,25 +317,21 @@ impl Workspace {
                     t.duplicate_tab(id, w, cx);
                 },
             )));
-            // Put this tab's terminals into the split of another terminal tab.
-            let others = self
-                .tabs
-                .iter()
-                .filter(|o| o.id != id && matches!(o.kind, TabKind::Terminal(_)));
-            for o in others {
-                let into = o.id;
-                let name = o.name.clone().unwrap_or_else(|| o.label.clone());
-                items.push(
-                    Self::menu_item(
-                        ("tm-merge", into as usize),
-                        format!("Merge into {}", privacy::redact(&name)),
-                    )
-                    .on_click(cx.listener(move |t, _, w, cx| {
-                        t.tab_menu = None;
-                        t.merge_tab(id, into, w, cx);
-                    })),
-                );
-            }
+        }
+        // Put this tab's panes into the split of another tab.
+        for o in self.tabs.iter().filter(|o| o.id != id) {
+            let into = o.id;
+            let name = o.name.clone().unwrap_or_else(|| o.label.clone());
+            items.push(
+                Self::menu_item(
+                    ("tm-merge", into as usize),
+                    format!("Merge into {}", privacy::redact(&name)),
+                )
+                .on_click(cx.listener(move |t, _, w, cx| {
+                    t.tab_menu = None;
+                    t.merge_tab(id, into, w, cx);
+                })),
+            );
         }
         items.push(Self::menu_item("tm-close", "Close").on_click(cx.listener(
             move |t, _, w, cx| {
@@ -439,7 +432,13 @@ impl Workspace {
             t.close_tab_menu(w, cx);
             t.split(w, cx);
         }));
-        let mut items = vec![same.into_any_element()];
+        let files = Self::split_row("sm-files", "folder", "Files on same server", "").on_click(
+            cx.listener(|t, _, w, cx| {
+                t.close_tab_menu(w, cx);
+                t.split_files(w, cx);
+            }),
+        );
+        let mut items = vec![same.into_any_element(), files.into_any_element()];
         if !self.cfg.hosts.is_empty() {
             items.push(
                 div()

@@ -213,7 +213,7 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
                 .unwrap()
                 .panes
                 .iter()
-                .map(|p| p.view.entity_id())
+                .map(|p| p.shell().unwrap().view.entity_id())
                 .collect::<Vec<_>>()
         })
     };
@@ -534,6 +534,31 @@ fn logs_tab(root: &Entity<Workspace>, cx: &mut VisualTestContext, name: &str) {
         let local = Arc::new(docker::Local::new().unwrap());
         let view = cx.new(|cx| LogView::new(Backend::Local(local), name.into(), cx));
         r.push_tab(name.into(), TabKind::Logs(view), None, w, cx);
+    });
+}
+
+#[gpui::test]
+fn any_tabs_merge_into_a_split_and_come_apart_again(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    logs_tab(&root, cx, "web");
+    logs_tab(&root, cx, "db");
+    let (web, db) = root.read_with(cx, |r, _| (r.tabs[0].id, r.tabs[1].id));
+    root.update_in(cx, |r, w, cx| r.merge_tab(db, web, w, cx));
+    root.read_with(cx, |r, cx| {
+        assert_eq!(r.tabs.len(), 1);
+        assert_eq!(r.tabs[0].id, web);
+        let TabKind::Terminal(t) = &r.tabs[0].kind else {
+            panic!("not a split");
+        };
+        let titles: Vec<_> = t.panes.iter().map(|p| p.title(cx)).collect();
+        assert_eq!(titles, ["web", "db"]);
+    });
+    root.update_in(cx, |r, w, cx| r.close_pane(0, 0, w, cx));
+    root.read_with(cx, |r, _| {
+        assert_eq!(r.tabs.len(), 1);
+        assert_eq!(r.tabs[0].label.as_ref(), "db");
+        assert!(matches!(r.tabs[0].kind, TabKind::Logs(_)));
     });
 }
 
@@ -906,6 +931,30 @@ fn quick_shell(root: &Entity<Workspace>, cx: &mut VisualTestContext, tabs: usize
     cx.simulate_keystrokes("enter");
     wait(cx, root, "a quick connect shell", |r, _| {
         r.tabs.len() == tabs
+    });
+}
+
+#[gpui::test]
+fn files_open_beside_the_shell(cx: &mut TestAppContext) {
+    let _g = setup();
+    if !docker() {
+        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        return;
+    }
+    let (root, cx) = open_root(cx);
+    quick_shell(&root, cx, 1);
+    root.update_in(cx, Workspace::split_files);
+    wait(cx, &root, "a files pane", |r, _| {
+        term(r).is_some_and(|t| t.panes.len() == 2)
+    });
+    root.read_with(cx, |r, _| {
+        let t = term(r).unwrap();
+        assert!(t.panes[0].shell().is_some());
+        assert!(matches!(
+            t.panes[1].tab().map(|t| &t.kind),
+            Some(TabKind::Sftp(_))
+        ));
+        assert_eq!(t.focused, 1);
     });
 }
 

@@ -70,21 +70,14 @@ impl Workspace {
                         && let TabKind::Terminal(t) = &mut this.tabs[ix].kind
                         && t.panes.len() < split::max_panes()
                     {
-                        t.panes.push(pane);
+                        t.panes.push(PaneView::Shell(pane));
                         t.focused = t.panes.len() - 1;
                         this.select_tab(ix, window, cx);
                         return;
                     }
                     this.push_tab(
                         label,
-                        TabKind::Terminal(TermTab {
-                            panes: vec![pane],
-                            focused: 0,
-                            layout: vec![vec![0]],
-                            cols: vec![Spring::new(1.0)],
-                            rows: vec![vec![Spring::new(1.0)]],
-                            ticked: None,
-                        }),
+                        TabKind::Terminal(TermTab::new(vec![PaneView::Shell(pane)])),
                         None,
                         window,
                         cx,
@@ -133,6 +126,7 @@ impl Workspace {
         &mut self,
         host: Host,
         conn: Arc<Connection>,
+        split_into: Option<u64>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -160,7 +154,22 @@ impl Workspace {
                     })
                     .detach();
                     view.update(cx, SftpView::load);
-                    this.push_tab(label, TabKind::Sftp(view), Some(host.account()), window, cx);
+                    let kind = TabKind::Sftp(view);
+                    let target =
+                        split_into.and_then(|id| this.tabs.iter().position(|t| t.id == id));
+                    if let Some(ix) = target
+                        && let TabKind::Terminal(t) = &this.tabs[ix].kind
+                        && t.panes.len() < split::max_panes()
+                    {
+                        let pane = this.new_tab(label, kind, Some(host.account()), cx);
+                        if let TabKind::Terminal(t) = &mut this.tabs[ix].kind {
+                            t.panes.push(PaneView::View(Box::new(pane)));
+                            t.focused = t.panes.len() - 1;
+                        }
+                        this.select_tab(ix, window, cx);
+                        return;
+                    }
+                    this.push_tab(label, kind, Some(host.account()), window, cx);
                 }
                 Err(e) => {
                     this.set_status(format!("{}: {e}", host.name), true);

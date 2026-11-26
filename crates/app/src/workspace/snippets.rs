@@ -37,7 +37,12 @@ impl Workspace {
         else {
             return;
         };
-        let view = t.panes[Self::focused_pane(t, window, cx)].view.clone();
+        let Some(view) = t.panes[Self::focused_pane(t, window, cx)]
+            .shell()
+            .map(|p| p.view.clone())
+        else {
+            return;
+        };
         view.update(cx, |v, cx| v.paste(text, cx));
     }
 }

@@ -408,7 +408,7 @@ impl Workspace {
                 self.spawn_shell(host.name, conn, password, None, Some(tab), window, cx)
             }
             Open::Docker => self.open_docker(host, conn, password, window, cx),
-            Open::Sftp => self.open_sftp(host, conn, window, cx),
+            Open::Sftp => self.open_sftp(host, conn, None, window, cx),
             Open::SftpSource(view, side) => self.attach_sftp(host, conn, view, side, window, cx),
             Open::Reattach(view, attempt, _) => {
                 self.reattach(view, attempt, conn, password, window, cx)

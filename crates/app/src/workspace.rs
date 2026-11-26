@@ -8,6 +8,7 @@ mod home;
 mod hosts;
 mod latency;
 mod overlays;
+mod panes;
 mod reconnect;
 mod sessions;
 mod snippets;
@@ -144,9 +145,14 @@ struct Pane {
     password: Option<Secret>,
 }
 
+enum PaneView {
+    Shell(Pane),
+    View(Box<Tab>),
+}
+
 /// A terminal tab: one shell, or several split side by side.
 struct TermTab {
-    panes: Vec<Pane>,
+    panes: Vec<PaneView>,
     /// Pane that had focus last; gets it back when the tab is selected.
     focused: usize,
     /// Pane indices per column, left to right, each column top to bottom. Picked from the
@@ -542,8 +548,14 @@ impl Workspace {
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         crate::shortcuts::apply(cx);
         for tab in &self.tabs {
-            if let TabKind::Sftp(v) = &tab.kind {
-                v.update(cx, SftpView::settings_changed);
+            let nested = match &tab.kind {
+                TabKind::Terminal(t) => t.panes.iter().filter_map(PaneView::tab).collect(),
+                _ => vec![tab],
+            };
+            for tab in nested {
+                if let TabKind::Sftp(v) = &tab.kind {
+                    v.update(cx, SftpView::settings_changed);
+                }
             }
         }
         cx.refresh_windows();

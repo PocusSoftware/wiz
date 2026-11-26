@@ -19,9 +19,21 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let tab = self.new_tab(label, kind, account, cx);
+        self.tabs.push(tab);
+        self.select_tab(self.tabs.len() - 1, window, cx);
+    }
+
+    pub(super) fn new_tab(
+        &mut self,
+        label: String,
+        kind: TabKind,
+        account: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Tab {
         let id = self.next_tab;
         self.next_tab += 1;
-        self.tabs.push(Tab {
+        Tab {
             id,
             label: label.into(),
             kind,
@@ -29,8 +41,7 @@ impl Workspace {
             name: None,
             focus: cx.focus_handle(),
             account,
-        });
-        self.select_tab(self.tabs.len() - 1, window, cx);
+        }
     }
 
     pub(super) fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -47,7 +58,7 @@ impl Workspace {
         match &self.tabs[ix].kind {
             TabKind::Terminal(t) => {
                 if let Some(p) = t.panes.get(t.focused).or(t.panes.first()) {
-                    window.focus(&p.view.focus_handle(cx), cx)
+                    window.focus(&p.focus_handle(cx), cx)
                 }
             }
             TabKind::Sftp(v) => {
@@ -141,7 +152,11 @@ impl Workspace {
     /// Tabs on a server (terminal, files, remote Docker) hold an SSH session.
     fn holds_session(tab: &Tab, cx: &App) -> bool {
         match &tab.kind {
-            TabKind::Terminal(_) | TabKind::Sftp(_) => true,
+            TabKind::Terminal(t) => t.panes.iter().any(|p| match p {
+                PaneView::Shell(_) => true,
+                PaneView::View(tab) => Self::holds_session(tab, cx),
+            }),
+            TabKind::Sftp(_) => true,
             TabKind::Docker(v) => v.read(cx).is_remote(),
             TabKind::Logs(_) => false,
         }
@@ -221,7 +236,7 @@ impl Workspace {
             if let Some(name) = &tab.name {
                 text = privacy::redact(name).into_owned();
             } else if let TabKind::Terminal(t) = &tab.kind
-                && let Some(p) = t.panes.get(t.focused)
+                && let Some(p) = t.panes.get(t.focused).and_then(PaneView::shell)
                 && let Some(title) = p.view.read(cx).title()
                 && !title.is_empty()
             {
@@ -552,9 +567,7 @@ impl Workspace {
             _ => return self.home_view(width, cx),
         }
         match self.tabs.get(self.active).map(|t| &t.kind) {
-            Some(TabKind::Terminal(t)) if t.panes.len() == 1 => {
-                t.panes[0].view.clone().into_any_element()
-            }
+            Some(TabKind::Terminal(t)) if t.panes.len() == 1 => t.panes[0].element(),
             Some(TabKind::Terminal(t)) => self.split_view(t, cx),
             Some(TabKind::Docker(v)) => v.clone().into_any_element(),
             Some(TabKind::Sftp(v)) => v.clone().into_any_element(),

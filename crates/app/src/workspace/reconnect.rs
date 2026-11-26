@@ -80,7 +80,10 @@ impl Workspace {
                 TabKind::Terminal(tt) => tt
                     .panes
                     .iter()
-                    .position(|p| p.view.entity_id() == view.entity_id())
+                    .position(|p| {
+                        p.shell()
+                            .is_some_and(|p| p.view.entity_id() == view.entity_id())
+                    })
                     .map(|p| (i, p)),
                 _ => None,
             });
@@ -178,7 +181,7 @@ impl Workspace {
                 TabKind::Terminal(tt) => Some(tt),
                 _ => None,
             })
-            .flat_map(|tt| tt.panes.iter_mut())
+            .flat_map(|tt| tt.panes.iter_mut().filter_map(PaneView::shell_mut))
             .find(|p| p.view.entity_id() == view.entity_id())
     }
 

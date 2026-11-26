@@ -102,7 +102,7 @@ pub(super) fn tabs_of(tabs: &[Tab], account: &str) -> Vec<usize> {
     tabs.iter()
         .enumerate()
         .filter(|(_, t)| match &t.kind {
-            TabKind::Terminal(term) => term.panes.iter().any(|p| p.account == account),
+            TabKind::Terminal(term) => term.panes.iter().any(|p| p.account() == Some(account)),
             _ => t.account.as_deref() == Some(account),
         })
         .map(|(i, _)| i)
