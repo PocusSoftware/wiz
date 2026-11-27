@@ -143,7 +143,7 @@ impl Workspace {
             if self.overlay.is_some() {
                 return;
             }
-            self.overlay = Some(Overlay::ConfirmClose(tab.id, pane));
+            self.overlay = Some(Overlay::ConfirmClose(tab.id, pane, false));
             // Take keyboard focus from the terminal so Enter and Esc reach the dialog.
             window.focus(&self.focus, cx);
             cx.notify();
@@ -201,10 +201,20 @@ impl Workspace {
 
     /// Answer the close dialog.
     pub(super) fn answer_close(&mut self, yes: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(Overlay::ConfirmClose(id, pane)) = self.overlay else {
+        let Some(Overlay::ConfirmClose(id, pane, dont_ask)) = self.overlay else {
             return;
         };
         self.overlay = None;
+        if yes && dont_ask {
+            match crate::prefs::update(|s| s.confirm_close = Some(false)) {
+                Ok(()) => self.set_status(
+                    "Sessions now close without asking. Settings, Terminal and network turns it back on.",
+                    false,
+                ),
+                Err(e) => self.set_status(format!("Could not save settings: {e}"), true),
+            }
+            self.settings_changed(cx);
+        }
         let Some(ix) = self.tabs.iter().position(|t| t.id == id) else {
             cx.notify();
             return;

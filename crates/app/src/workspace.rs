@@ -55,7 +55,9 @@ use crate::views::sftp::{RemoteRef, SftpEvent, SftpView, Side as SftpSide, Sourc
 use crate::views::terminal::{TerminalEvent, TerminalView};
 use crate::widgets::anim::{Spring, fade_in, page_in, pop_in, stagger_in};
 use crate::widgets::input::{Hide, InputEvent, TextInput};
-use crate::widgets::{FocusNext, FocusPrev, button, icon, icon_button, keyboard, primary_button};
+use crate::widgets::{
+    FocusNext, FocusPrev, button, checkbox, icon, icon_button, keyboard, primary_button,
+};
 
 actions!(
     app,
@@ -245,8 +247,9 @@ enum Overlay {
     Quick(Entity<QuickDialog>),
     Snippets(Entity<SnippetPicker>),
     Unlock(Entity<UnlockDialog>),
-    /// A close waiting for "are you sure": tab id, and the pane for a split.
-    ConfirmClose(u64, Option<usize>),
+    /// A close waiting for "are you sure": tab id, the pane for a split, and whether
+    /// "Don't ask again" is ticked.
+    ConfirmClose(u64, Option<usize>, bool),
     /// A host delete waiting for "are you sure": index into the host list.
     ConfirmDelete(usize),
     Help,

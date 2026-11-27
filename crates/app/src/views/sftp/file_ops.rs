@@ -53,6 +53,7 @@ impl SftpView {
         let names = self.pane(side).selected_names();
         if !names.is_empty() {
             self.open_prompt(Prompt::Delete(side, names), "", false, window, cx);
+            window.focus(&self.confirm_focus, cx);
         }
     }
 
@@ -201,6 +202,7 @@ impl SftpView {
                 .child(div().flex_1())
                 .child(
                     button("p-ok", "Delete")
+                        .track_focus(&self.confirm_focus)
                         .bg(c(danger()))
                         .text_color(c(on_danger()))
                         .on_click(cx.listener(|t, _, w, cx| t.confirm_prompt(w, cx))),

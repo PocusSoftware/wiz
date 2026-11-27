@@ -580,6 +580,22 @@ fn logs_tab(root: &Entity<Workspace>, cx: &mut VisualTestContext, name: &str) {
 }
 
 #[gpui::test]
+fn dont_ask_again_turns_the_close_question_off(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    logs_tab(&root, cx, "web");
+    assert!(crate::prefs::get().confirm_close());
+    let id = root.read_with(cx, |r, _| r.tabs[0].id);
+    root.update_in(cx, |r, w, cx| {
+        r.overlay = Some(Overlay::ConfirmClose(id, None, true));
+        w.focus(&r.focus, cx);
+    });
+    cx.simulate_keystrokes("enter");
+    assert!(root.read_with(cx, |r, _| r.tabs.is_empty() && r.overlay.is_none()));
+    assert!(!crate::prefs::get().confirm_close());
+}
+
+#[gpui::test]
 fn any_tabs_merge_into_a_split_and_come_apart_again(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);

@@ -223,7 +223,7 @@ impl Workspace {
                     )),
                 ))
             }
-            &Overlay::ConfirmClose(id, pane) => {
+            &Overlay::ConfirmClose(id, pane, dont_ask) => {
                 let tab = self.tabs.iter().find(|t| t.id == id)?;
                 let what = match pane {
                     Some(_) => "this terminal pane",
@@ -254,8 +254,20 @@ impl Workspace {
                         .child(
                             div()
                                 .flex()
-                                .justify_end()
+                                .items_center()
                                 .gap_2()
+                                .child(
+                                    checkbox("close-dont-ask", dont_ask, "Don't ask again")
+                                        .on_click(cx.listener(|t, _, _, cx| {
+                                            if let Some(Overlay::ConfirmClose(_, _, d)) =
+                                                &mut t.overlay
+                                            {
+                                                *d = !*d;
+                                                cx.notify();
+                                            }
+                                        })),
+                                )
+                                .child(div().flex_1())
                                 .child(button("close-no", "Cancel").on_click(
                                     cx.listener(|t, _, w, cx| t.answer_close(false, w, cx)),
                                 ))

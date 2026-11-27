@@ -255,6 +255,52 @@ fn the_filter_searches_subfolders(cx: &mut TestAppContext) {
     });
 }
 
+fn press(cx: &mut gpui::VisualTestContext, key: &'static str) {
+    cx.simulate_keystrokes(key);
+    cx.simulate_event(gpui::KeyUpEvent {
+        keystroke: gpui::Keystroke::parse(key).unwrap(),
+    });
+}
+
+#[gpui::test]
+fn delete_asks_with_the_button_focused(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["keep", "gone"]);
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    let (pane, confirm) =
+        view.read_with(cx, |v, _| (v.left.focus.clone(), v.confirm_focus.clone()));
+    let ask = |cx: &mut gpui::VisualTestContext, name: &str| {
+        view.update(cx, |v, _| v.left.selected = [name.to_string()].into());
+        cx.update(|w, cx| w.focus(&pane, cx));
+        cx.simulate_keystrokes("delete");
+        cx.run_until_parked();
+    };
+
+    ask(cx, "keep");
+    assert!(cx.update(|w, _| confirm.is_focused(w)));
+    cx.simulate_keystrokes("tab");
+    press(cx, "enter");
+    assert!(view.read_with(cx, |v, _| v.prompt.is_none()));
+    assert!(dir.path().join("keep").exists());
+
+    ask(cx, "gone");
+    press(cx, "enter");
+    for _ in 0..100 {
+        cx.run_until_parked();
+        if !dir.path().join("gone").exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!dir.path().join("gone").exists());
+    assert!(cx.update(|w, _| pane.is_focused(w)));
+}
+
 #[gpui::test]
 fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
