@@ -36,6 +36,9 @@ struct Search {
     cur: usize,
 }
 
+/// How long the shell must stay quiet before the startup command is typed.
+const STARTUP_QUIET_MS: u64 = 300;
+
 pub struct TerminalView {
     search: Option<Search>,
     /// Link under the mouse while the link modifier (`platform::link_click`) is held.
@@ -59,6 +62,10 @@ pub struct TerminalView {
     retry_ready: bool,
     /// Command this terminal runs instead of a login shell (`docker exec`), re-run on reconnect.
     pub command: Option<String>,
+    /// The host's startup command, typed once the shell has drawn its prompt.
+    startup: Option<String>,
+    /// Bumped by each output while `startup` waits, so only the last quiet spell types it.
+    startup_seq: u64,
     title: Option<SharedString>,
     saved_password: Option<Secret>,
     selecting: bool,
@@ -108,6 +115,8 @@ impl TerminalView {
             retry_ready: false,
             strip_boot_until: None,
             command: None,
+            startup: None,
+            startup_seq: 0,
         };
         this.pump(events, cx);
         this
@@ -174,6 +183,35 @@ impl TerminalView {
         cx.notify();
     }
 
+    /// Type `line` once the shell goes quiet after its first output (the prompt). Typed
+    /// earlier, the terminal echoes it above the prompt and it shows twice.
+    pub fn run_on_prompt(&mut self, line: String) {
+        self.startup = Some(line);
+    }
+
+    /// Wait for output to stop, then type the startup command.
+    fn type_startup_when_quiet(&mut self, cx: &mut Context<Self>) {
+        if self.startup.is_none() {
+            return;
+        }
+        self.startup_seq += 1;
+        let seq = self.startup_seq;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(STARTUP_QUIET_MS))
+                .await;
+            this.update(cx, |t, cx| {
+                if t.startup_seq == seq
+                    && let Some(line) = t.startup.take()
+                {
+                    t.paste(&format!("{line}\n"), cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     pub fn title(&self) -> Option<SharedString> {
         self.title.clone()
     }
@@ -189,6 +227,7 @@ impl TerminalView {
                         self.strip_boot_until = None;
                     }
                 }
+                self.type_startup_when_quiet(cx);
                 let reply = self.term.advance(&d);
                 if !reply.is_empty() {
                     self.write(reply, cx);

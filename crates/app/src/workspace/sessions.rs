@@ -52,8 +52,8 @@ impl Workspace {
                     let view = cx.new(|cx| {
                         let mut v = TerminalView::new(shell, password.clone(), cx);
                         v.command = saved_command;
-                        if let Some(line) = &startup {
-                            v.paste(&format!("{line}\n"), cx);
+                        if let Some(line) = startup {
+                            v.run_on_prompt(line);
                         }
                         v
                     });

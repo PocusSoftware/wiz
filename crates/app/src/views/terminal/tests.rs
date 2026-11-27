@@ -1,6 +1,6 @@
 //! Tests for `terminal`.
 
-use gpui::{Modifiers, px};
+use gpui::{AppContext, Modifiers, px};
 
 use super::keys::key_bytes;
 use super::mouse::autoscroll_lines;
@@ -60,4 +60,53 @@ fn autoscroll_follows_the_mouse_past_the_edges() {
     assert_eq!(autoscroll_lines(px(510.), top, height, cell), -1);
     assert_eq!(autoscroll_lines(px(-500.), top, height, cell), 5);
     assert_eq!(autoscroll_lines(px(900.), top, height, cell), -5);
+}
+
+#[gpui::test]
+fn startup_command_waits_for_the_prompt(cx: &mut gpui::TestAppContext) {
+    use tokio::sync::mpsc;
+    use wiz_core::session::{Shell, ShellEvent, ShellInput};
+
+    let (input, mut sent) = mpsc::channel(16);
+    let (events_tx, events) = mpsc::channel(16);
+    let view = cx.new(|cx| {
+        let mut v = super::TerminalView::new(Shell { input, events }, None, cx);
+        v.run_on_prompt("cd /srv".into());
+        v
+    });
+    cx.run_until_parked();
+    assert!(
+        sent.try_recv().is_err(),
+        "typed before the shell printed anything"
+    );
+
+    events_tx
+        .try_send(ShellEvent::Data(b"Last login: today\r\n".to_vec()))
+        .unwrap();
+    cx.run_until_parked();
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(100));
+    events_tx
+        .try_send(ShellEvent::Data(b"root@host:~# ".to_vec()))
+        .unwrap();
+    cx.run_until_parked();
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(250));
+    cx.run_until_parked();
+    assert!(
+        sent.try_recv().is_err(),
+        "typed while output was still coming"
+    );
+
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(100));
+    cx.run_until_parked();
+    let typed: Vec<u8> = std::iter::from_fn(|| sent.try_recv().ok())
+        .flat_map(|m| match m {
+            ShellInput::Data(d) => d,
+            _ => Vec::new(),
+        })
+        .collect();
+    assert_eq!(typed, b"cd /srv\r");
+    drop(view);
 }
