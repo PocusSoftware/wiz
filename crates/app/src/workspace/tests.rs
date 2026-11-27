@@ -1546,3 +1546,16 @@ fn zoom_changes_the_terminal_font_size(cx: &mut TestAppContext) {
     cx.dispatch_action(ResetZoom);
     assert_eq!(size(), None);
 }
+
+#[gpui::test]
+fn settings_messages_show_in_the_status_line(cx: &mut TestAppContext) {
+    let _g = setup();
+    let (root, cx) = open_root(cx);
+    root.update_in(cx, Workspace::open_settings);
+    let settings = root.read_with(cx, |r, _| r.settings.clone().unwrap());
+    settings.update(cx, |_, cx| {
+        cx.emit(SettingsEvent::Notify("Wiz is up to date.".into(), false))
+    });
+    cx.run_until_parked();
+    assert_eq!(status(&root, cx), "Wiz is up to date.");
+}

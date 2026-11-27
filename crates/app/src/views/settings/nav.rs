@@ -113,18 +113,6 @@ impl SettingsView {
                             )
                             .on_click(cx.listener(|t, _, _, cx| t.check_for_updates(cx))),
                         },
-                    )
-                    .when_some(
-                        match &self.update_check {
-                            Some(UpdateCheck::UpToDate) => {
-                                Some(("Wiz is up to date".to_string(), palette().muted))
-                            }
-                            Some(UpdateCheck::Failed(e)) => Some((e.clone(), danger())),
-                            _ => None,
-                        },
-                        |d, (text, color)| {
-                            d.child(div().px_2().text_xs().text_color(c(color)).child(text))
-                        },
                     ),
             )
             .child(
@@ -149,21 +137,31 @@ impl SettingsView {
                 .background_executor()
                 .spawn(async { wiz_core::update::newer_release() })
                 .await;
-            this.update(cx, |t, cx| {
-                t.update_check = Some(match r {
-                    Ok(Some(release)) => {
-                        let version = release.version.clone();
-                        crate::update::set_available(release, cx);
-                        UpdateCheck::Found(version)
-                    }
-                    Ok(None) => UpdateCheck::UpToDate,
-                    Err(e) => UpdateCheck::Failed(e.to_string()),
-                });
-                cx.notify();
-            })
-            .ok();
+            this.update(cx, |t, cx| t.finish_check(r, cx)).ok();
         })
         .detach();
+    }
+
+    /// Show what the update check found: a newer version in the sidebar, anything else in
+    /// the status line.
+    pub(super) fn finish_check(
+        &mut self,
+        r: wiz_core::Result<Option<wiz_core::update::Release>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_check = None;
+        match r {
+            Ok(Some(release)) => {
+                self.update_check = Some(UpdateCheck::Found(release.version.clone()));
+                crate::update::set_available(release, cx);
+            }
+            Ok(None) => cx.emit(SettingsEvent::Notify("Wiz is up to date.".into(), false)),
+            Err(e) => cx.emit(SettingsEvent::Notify(
+                format!("Could not check for updates: {e}"),
+                true,
+            )),
+        }
+        cx.notify();
     }
 
     /// Back to the defaults. The secret store stays: switching it means moving secrets.

@@ -120,3 +120,27 @@ fn offers_the_1password_agent_once_its_socket_exists(cx: &mut TestAppContext) {
         }
     }
 }
+
+#[gpui::test]
+fn update_check_results_go_to_the_status_line(cx: &mut TestAppContext) {
+    let view = cx.new(SettingsView::new);
+    let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let log = sent.clone();
+    cx.update(|cx| {
+        cx.subscribe(&view, move |_, ev: &SettingsEvent, _| {
+            if let SettingsEvent::Notify(text, error) = ev {
+                log.borrow_mut().push((text.clone(), *error));
+            }
+        })
+        .detach();
+    });
+    view.update(cx, |v, cx| {
+        v.update_check = Some(UpdateCheck::Checking);
+        v.finish_check(Ok(None), cx);
+        assert_eq!(v.update_check, None);
+        v.finish_check(Err(wiz_core::Error::Config("offline".into())), cx);
+    });
+    let sent = sent.borrow();
+    assert_eq!(sent[0], ("Wiz is up to date.".to_string(), false));
+    assert!(sent[1].1 && sent[1].0.contains("offline"));
+}

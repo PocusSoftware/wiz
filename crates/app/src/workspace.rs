@@ -551,6 +551,7 @@ impl Workspace {
                     }
                     SettingsEvent::ChangeMaster => this.show_unlock(UnlockMode::Change, window, cx),
                     SettingsEvent::OpenUpdate => this.open_update(window, cx),
+                    SettingsEvent::Notify(text, error) => this.set_status(text.clone(), *error),
                 }
                 this.settings_changed(cx)
             })

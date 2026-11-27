@@ -32,14 +32,14 @@ pub enum SettingsEvent {
     /// Escape: back to the page Settings was opened from.
     Close,
     OpenUpdate,
+    /// A message for the status line, and whether it is an error.
+    Notify(String, bool),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum UpdateCheck {
     Checking,
-    UpToDate,
     Found(String),
-    Failed(String),
 }
 
 impl EventEmitter<SettingsEvent> for SettingsView {}
