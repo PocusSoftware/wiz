@@ -441,6 +441,7 @@ impl SettingsView {
                 .child(div().flex_1().min_w_0().child(self.editor.clone()))
                 .child(
                     button("ed-browse", "Browse")
+                        .flex_shrink_0()
                         .on_click(cx.listener(|t, _, _, cx| t.browse_editor(cx))),
                 ),
         )

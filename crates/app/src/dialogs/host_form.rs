@@ -411,32 +411,36 @@ impl Render for HostForm {
                 cx.stop_propagation();
             }))
             .map(|d| dialog(d, 340.))
-            .child(dialog_header(if self.index.is_some() {
-                        "Edit host"
-                    } else {
-                        "Add host"
-                    }, close_button("form-close", "Close (Esc)").on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled)))))
+            .child(dialog_header(
+                if self.index.is_some() {
+                    "Edit host"
+                } else {
+                    "Add host"
+                },
+                close_button("form-close", "Close (Esc)")
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(FormEvent::Cancelled))),
+            ))
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(field("Name", &self.name).flex_1())
-                    .child(self.folder_field(cx).flex_1()),
+                    .child(field("Name", &self.name).flex_1().min_w_0())
+                    .child(self.folder_field(cx).flex_1().min_w_0()),
             )
             .child(field("Tags", &self.tags))
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(field("Host", &self.host).flex_1())
-                    .child(field("Port", &self.port).w(px(80.))),
+                    .child(field("Host", &self.host).flex_1().min_w_0())
+                    .child(field("Port", &self.port).w(px(80.)).flex_shrink_0()),
             )
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(field("User", &self.user).flex_1())
-                    .child(field("Jump host", &self.jump).flex_1()),
+                    .child(field("User", &self.user).flex_1().min_w_0())
+                    .child(field("Jump host", &self.jump).flex_1().min_w_0()),
             )
             .child(self.logo_field(cx))
             .child(
@@ -454,12 +458,11 @@ impl Render for HostForm {
                 ))
             })
             .when(mode == Mode::Agent, |d| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(c(palette().muted))
-                        .child("Logs in with the keys in your SSH agent (1Password, Secretive, ssh-add). Set another agent under Settings, Passwords."),
-                )
+                d.child(div().text_xs().text_color(c(palette().muted)).child(
+                    "Logs in with the keys in your SSH agent (1Password, \
+                 Secretive, ssh-add). Set another agent under Settings, \
+                 Passwords.",
+                ))
             })
             .when(mode == Mode::Key, |d| {
                 d.child(
@@ -467,9 +470,10 @@ impl Render for HostForm {
                         .flex()
                         .gap_2()
                         .items_end()
-                        .child(field("Private key", &self.key_path).flex_1())
+                        .child(field("Private key", &self.key_path).flex_1().min_w_0())
                         .child(
                             button("browse", "Browse")
+                                .flex_shrink_0()
                                 .tab_index(1)
                                 .on_click(cx.listener(|t, _, _, cx| t.browse(cx))),
                         ),

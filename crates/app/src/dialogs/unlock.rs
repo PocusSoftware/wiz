@@ -124,12 +124,16 @@ impl Render for UnlockDialog {
         let (title, hint, action) = match self.mode {
             UnlockMode::Unlock => (
                 "Unlock secrets file",
-                "Passwords are kept in an encrypted file. Enter the master password to use them. It stays unlocked until Wiz quits or you lock it in Settings.",
+                "Passwords are kept in an encrypted file. Enter the master \
+                 password to use them. It stays unlocked until Wiz quits or \
+                 you lock it in Settings.",
                 "Unlock",
             ),
             UnlockMode::Create => (
                 "Create a master password",
-                "Passwords will be kept in an encrypted file (Argon2id and AES-256). The master password can't be recovered: if you forget it, the saved passwords are gone.",
+                "Passwords will be kept in an encrypted file (Argon2id and \
+                 AES-256). The master password can't be recovered: if you \
+                 forget it, the saved passwords are gone.",
                 "Create",
             ),
             UnlockMode::Change => (
