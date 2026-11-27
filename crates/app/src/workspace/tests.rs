@@ -1079,6 +1079,37 @@ fn files_open_beside_the_shell(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn files_of_another_host_open_beside_the_shell(cx: &mut TestAppContext) {
+    let _g = setup();
+    if !docker() {
+        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        return;
+    }
+    let (root, cx) = open_root(cx);
+    quick_shell(&root, cx, 1);
+    let key = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docker/keys/ed25519");
+    root.update(cx, |r, _| {
+        r.cfg.hosts.push(Host {
+            port: 2223,
+            auth: AuthMethod::Key { path: key },
+            ..test_host("tester")
+        })
+    });
+    root.update_in(cx, |r, w, cx| r.split_files_with(0, w, cx));
+    wait(cx, &root, "a files pane", |r, _| {
+        term(r).is_some_and(|t| t.panes.len() == 2)
+    });
+    root.read_with(cx, |r, _| {
+        let t = term(r).unwrap();
+        assert!(matches!(
+            t.panes[1].tab().map(|t| &t.kind),
+            Some(TabKind::Sftp(_))
+        ));
+        assert_eq!(r.tabs.len(), 1);
+    });
+}
+
+#[gpui::test]
 fn tabs_merge_into_one_split_from_the_menu(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {

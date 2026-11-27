@@ -240,6 +240,21 @@ impl Workspace {
         }
     }
 
+    /// Open the files of saved host `host` as a new pane of the active tab.
+    pub(super) fn split_files_with(
+        &mut self,
+        host: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
+            return;
+        }
+        if let Some(id) = self.tabs.get(self.active).map(|t| t.id) {
+            self.open_host(host, Open::SplitSftp(id), window, cx);
+        }
+    }
+
     /// Move the panes of terminal tab `id` into the split of tab `into`, and close `id`.
     pub(super) fn merge_tab(
         &mut self,

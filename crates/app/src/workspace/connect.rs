@@ -441,6 +441,7 @@ impl Workspace {
             }
             Open::Docker => self.open_docker(host, conn, password, window, cx),
             Open::Sftp => self.open_sftp(host, conn, None, window, cx),
+            Open::SplitSftp(tab) => self.open_sftp(host, conn, Some(tab), window, cx),
             Open::SftpSource(view, side) => self.attach_sftp(host, conn, view, side, window, cx),
             Open::Reattach(view, attempt, _) => {
                 self.reattach(view, attempt, conn, password, window, cx)

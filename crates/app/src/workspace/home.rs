@@ -110,7 +110,7 @@ pub(super) fn tabs_of(tabs: &[Tab], account: &str) -> Vec<usize> {
 }
 
 /// `user@host:port`, masked by "hide sensitive information".
-fn address(h: &Host) -> String {
+pub(super) fn address(h: &Host) -> String {
     privacy::redact(&format!("{}@{}:{}", h.user, h.host, privacy::port(h.port))).into_owned()
 }
 

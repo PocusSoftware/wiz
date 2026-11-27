@@ -3,6 +3,8 @@
 
 use gpui::{Anchor, Div, ElementId, MouseButton, Point, anchored, point};
 
+use super::home::address;
+use super::hosts::card_icon;
 use super::*;
 
 /// A tab being dragged to a new place; also draws itself under the mouse.
@@ -371,7 +373,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let Some(account) = account else {
-            let add = Self::split_row(
+            let add = Self::icon_row(
                 "hm-add",
                 "plus",
                 "Add host",
@@ -386,7 +388,7 @@ impl Workspace {
         let ix = self.cfg.hosts.iter().position(|h| h.account() == account)?;
         let pinned = self.cfg.hosts[ix].pinned;
         let open = |id: &'static str, icon_name: &str, text: &str, what: fn() -> Open| {
-            Self::split_row(id, icon_name, text.to_string(), "")
+            Self::icon_row(id, icon_name, text.to_string(), "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.open_host(ix, what(), w, cx);
@@ -404,7 +406,7 @@ impl Workspace {
                 .h(px(1.))
                 .bg(c(palette().border_variant))
                 .into_any_element(),
-            Self::split_row(
+            Self::icon_row(
                 "hm-pin",
                 "pin",
                 if pinned { "Unpin" } else { "Pin to top" },
@@ -415,19 +417,19 @@ impl Workspace {
                 t.toggle_pin(ix, cx);
             }))
             .into_any_element(),
-            Self::split_row("hm-edit", "pencil", "Edit", "")
+            Self::icon_row("hm-edit", "pencil", "Edit", "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.open_form(Some(ix), w, cx);
                 }))
                 .into_any_element(),
-            Self::split_row("hm-copy", "copy", "Duplicate", "")
+            Self::icon_row("hm-copy", "copy", "Duplicate", "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.duplicate_host(ix, w, cx);
                 }))
                 .into_any_element(),
-            Self::split_row("hm-del", "trash", "Delete", "")
+            Self::icon_row("hm-del", "trash", "Delete", "")
                 .text_color(c(danger()))
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
@@ -438,25 +440,28 @@ impl Workspace {
         Some(self.menu_overlay(usize::MAX - 1, at, Anchor::TopLeft, MENU_W, items, cx))
     }
 
-    /// Where the next pane opens: the same server, or any saved host.
+    /// Where the next pane opens: the same server, or any saved host. A row opens a
+    /// terminal, its folder button the files.
     fn split_menu_view(&self, at: Point<Pixels>, cx: &mut Context<Self>) -> AnyElement {
         let same = Self::split_row(
             "sm-same",
-            "columns",
-            "Same server",
-            crate::shortcuts::label("split"),
+            icon("columns", 14., palette().muted),
+            "Same server".into(),
+            None,
+            crate::shortcuts::label("split").into(),
+            Self::files_button("sm-files", "Files on same server".into()).on_click(cx.listener(
+                |t, _, w, cx| {
+                    cx.stop_propagation();
+                    t.close_tab_menu(w, cx);
+                    t.split_files(w, cx);
+                },
+            )),
         )
         .on_click(cx.listener(|t, _, w, cx| {
             t.close_tab_menu(w, cx);
             t.split(w, cx);
         }));
-        let files = Self::split_row("sm-files", "folder", "Files on same server", "").on_click(
-            cx.listener(|t, _, w, cx| {
-                t.close_tab_menu(w, cx);
-                t.split_files(w, cx);
-            }),
-        );
-        let mut items = vec![same.into_any_element(), files.into_any_element()];
+        let mut items = vec![same.into_any_element()];
         if !self.cfg.hosts.is_empty() {
             items.push(
                 div()
@@ -468,21 +473,31 @@ impl Workspace {
             items.push(
                 div()
                     .px_2()
-                    .pb_1()
+                    .py_1()
                     .text_xs()
                     .text_color(c(palette().placeholder))
-                    .child("Other host")
+                    .child("Other hosts")
                     .into_any_element(),
             );
         }
+        let logos = crate::prefs::get().show_os_logos();
         for (ix, h) in self.cfg.hosts.iter().enumerate() {
-            let addr = privacy::redact(&format!("{}@{}", h.user, h.host)).into_owned();
+            let name = privacy::redact(&h.name).into_owned();
+            let files =
+                Self::files_button(("sm-host-files", ix), format!("Files on {name}").into())
+                    .on_click(cx.listener(move |t, _, w, cx| {
+                        cx.stop_propagation();
+                        t.close_tab_menu(w, cx);
+                        t.split_files_with(ix, w, cx);
+                    }));
             items.push(
                 Self::split_row(
                     ("sm-host", ix),
-                    "server",
-                    privacy::redact(&h.name).into_owned(),
-                    addr,
+                    icon(&card_icon(h, logos), 14., accent_text()),
+                    name.into(),
+                    Some(address(h).into()),
+                    SharedString::default(),
+                    files,
                 )
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
@@ -494,8 +509,60 @@ impl Workspace {
         self.menu_overlay(usize::MAX, at, Anchor::TopRight, SPLIT_MENU_W, items, cx)
     }
 
-    /// A split menu row: icon, name, and a muted note on the right.
+    /// A split menu row: icon, name with the address under it, a muted shortcut, and the
+    /// files button at the end.
     fn split_row(
+        id: impl Into<ElementId>,
+        lead: impl IntoElement,
+        title: SharedString,
+        subtitle: Option<SharedString>,
+        shortcut: SharedString,
+        files: Stateful<Div>,
+    ) -> Stateful<Div> {
+        keyboard(div().id(id))
+            .focus(|s| s.bg(c(palette().hover)))
+            .h(px(if subtitle.is_some() { 38. } else { 30. }))
+            .pl_2()
+            .pr_1()
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded(px(2.))
+            .cursor_pointer()
+            .hover(|s| s.bg(c(palette().hover)))
+            .whitespace_nowrap()
+            .child(lead)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(div().truncate().child(title))
+                    .when_some(subtitle, |d, sub| {
+                        d.child(
+                            div()
+                                .truncate()
+                                .text_xs()
+                                .text_color(c(palette().placeholder))
+                                .child(sub),
+                        )
+                    }),
+            )
+            .when(!shortcut.is_empty(), |d| {
+                d.child(
+                    div()
+                        .flex_shrink_0()
+                        .text_xs()
+                        .text_color(c(palette().placeholder))
+                        .child(shortcut),
+                )
+            })
+            .child(files)
+    }
+
+    /// A menu row: icon, text, and a muted note on the right.
+    fn icon_row(
         id: impl Into<ElementId>,
         icon_name: &str,
         text: impl Into<SharedString>,
@@ -523,5 +590,9 @@ impl Workspace {
                     .text_color(c(palette().placeholder))
                     .child(note.into()),
             )
+    }
+
+    fn files_button(id: impl Into<ElementId>, tooltip: SharedString) -> Stateful<Div> {
+        icon_button(id, "folder", tooltip, palette().muted).flex_shrink_0()
     }
 }

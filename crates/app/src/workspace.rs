@@ -207,6 +207,8 @@ enum Open {
     Reattach(gpui::WeakEntity<TerminalView>, u32, bool),
     /// Connect a host and open a shell for it as a new pane of the terminal tab with this id.
     SplitShell(u64),
+    /// Connect a host and open its files as a new pane of the terminal tab with this id.
+    SplitSftp(u64),
 }
 
 enum TabKind {
