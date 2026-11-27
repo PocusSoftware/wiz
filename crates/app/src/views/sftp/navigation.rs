@@ -32,6 +32,10 @@ impl SftpView {
                                 Nav::Reload => {}
                             }
                         }
+                        if p.path != canon {
+                            p.filter = None;
+                            p.query.clear();
+                        }
                         p.path = canon.clone();
                         p.raw = list;
                         p.error = None;
@@ -197,9 +201,11 @@ impl SftpView {
                 self.active = to;
                 window.focus(&self.pane(to).focus, cx);
             }
+            "escape" if self.menu.is_some() => self.menu = None,
             "escape" => {
                 self.pane_mut(side).selected.clear();
             }
+            "f" if m.secondary(cx) => self.open_filter(side, window, cx),
             "f2" => self.ask_rename(side, window, cx),
             "f5" => self.begin_transfer(side, cx),
             "r" if m.secondary(cx) => self.refresh(side, cx),

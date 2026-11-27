@@ -105,6 +105,104 @@ fn the_line_between_the_panes_can_be_dragged(cx: &mut TestAppContext) {
     assert_eq!(view.read_with(cx, |v, _| v.split), 0.5);
 }
 
+fn folder_with(names: &[&str]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    for n in names {
+        std::fs::write(dir.path().join(n), "x").unwrap();
+    }
+    dir
+}
+
+fn context(v: &SftpView, _: &gpui::App) -> Option<(Side, bool)> {
+    match v.menu {
+        Some(Menu::Context { side, on_file, .. }) => Some((side, on_file)),
+        _ => None,
+    }
+}
+
+#[gpui::test]
+fn right_click_opens_a_menu_for_files_or_the_folder(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["alpha", "beta", "gamma"]);
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    let none = Modifiers::default();
+    let right_click = |cx: &mut gpui::VisualTestContext, y: f32| {
+        cx.simulate_mouse_down(point(px(200.), px(y)), MouseButton::Right, none);
+        cx.simulate_mouse_up(point(px(200.), px(y)), MouseButton::Right, none);
+    };
+
+    // The empty list under the files gets the folder menu.
+    right_click(cx, 560.);
+    assert_eq!(view.read_with(cx, context), Some((Side::Left, false)));
+
+    // The first row: a file menu, and only that file selected.
+    let row = (40..300)
+        .step_by(4)
+        .map(|y| y as f32)
+        .find(|&y| {
+            right_click(cx, y);
+            view.read_with(cx, context) == Some((Side::Left, true))
+        })
+        .expect("a row takes the right click");
+    view.read_with(cx, |v, _| assert_eq!(v.left.selected_names(), ["alpha"]));
+
+    // Inside a selection of several, the selection stays.
+    view.update(cx, |v, _| {
+        v.left.selected = ["alpha", "beta"].map(String::from).into_iter().collect();
+    });
+    right_click(cx, row);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.left.selected_names(), ["alpha", "beta"]);
+    });
+
+    // Escape closes it.
+    cx.simulate_keystrokes("escape");
+    assert!(view.read_with(cx, |v, _| v.menu.is_none()));
+}
+
+#[gpui::test]
+fn the_filter_narrows_the_folder_and_drops_hidden_selections(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["alpha", "beta", "gamma"]);
+    let inner = dir.path().join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    view.update(cx, |v, _| v.left.selected = ["beta".to_string()].into());
+    view.update_in(cx, |v, w, cx| v.open_filter(Side::Left, w, cx));
+    cx.simulate_input("AL");
+    view.read_with(cx, |v, _| {
+        let names: Vec<_> = v.left.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["alpha"]);
+        assert!(v.left.selected_names().is_empty());
+    });
+    // Escape in the field clears the filter.
+    cx.simulate_keystrokes("escape");
+    view.read_with(cx, |v, _| {
+        assert!(v.left.filter.is_none());
+        assert_eq!(v.left.entries.len(), 4);
+    });
+    // Another folder starts without a filter.
+    view.update_in(cx, |v, w, cx| v.open_filter(Side::Left, w, cx));
+    cx.simulate_input("zzz");
+    assert!(view.read_with(cx, |v, _| v.left.entries.is_empty()));
+    let inner = inner.to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, inner, Nav::New, cx));
+    settle(cx, &view);
+    view.read_with(cx, |v, _| {
+        assert!(v.left.filter.is_none() && v.left.query.is_empty());
+    });
+}
+
 #[gpui::test]
 fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();

@@ -6,6 +6,7 @@ use gpui::{Anchor, Div, ElementId, MouseButton, Point, anchored, point};
 use super::home::address;
 use super::hosts::card_icon;
 use super::*;
+use crate::widgets::{menu_panel, menu_row};
 
 /// A tab being dragged to a new place; also draws itself under the mouse.
 #[derive(Clone)]
@@ -251,17 +252,7 @@ impl Workspace {
         items: impl IntoIterator<Item = impl IntoElement>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let menu = div()
-            .w(px(width))
-            .p_1()
-            .flex()
-            .flex_col()
-            .rounded(px(3.))
-            .bg(c(palette().elevated))
-            .border_1()
-            .border_color(c(palette().border))
-            .text_color(c(palette().text))
-            .children(items);
+        let menu = menu_panel(width).children(items);
         div()
             .id("tab-menu")
             .track_focus(&self.modal_focus)
@@ -373,7 +364,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let Some(account) = account else {
-            let add = Self::icon_row(
+            let add = menu_row(
                 "hm-add",
                 "plus",
                 "Add host",
@@ -388,7 +379,7 @@ impl Workspace {
         let ix = self.cfg.hosts.iter().position(|h| h.account() == account)?;
         let pinned = self.cfg.hosts[ix].pinned;
         let open = |id: &'static str, icon_name: &str, text: &str, what: fn() -> Open| {
-            Self::icon_row(id, icon_name, text.to_string(), "")
+            menu_row(id, icon_name, text.to_string(), "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.open_host(ix, what(), w, cx);
@@ -406,7 +397,7 @@ impl Workspace {
                 .h(px(1.))
                 .bg(c(palette().border_variant))
                 .into_any_element(),
-            Self::icon_row(
+            menu_row(
                 "hm-pin",
                 "pin",
                 if pinned { "Unpin" } else { "Pin to top" },
@@ -417,19 +408,19 @@ impl Workspace {
                 t.toggle_pin(ix, cx);
             }))
             .into_any_element(),
-            Self::icon_row("hm-edit", "pencil", "Edit", "")
+            menu_row("hm-edit", "pencil", "Edit", "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.open_form(Some(ix), w, cx);
                 }))
                 .into_any_element(),
-            Self::icon_row("hm-copy", "copy", "Duplicate", "")
+            menu_row("hm-copy", "copy", "Duplicate", "")
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
                     t.duplicate_host(ix, w, cx);
                 }))
                 .into_any_element(),
-            Self::icon_row("hm-del", "trash", "Delete", "")
+            menu_row("hm-del", "trash", "Delete", "")
                 .text_color(c(danger()))
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
@@ -583,37 +574,6 @@ impl Workspace {
                 )
             })
             .children(actions)
-    }
-
-    /// A menu row: icon, text, and a muted note on the right.
-    fn icon_row(
-        id: impl Into<ElementId>,
-        icon_name: &str,
-        text: impl Into<SharedString>,
-        note: impl Into<SharedString>,
-    ) -> Stateful<Div> {
-        keyboard(div().id(id))
-            .focus(|s| s.bg(c(palette().hover)))
-            .h(px(28.))
-            .px_2()
-            .flex()
-            .items_center()
-            .gap_2()
-            .rounded(px(2.))
-            .cursor_pointer()
-            .hover(|s| s.bg(c(palette().hover)))
-            .whitespace_nowrap()
-            .child(icon(icon_name, 14., palette().muted))
-            .child(div().flex_1().min_w_0().truncate().child(text.into()))
-            .child(
-                div()
-                    .flex_shrink_0()
-                    .max_w(px(120.))
-                    .truncate()
-                    .text_xs()
-                    .text_color(c(palette().placeholder))
-                    .child(note.into()),
-            )
     }
 
     fn pane_button(

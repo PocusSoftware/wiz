@@ -115,6 +115,51 @@ pub fn icon_button(
         .child(icon(name, 13., color))
 }
 
+/// The frame of a menu `width` wide.
+pub fn menu_panel(width: f32) -> Div {
+    div()
+        .w(px(width))
+        .p_1()
+        .flex()
+        .flex_col()
+        .rounded(px(3.))
+        .bg(c(palette().elevated))
+        .border_1()
+        .border_color(c(palette().border))
+        .text_color(c(palette().text))
+}
+
+/// A menu row: icon, text, and a muted note on the right.
+pub fn menu_row(
+    id: impl Into<ElementId>,
+    icon_name: &str,
+    text: impl Into<SharedString>,
+    note: impl Into<SharedString>,
+) -> Stateful<Div> {
+    keyboard(div().id(id))
+        .focus(|s| s.bg(c(palette().hover)))
+        .h(px(28.))
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_2()
+        .rounded(px(2.))
+        .cursor_pointer()
+        .hover(|s| s.bg(c(palette().hover)))
+        .whitespace_nowrap()
+        .child(icon(icon_name, 14., palette().muted))
+        .child(div().flex_1().min_w_0().truncate().child(text.into()))
+        .child(
+            div()
+                .flex_shrink_0()
+                .max_w(px(120.))
+                .truncate()
+                .text_xs()
+                .text_color(c(palette().placeholder))
+                .child(note.into()),
+        )
+}
+
 pub fn surface<E: Styled>(el: E) -> E {
     el.rounded(px(3.))
         .bg(c(palette().elevated))

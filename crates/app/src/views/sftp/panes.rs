@@ -83,6 +83,12 @@ impl SftpView {
                             cx.notify();
                         }),
                     )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |t, ev: &MouseDownEvent, w, cx| {
+                            t.open_context(side, Some(ix), ev.position, w, cx)
+                        }),
+                    )
                     .on_click(cx.listener(move |t, ev: &ClickEvent, _, cx| {
                         if ev.click_count() >= 2 {
                             t.open_dir(side, ix, cx);
@@ -331,7 +337,11 @@ impl SftpView {
                 .flex_1()
                 .p_3()
                 .text_color(c(palette().placeholder))
-                .child("Empty folder")
+                .child(if p.query.is_empty() {
+                    "Empty folder"
+                } else {
+                    "No matches"
+                })
                 .into_any_element()
         } else {
             list.into_any_element()
@@ -404,10 +414,9 @@ impl SftpView {
                             .cursor_pointer()
                             .hover(|s| s.bg(c(palette().hover)))
                             .on_click(cx.listener(move |t, _, _, cx| {
-                                t.menu = if t.menu == Some(side) {
-                                    None
-                                } else {
-                                    Some(side)
+                                t.menu = match t.menu {
+                                    Some(Menu::Source(s)) if s == side => None,
+                                    _ => Some(Menu::Source(side)),
                                 };
                                 cx.notify();
                             }))
@@ -458,14 +467,28 @@ impl SftpView {
                         .child(crate::privacy::redact(&e).into_owned()),
                 )
             })
+            .children(self.filter_bar(side, cx))
             .child(self.sort_header(side, cx))
-            .child(body)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |t, ev: &MouseDownEvent, w, cx| {
+                            t.open_context(side, None, ev.position, w, cx)
+                        }),
+                    )
+                    .child(body),
+            )
             .children(self.source_menu(side, cx))
             .into_any_element()
     }
 
     fn source_menu(&self, side: Side, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
-        if self.menu != Some(side) {
+        if !matches!(self.menu, Some(Menu::Source(s)) if s == side) {
             return None;
         }
         let current = self.pane(side).source.label();

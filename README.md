@@ -7,7 +7,7 @@ A fast SSH client for macOS, Windows and Linux in Rust (terminal, SFTP, Docker).
   known_hosts verification (TOFU, hard fail on changed key, OpenSSH host key rotation), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
   (through the `docker` CLI, remote over SSH or local).
-- SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop between panes and from Finder or Explorer, conflict prompts, rsync hint for big transfers.
+- SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop between panes and from Finder or Explorer, a right-click menu on files and on the empty list, a name filter for the folder (⌘F), a line between the panes that can be dragged (double click centers it), conflict prompts, rsync hint for big transfers.
 - Todo: startup time measurement.
 
 ## Test
@@ -15,7 +15,7 @@ A fast SSH client for macOS, Windows and Linux in Rust (terminal, SFTP, Docker).
 sh docker/gen-keys.sh && (cd docker && docker compose up -d --build)
 SSHC_DOCKER_TESTS=1 cargo test --workspace
 ```
-Unit tests sit in a `tests.rs` next to the code they test (`views/sftp/tests.rs` for `views/sftp.rs`). Backend tests that use only the public API are in `crates/core/tests/`.
+Unit tests sit at the bottom of the file they test, in `mod tests`; a module that has a folder for submodules keeps them in a `tests.rs` there (`views/sftp/tests.rs` for `views/sftp.rs`). Backend tests that use only the public API are in `crates/core/tests/`.
 Password server: `tester`/`hunter2` on :2222. Key-only server on :2223 (mounts docker.sock).
 Server without SFTP, FTP on :21 instead: `tester`/`hunter2` on :2224.
 Manual shell: `cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2`
@@ -38,7 +38,7 @@ The eye button in the title bar flips `hide_sensitive`.
 ## Split terminals
 ⌘D opens another shell on the same server in the current tab, up to 4 (`max_splits` under Experimental raises it). Two sit side by side, a third and fourth go below them as a 2x2 grid, more grow the grid. On a short window they go side by side, on a narrow one they stack. Splitting is refused when a pane would get smaller than about 320x150 px. Dividers between columns and rows can be dragged. ⌘] and ⌘[ move between the panes.
 
-To put another server in the split, click the split button or press ⇧⌘D and pick a saved host. To join two open tabs, open the menu of the tab you want to move (right-click, or ⇧⌘M for the open tab) and pick "Merge into" the other one. Any tab can be merged, so files, Docker or logs can sit beside a shell; "Files on same server" in the split menu opens one directly. "Open in new window" in the same menu moves a tab into a window of its own, and "Move to other window" brings it back. Both work from the keyboard (Tab or the arrow keys move in the menu, Enter picks, Escape closes). All shortcuts above can be changed under Shortcuts in Settings: select the shortcut, press Enter, type the new keys (hold Cmd, Ctrl or Option).
+To put another server in the split, click the split button or press ⇧⌘D and pick a saved host. To join two open tabs, open the menu of the tab you want to move (right-click, or ⇧⌘M for the open tab) and pick "Merge into" the other one. Any tab can be merged, so files, Docker or logs can sit beside a shell; the folder and Docker buttons in the split menu open files or containers of any host directly. "Open in new window" in the same menu moves a tab into a window of its own, and "Move to other window" brings it back. Both work from the keyboard (Tab or the arrow keys move in the menu, Enter picks, Escape closes). All shortcuts above can be changed under Shortcuts in Settings: select the shortcut, press Enter, type the new keys (hold Cmd, Ctrl or Option).
 
 ## Keyboard
 Everything works without a mouse. Tab and Shift+Tab, or the arrow keys, move between controls. Enter or Space presses the focused one. A dialog keeps Tab inside it, fields first, then its buttons. The terminal keeps Tab for the shell, so ⌘L jumps to the tab bar. There Left and Right move between tabs, Home and End go to the ends, Enter selects, Shift+Left and Shift+Right move a tab, Delete closes it, and Shift+F10 opens its menu (Up and Down to pick). In the file panes Left and Right switch between the two lists. ⌘= (or ⌘+) and ⌘- make the terminal text larger and smaller, ⌘0 sets it back to the default (Ctrl on Windows). The zoom shows under Settings, Terminal and network, with a button to reset it.

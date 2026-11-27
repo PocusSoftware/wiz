@@ -2,6 +2,7 @@
 
 mod edit;
 mod file_ops;
+mod menu;
 mod navigation;
 mod panes;
 #[cfg(test)]
@@ -172,6 +173,17 @@ struct Pane {
     secret_hidden: usize,
     nav: u64,
     typed: (String, Instant),
+    filter: Option<Entity<TextInput>>,
+    query: String,
+}
+
+enum Menu {
+    Source(Side),
+    Context {
+        side: Side,
+        at: gpui::Point<gpui::Pixels>,
+        on_file: bool,
+    },
 }
 
 impl Pane {
@@ -202,6 +214,8 @@ impl Pane {
             secret_hidden: 0,
             nav: 0,
             typed: (String::new(), Instant::now()),
+            filter: None,
+            query: String::new(),
         }
     }
 
@@ -218,7 +232,9 @@ impl Pane {
             .raw
             .iter()
             .filter(|e| {
-                (self.hidden || !e.name.starts_with('.')) && !crate::privacy::file_hidden(&e.name)
+                (self.hidden || !e.name.starts_with('.'))
+                    && !crate::privacy::file_hidden(&e.name)
+                    && (self.query.is_empty() || e.name.to_lowercase().contains(&self.query))
             })
             .cloned()
             .collect();
@@ -311,7 +327,7 @@ pub struct SftpView {
     right: Pane,
     /// (account, display name) of every configured host.
     hosts: Vec<(String, String)>,
-    menu: Option<Side>,
+    menu: Option<Menu>,
     active: Side,
     prompt: Option<Prompt>,
     prompt_input: Entity<TextInput>,
@@ -595,5 +611,6 @@ impl Render for SftpView {
             .children(self.prompt_bar(cx))
             .children(self.edit_bar(cx))
             .children(self.transfer_bar(cx))
+            .children(self.context_menu(cx))
     }
 }

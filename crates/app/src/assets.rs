@@ -51,6 +51,7 @@ icons!(
     "columns",
     "pause",
     "external-link",
+    "search",
     "os/almalinux",
     "os/alpinelinux",
     "os/aosc",
