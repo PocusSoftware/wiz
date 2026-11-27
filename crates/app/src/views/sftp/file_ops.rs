@@ -44,7 +44,8 @@ impl SftpView {
         let names = self.pane(side).selected_names();
         if let [name] = names.as_slice() {
             let name = name.clone();
-            self.open_prompt(Prompt::Rename(side, name.clone()), &name, true, window, cx);
+            let base = base_name(&name).to_string();
+            self.open_prompt(Prompt::Rename(side, name), &base, true, window, cx);
         }
     }
 
@@ -61,8 +62,12 @@ impl SftpView {
             Some(Prompt::NewFolder(side)) if !value.is_empty() => {
                 self.fs_op(side, FsOp::Mkdir(value), cx)
             }
-            Some(Prompt::Rename(side, old)) if !value.is_empty() && value != old => {
-                self.fs_op(side, FsOp::Rename(old, value), cx)
+            Some(Prompt::Rename(side, old)) if !value.is_empty() && value != base_name(&old) => {
+                let new = match old.rsplit_once('/') {
+                    Some((dir, _)) => format!("{dir}/{value}"),
+                    None => value,
+                };
+                self.fs_op(side, FsOp::Rename(old, new), cx)
             }
             Some(Prompt::Delete(side, names)) => self.fs_op(side, FsOp::Delete(names), cx),
             _ => {}

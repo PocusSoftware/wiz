@@ -4,7 +4,7 @@ use gpui::{AnyElement, ClipboardItem, Pixels, Point, anchored, deferred};
 
 use super::*;
 use crate::widgets::input::InputEvent;
-use crate::widgets::{menu_panel, menu_row};
+use crate::widgets::{checkbox, menu_panel, menu_row};
 
 const MENU_W: f32 = 210.;
 
@@ -163,11 +163,7 @@ impl SftpView {
                         "Show dotfiles"
                     },
                     "".into(),
-                    |t, s, _, _| {
-                        let p = t.pane_mut(s);
-                        p.hidden = !p.hidden;
-                        p.rebuild();
-                    },
+                    |t, s, _, cx| t.toggle_dotfiles(s, cx),
                 )
                 .into_any_element(),
             );
@@ -202,6 +198,9 @@ impl SftpView {
                     let p = t.pane_mut(side);
                     p.query = q;
                     p.rebuild();
+                    if p.deep {
+                        t.search(side, true, cx);
+                    }
                     cx.notify();
                 })
                 .detach();
@@ -217,13 +216,25 @@ impl SftpView {
         let p = self.pane_mut(side);
         p.filter = None;
         p.query.clear();
+        p.deep = false;
+        p.stop_search();
         p.rebuild();
         window.focus(&p.focus, cx);
         cx.notify();
     }
 
     pub(super) fn filter_bar(&self, side: Side, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let input = self.pane(side).filter.clone()?;
+        let p = self.pane(side);
+        let input = p.filter.clone()?;
+        let status = if p.searching {
+            Some("Searching...".to_string())
+        } else {
+            p.found.as_ref().map(|f| match f {
+                f if f.complete => format!("{} found", p.entries.len()),
+                f if f.entries.len() >= sftp::MAX_HITS => format!("First {} found", sftp::MAX_HITS),
+                _ => format!("Stopped after {} folders", sftp::MAX_DIRS),
+            })
+        };
         Some(
             div()
                 .px_2()
@@ -243,6 +254,24 @@ impl SftpView {
                 }))
                 .child(icon("search", 13., palette().muted))
                 .child(div().flex_1().min_w_0().child(input))
+                .when_some(status, |d, s| {
+                    d.child(
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(c(palette().placeholder))
+                            .child(s),
+                    )
+                })
+                .child(
+                    checkbox((side.tag(), 1008usize), p.deep, "Subfolders")
+                        .flex_shrink_0()
+                        .on_click(cx.listener(move |t, _, _, cx| {
+                            let p = t.pane_mut(side);
+                            p.deep = !p.deep;
+                            t.search(side, false, cx);
+                        })),
+                )
                 .child(
                     icon_button(
                         (side.tag(), 1007usize),
@@ -254,6 +283,78 @@ impl SftpView {
                 )
                 .into_any_element(),
         )
+    }
+}
+
+impl SftpView {
+    pub(super) fn toggle_dotfiles(&mut self, side: Side, cx: &mut Context<Self>) {
+        let p = self.pane_mut(side);
+        p.hidden = !p.hidden;
+        p.rebuild();
+        if p.found.is_some() {
+            self.search(side, false, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn search(&mut self, side: Side, debounce: bool, cx: &mut Context<Self>) {
+        let p = self.pane_mut(side);
+        p.search_cancel.store(true, Ordering::Relaxed);
+        if !p.deep || p.query.chars().count() < 2 {
+            p.stop_search();
+            p.rebuild();
+            cx.notify();
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        p.search_cancel = cancel.clone();
+        p.search_gen += 1;
+        p.searching = true;
+        let run = p.search_gen;
+        let (source, root, query, dots) =
+            (p.source.clone(), p.path.clone(), p.query.clone(), p.hidden);
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            if debounce {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+            }
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
+            let r = match source {
+                Source::Local => {
+                    runtime::spawn(async move {
+                        tokio::task::spawn_blocking(move || {
+                            sftp::search_local(std::path::Path::new(&root), &query, dots, &cancel)
+                        })
+                        .await
+                        .map_err(|e| ssh_core::Error::Sftp(e.to_string()))?
+                    })
+                    .await
+                }
+                Source::Remote(r) => {
+                    runtime::spawn(async move { r.sftp.search(&root, &query, dots, &cancel).await })
+                        .await
+                }
+            };
+            this.update(cx, |t, cx| {
+                let p = t.pane_mut(side);
+                if p.search_gen != run {
+                    return;
+                }
+                p.searching = false;
+                match r {
+                    Ok(found) => p.found = Some(found),
+                    Err(e) => p.error = Some(e.to_string().into()),
+                }
+                p.rebuild();
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 }
 

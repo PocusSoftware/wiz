@@ -35,6 +35,8 @@ impl SftpView {
                         if p.path != canon {
                             p.filter = None;
                             p.query.clear();
+                            p.deep = false;
+                            p.stop_search();
                         }
                         p.path = canon.clone();
                         p.raw = list;
@@ -63,6 +65,9 @@ impl SftpView {
         let path = self.pane(side).path.clone();
         if !path.is_empty() {
             self.go(side, path, Nav::Reload, cx);
+        }
+        if self.pane(side).found.is_some() {
+            self.search(side, false, cx);
         }
     }
 
@@ -94,7 +99,7 @@ impl SftpView {
         if e.is_dir {
             self.go(side, target, Nav::New, cx);
         } else {
-            let (name, size) = (e.name.clone(), e.size);
+            let (name, size) = (base_name(&e.name).to_string(), e.size);
             self.open_file(side, name, target, size, cx);
         }
     }
@@ -230,7 +235,7 @@ impl SftpView {
                         if let Some(ix) = p
                             .entries
                             .iter()
-                            .position(|e| e.name.to_lowercase().starts_with(&q))
+                            .position(|e| base_name(&e.name).to_lowercase().starts_with(&q))
                         {
                             self.select_row(side, ix, false, false);
                             self.pane(side)

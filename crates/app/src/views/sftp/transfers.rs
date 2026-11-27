@@ -53,11 +53,28 @@ impl SftpView {
         names: Vec<String>,
         cx: &mut Context<Self>,
     ) {
-        let origin = Origin {
-            source: self.pane(from).source.clone(),
-            dir: self.pane(from).path.clone(),
-        };
-        self.begin_copy(origin, from.other(), names, cx);
+        let p = self.pane(from);
+        let (source, path) = (p.source.clone(), p.path.clone());
+        let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+        for name in names {
+            let (sub, base) = name.rsplit_once('/').unwrap_or(("", &name));
+            let dir = if sub.is_empty() {
+                path.clone()
+            } else {
+                source.join(&path, sub)
+            };
+            match groups.iter_mut().find(|(d, _)| *d == dir) {
+                Some((_, v)) => v.push(base.to_string()),
+                None => groups.push((dir, vec![base.to_string()])),
+            }
+        }
+        for (dir, names) in groups {
+            let origin = Origin {
+                source: source.clone(),
+                dir,
+            };
+            self.begin_copy(origin, from.other(), names, cx);
+        }
     }
 
     pub(super) fn drop_paths(&mut self, to: Side, paths: &[PathBuf], cx: &mut Context<Self>) {

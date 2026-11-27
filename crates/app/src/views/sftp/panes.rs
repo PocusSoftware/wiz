@@ -286,12 +286,7 @@ impl SftpView {
                     },
                     palette().muted,
                 )
-                .on_click(cx.listener(move |t, _, _, cx| {
-                    let p = t.pane_mut(side);
-                    p.hidden = !p.hidden;
-                    p.rebuild();
-                    cx.notify();
-                })),
+                .on_click(cx.listener(move |t, _, _, cx| t.toggle_dotfiles(side, cx))),
             )
             .child(
                 icon_button(
@@ -337,10 +332,11 @@ impl SftpView {
                 .flex_1()
                 .p_3()
                 .text_color(c(palette().placeholder))
-                .child(if p.query.is_empty() {
-                    "Empty folder"
-                } else {
-                    "No matches"
+                .child(match (p.query.is_empty(), p.deep, p.searching) {
+                    (true, ..) => "Empty folder",
+                    (false, true, true) => "Searching...",
+                    (false, true, false) => "No matches in subfolders",
+                    (false, false, _) => "No matches",
                 })
                 .into_any_element()
         } else {

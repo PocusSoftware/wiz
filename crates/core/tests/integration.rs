@@ -758,3 +758,34 @@ async fn exit_ends_shell_with_status_and_keeps_connection() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(!c.is_closed());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn sftp_search_finds_names_below_and_survives_link_loops() {
+    use std::sync::atomic::AtomicBool;
+    gate!();
+    let d = tempfile::tempdir().unwrap();
+    let c = Connection::connect(
+        &host(2223, AuthMethod::Password),
+        &Credentials::Key {
+            path: keys().join("ed25519"),
+            passphrase: None,
+        },
+        verifier(&d, Arc::new(TrustAll)),
+    )
+    .await
+    .unwrap();
+    let sftp = c.open_sftp().await.unwrap();
+    let base = "/home/tester/search-test";
+    c.exec(&format!("rm -rf {base}; mkdir -p {base}/a/b {base}/.hidden; touch {base}/Notes.txt {base}/a/b/notes-old.md {base}/.hidden/notes; ln -s .. {base}/a/up"))
+        .await
+        .unwrap();
+    let found = sftp
+        .search(base, "notes", false, &AtomicBool::new(false))
+        .await
+        .unwrap();
+    let mut names: Vec<&str> = found.entries.iter().map(|e| e.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["Notes.txt", "a/b/notes-old.md"]);
+    assert!(found.complete);
+}

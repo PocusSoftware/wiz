@@ -175,6 +175,11 @@ struct Pane {
     typed: (String, Instant),
     filter: Option<Entity<TextInput>>,
     query: String,
+    deep: bool,
+    found: Option<sftp::Found>,
+    searching: bool,
+    search_cancel: Arc<AtomicBool>,
+    search_gen: u64,
 }
 
 enum Menu {
@@ -216,25 +221,29 @@ impl Pane {
             typed: (String::new(), Instant::now()),
             filter: None,
             query: String::new(),
+            deep: false,
+            found: None,
+            searching: false,
+            search_cancel: Arc::new(AtomicBool::new(false)),
+            search_gen: 0,
         }
     }
 
     /// Rebuild the visible list: hidden filter, then sort (folders always first).
     fn rebuild(&mut self) {
-        self.secret_hidden = self
-            .raw
+        let list = self.found.as_ref().map_or(&self.raw, |f| &f.entries);
+        let dots = |e: &Entry| self.hidden || !base_name(&e.name).starts_with('.');
+        self.secret_hidden = list
             .iter()
-            .filter(|e| {
-                (self.hidden || !e.name.starts_with('.')) && crate::privacy::file_hidden(&e.name)
-            })
+            .filter(|e| dots(e) && crate::privacy::file_hidden(base_name(&e.name)))
             .count();
-        let mut v: Vec<Entry> = self
-            .raw
+        let mut v: Vec<Entry> = list
             .iter()
             .filter(|e| {
-                (self.hidden || !e.name.starts_with('.'))
-                    && !crate::privacy::file_hidden(&e.name)
-                    && (self.query.is_empty() || e.name.to_lowercase().contains(&self.query))
+                let base = base_name(&e.name);
+                dots(e)
+                    && !crate::privacy::file_hidden(base)
+                    && (self.query.is_empty() || base.to_lowercase().contains(&self.query))
             })
             .cloned()
             .collect();
@@ -256,6 +265,12 @@ impl Pane {
         self.cursor = self.cursor.min(self.entries.len().saturating_sub(1));
     }
 
+    fn stop_search(&mut self) {
+        self.search_cancel.store(true, Ordering::Relaxed);
+        self.found = None;
+        self.searching = false;
+    }
+
     fn selected_names(&self) -> Vec<String> {
         self.entries
             .iter()
@@ -275,6 +290,10 @@ enum Prompt {
         names: Vec<String>,
         existing: Vec<String>,
     },
+}
+
+fn base_name(name: &str) -> &str {
+    name.rsplit('/').next().unwrap_or(name)
 }
 
 #[derive(Clone)]

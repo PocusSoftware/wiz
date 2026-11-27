@@ -7,7 +7,7 @@ A fast SSH client for macOS, Windows and Linux in Rust (terminal, SFTP, Docker).
   known_hosts verification (TOFU, hard fail on changed key, OpenSSH host key rotation), PTY shell with resize,
   terminal emulation (alacritty_terminal), Docker list/start/stop/restart/rm/logs/exec-shell
   (through the `docker` CLI, remote over SSH or local).
-- SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop between panes and from Finder or Explorer, a right-click menu on files and on the empty list, a name filter for the folder (⌘F), a line between the panes that can be dragged (double click centers it), conflict prompts, rsync hint for big transfers.
+- SFTP: two-pane browser, any host or local on either side (server to server streams through the app), editable path field, drag and drop between panes and from Finder or Explorer, a right-click menu on files and on the empty list, a name filter for the folder (⌘F) that can also search every subfolder (up to 1000 matches; dotfolders only when dotfiles are shown), a line between the panes that can be dragged (double click centers it), conflict prompts, rsync hint for big transfers.
 - Todo: startup time measurement.
 
 ## Test

@@ -1,5 +1,7 @@
 //! SFTP: remote and local directory listing plus recursive transfers with progress.
 
+mod search;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -9,6 +11,8 @@ use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{Error, Result, locked};
+
+pub use search::{Found, MAX_DIRS, MAX_HITS, search_local};
 
 fn e(err: impl std::fmt::Display) -> Error {
     Error::Sftp(err.to_string())
