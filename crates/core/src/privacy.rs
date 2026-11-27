@@ -23,6 +23,7 @@ struct Config {
     ipv6: bool,
     ports: bool,
     secrets: bool,
+    ids: bool,
     hosts: bool,
     users: bool,
     names: bool,
@@ -41,6 +42,7 @@ impl Config {
             ipv6: true,
             ports: true,
             secrets: true,
+            ids: true,
             hosts: true,
             users: true,
             names: false,
@@ -66,6 +68,7 @@ pub fn configure(s: &Settings) {
     c.ipv6 = s.mask_ipv6();
     c.ports = s.mask_ports();
     c.secrets = s.mask_secrets();
+    c.ids = s.mask_ids();
     c.hosts = s.mask_hosts();
     c.users = s.mask_users();
     c.names = s.mask_names();
@@ -321,6 +324,33 @@ fn key_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || "_.-".contains(c)
 }
 
+/// Generated IDs: container and image hashes (`4a066c8b481f`, 12+ hex digits) and random
+/// tokens (`apzpmaybcuijjz4oceqvlcnbf`, 20+ letters and digits), like the task part of a
+/// Swarm container name. Both need a digit and a letter, so words and numbers stay.
+fn id_ranges(chars: &[char]) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let end = i + chars[i..]
+            .iter()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .count();
+        if end == i {
+            i += 1;
+            continue;
+        }
+        let run = &chars[i..end];
+        let mixed =
+            run.iter().any(char::is_ascii_digit) && run.iter().any(char::is_ascii_alphabetic);
+        let hex = run.len() >= 12 && run.iter().all(char::is_ascii_hexdigit);
+        if mixed && (hex || run.len() >= 20) {
+            out.push(i..end);
+        }
+        i = end;
+    }
+    out
+}
+
 /// Values of `PASSWORD=hunter2`, `token: abc`, `"api_key": "xyz"` style assignments.
 fn secret_ranges(chars: &[char]) -> Vec<Range<usize>> {
     let mut out = Vec::new();
@@ -448,6 +478,9 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
     }
     if cfg.secrets {
         out.extend(secret_ranges(chars));
+    }
+    if cfg.ids {
+        out.extend(id_ranges(chars));
     }
     out.sort_by_key(|r| r.start);
     // Merge overlaps so each char is masked once.
@@ -707,6 +740,26 @@ mod tests {
             redact("deploy project-falcon now"),
             format!("deploy {} now", b(14))
         );
+
+        setup(|_| {});
+        assert_eq!(
+            redact("a_media_automod_discord.1.apzpmaybcuijjz4oceqvlcnbf 4a066c8b481f"),
+            format!("a_media_automod_discord.1.{} {}", b(25), b(12))
+        );
+        assert_eq!(
+            redact("sha256:4a066c8b481f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d"),
+            format!("sha256:{}", b(64))
+        );
+        for kept in [
+            "internationalization",
+            "1700000000000",
+            "deadbeefcafe",
+            "nginx:1.25",
+        ] {
+            assert_eq!(redact(kept), kept);
+        }
+        setup(|s| s.mask_ids = Some(false));
+        assert_eq!(redact("4a066c8b481f"), "4a066c8b481f");
 
         // The mask never reveals the hidden length.
         setup(|_| {});

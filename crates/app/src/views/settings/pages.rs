@@ -236,6 +236,15 @@ impl SettingsView {
                 |s, v| s.mask_secrets = Some(v),
                 cx,
             ))
+            .child(self.toggle(
+                "p-ids",
+                "IDs",
+                "Container and image IDs, and random parts of container names \
+                 (web.1.apzpmaybcuijjz4oceqvlcnbf).",
+                s.mask_ids(),
+                |s, v| s.mask_ids = Some(v),
+                cx,
+            ))
             .child(self.text(
                 "Extra words",
                 "Comma separated, 3+ letters, case-insensitive (project or \

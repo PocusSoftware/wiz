@@ -249,7 +249,11 @@ impl Render for DockerView {
                                 t.logs(log_id.clone(), log_name.clone(), cx);
                             }
                         }))
-                        .child(div().whitespace_nowrap().child(ct.name.clone()))
+                        .child(
+                            div()
+                                .whitespace_nowrap()
+                                .child(crate::privacy::redact(&ct.name).into_owned()),
+                        )
                         .child(
                             div()
                                 .text_color(c(palette().placeholder))
