@@ -4,7 +4,7 @@ members = ["crates/core", "crates/app"]
 
 [workspace.package]
 edition = "2024"
-version = "0.26.3"
+version = "0.26.4"
 license = "LGPL-3.0-only"
 
 # The rules behind these are in AGENTS.md. Warnings count as failures.
