@@ -1,6 +1,6 @@
 //! Logins where the server asks for more than the saved credentials (a one-time code), against
 //! an in-process russh server. Uses the throwaway keys from `docker/gen-keys.sh`.
-//! Run with: SSHC_DOCKER_TESTS=1 cargo test -p ssh-core --test second_factor
+//! Run with: WIZ_DOCKER_TESTS=1 cargo test -p wiz-core --test second_factor
 
 use std::borrow::Cow;
 use std::path::PathBuf;
@@ -10,11 +10,11 @@ use std::time::Duration;
 use russh::keys::load_secret_key;
 use russh::server::{self, Auth, Response};
 use russh::{MethodKind, MethodSet};
-use ssh_core::Error;
-use ssh_core::config::{AuthMethod, Host};
-use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::Secret;
-use ssh_core::session::{AuthPrompt, Connection, Credentials, Options, Question};
+use wiz_core::Error;
+use wiz_core::config::{AuthMethod, Host};
+use wiz_core::hostkey::{HostKeyVerifier, TrustPrompt};
+use wiz_core::secrets::Secret;
+use wiz_core::session::{AuthPrompt, Connection, Credentials, Options, Question};
 
 const CODE: &str = "123456";
 
@@ -185,7 +185,7 @@ fn password() -> Credentials {
 
 #[tokio::test]
 async fn password_then_code() {
-    if std::env::var("SSHC_DOCKER_TESTS").is_err() {
+    if std::env::var("WIZ_DOCKER_TESTS").is_err() {
         return;
     }
     let prompt = codes(false);
@@ -212,7 +212,7 @@ async fn password_then_code() {
 
 #[tokio::test]
 async fn key_then_code() {
-    if std::env::var("SSHC_DOCKER_TESTS").is_err() {
+    if std::env::var("WIZ_DOCKER_TESTS").is_err() {
         return;
     }
     let creds = Credentials::Key {
@@ -226,7 +226,7 @@ async fn key_then_code() {
 
 #[tokio::test]
 async fn cancelled_or_nobody_to_ask() {
-    if std::env::var("SSHC_DOCKER_TESTS").is_err() {
+    if std::env::var("WIZ_DOCKER_TESTS").is_err() {
         return;
     }
     let (r, _) = login(password(), Some(codes(true))).await;

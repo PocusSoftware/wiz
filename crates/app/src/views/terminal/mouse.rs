@@ -1,7 +1,7 @@
 //! Mouse: selecting text, and reporting clicks, drags and the wheel to programs that turn
 //! it on (btop, vim).
 
-use ssh_core::terminal::{MouseAction, MouseButton as Report};
+use wiz_core::terminal::{MouseAction, MouseButton as Report};
 
 use super::*;
 

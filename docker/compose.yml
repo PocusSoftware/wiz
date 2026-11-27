@@ -2,12 +2,12 @@
 services:
   ssh-password:
     build: .
-    container_name: sshc-password
+    container_name: wiz-password
     environment: { MODE: password }
     ports: ["127.0.0.1:2222:22"]
   ssh-key:
     build: .
-    container_name: sshc-key
+    container_name: wiz-key
     environment: { MODE: key }
     ports: ["127.0.0.1:2223:22"]
     volumes:
@@ -15,6 +15,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
   ssh-ftp:
     build: .
-    container_name: sshc-ftp
+    container_name: wiz-ftp
     environment: { MODE: ftp }
     ports: ["127.0.0.1:2224:22", "127.0.0.1:21:21"]

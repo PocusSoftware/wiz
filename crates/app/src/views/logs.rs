@@ -10,7 +10,7 @@ use gpui::{
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollEvent, ScrollStrategy,
     SharedString, UniformListScrollHandle, Window, canvas, div, font, prelude::*, px, uniform_list,
 };
-use ssh_core::docker::Backend;
+use wiz_core::docker::Backend;
 
 use crate::runtime;
 use crate::theme::*;

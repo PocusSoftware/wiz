@@ -27,10 +27,10 @@ pub(crate) fn locked<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T>
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Where hosts, known_hosts and settings live. `SSHC_CONFIG_DIR` overrides it (used by
+/// Where hosts, known_hosts and settings live. `WIZ_CONFIG_DIR` overrides it (used by
 /// tests so they never touch real data).
 pub fn config_dir() -> Result<std::path::PathBuf> {
-    if let Some(d) = std::env::var_os("SSHC_CONFIG_DIR") {
+    if let Some(d) = std::env::var_os("WIZ_CONFIG_DIR") {
         return Ok(d.into());
     }
     platform_config_dir()

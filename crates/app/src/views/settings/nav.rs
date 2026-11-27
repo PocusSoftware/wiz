@@ -108,7 +108,7 @@ impl SettingsView {
 
     /// Open `settings.toml` in the editor chosen under Files.
     fn open_file(&mut self, cx: &mut Context<Self>) {
-        let opened = ssh_core::config_dir().and_then(|d| {
+        let opened = wiz_core::config_dir().and_then(|d| {
             crate::platform::open_in_editor(&d.join("settings.toml"), &prefs::get().editor_app())
                 .map_err(Into::into)
         });

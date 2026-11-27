@@ -311,7 +311,7 @@ pub fn update_target() -> Option<PathBuf> {
 pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
     let out = dir.join("unpacked");
     std::fs::create_dir(&out)?;
-    let ok = ssh_core::process::command("/usr/bin/ditto")
+    let ok = wiz_core::process::command("/usr/bin/ditto")
         .args(["-x", "-k"])
         .arg(file)
         .arg(&out)
@@ -326,7 +326,7 @@ pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
 }
 
 pub fn relaunch(target: &Path) -> std::io::Result<()> {
-    ssh_core::process::command("/bin/sh")
+    wiz_core::process::command("/bin/sh")
         .args([
             "-c",
             r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; open "$2""#,

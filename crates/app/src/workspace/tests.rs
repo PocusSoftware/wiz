@@ -3,7 +3,7 @@
 use std::sync::{MutexGuard, OnceLock};
 
 use gpui::{TestAppContext, VisualTestContext, size};
-use ssh_core::config::Settings;
+use wiz_core::config::Settings;
 
 use super::split::{grid_layout, layout};
 use super::*;
@@ -37,7 +37,7 @@ fn split_layout_fits_the_window() {
 //
 // The secret store, settings and config dir are process-wide, so these run one at a
 // time against one temporary config dir. Steps that talk to the SSH test servers
-// (docker/compose.yml) need SSHC_DOCKER_TESTS=1.
+// (docker/compose.yml) need WIZ_DOCKER_TESTS=1.
 
 static DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
 
@@ -47,7 +47,7 @@ fn setup() -> MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = DIR.get_or_init(|| tempfile::tempdir().unwrap());
     // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
-    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
     for f in ["hosts.toml", "secrets.toml", "settings.toml", "known_hosts"] {
         let _ = std::fs::remove_file(dir.path().join(f));
     }
@@ -57,7 +57,7 @@ fn setup() -> MutexGuard<'static, ()> {
 }
 
 fn docker() -> bool {
-    std::env::var("SSHC_DOCKER_TESTS").is_ok()
+    std::env::var("WIZ_DOCKER_TESTS").is_ok()
 }
 
 fn open_root(cx: &mut TestAppContext) -> (Entity<Workspace>, &mut VisualTestContext) {
@@ -188,7 +188,7 @@ fn snippets_need_a_terminal_in_front(cx: &mut TestAppContext) {
 fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
-        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
     let (root, cx) = open_root(cx);
@@ -206,7 +206,7 @@ fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
         assert!(r.quick.contains_key("tester@127.0.0.1:2222"));
         assert!(r.cfg.hosts.is_empty());
     });
-    assert!(!ssh_core::config_dir().unwrap().join("hosts.toml").exists());
+    assert!(!wiz_core::config_dir().unwrap().join("hosts.toml").exists());
 
     cx.dispatch_action(SplitPane);
     wait(cx, &root, "a split pane", |r, _| {
@@ -421,7 +421,7 @@ fn secrets_file_unlock_lock_change_and_switch(cx: &mut TestAppContext) {
     secrets::lock();
     assert!(matches!(
         secrets::unlock("masterpass1"),
-        Err(ssh_core::Error::WrongMasterPassword)
+        Err(wiz_core::Error::WrongMasterPassword)
     ));
     secrets::unlock("masterpass2").unwrap();
     assert_eq!(
@@ -1077,7 +1077,7 @@ fn quick_shell(root: &Entity<Workspace>, cx: &mut VisualTestContext, tabs: usize
 fn files_open_beside_the_shell(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
-        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
     let (root, cx) = open_root(cx);
@@ -1101,7 +1101,7 @@ fn files_open_beside_the_shell(cx: &mut TestAppContext) {
 fn docker_opens_beside_the_shell(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
-        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
     let (root, cx) = open_root(cx);
@@ -1123,7 +1123,7 @@ fn docker_opens_beside_the_shell(cx: &mut TestAppContext) {
 fn files_of_another_host_open_beside_the_shell(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
-        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
     let (root, cx) = open_root(cx);
@@ -1154,7 +1154,7 @@ fn files_of_another_host_open_beside_the_shell(cx: &mut TestAppContext) {
 fn tabs_merge_into_one_split_from_the_menu(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
-        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
     let (root, cx) = open_root(cx);

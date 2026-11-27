@@ -5,9 +5,9 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     Render, SharedString, Window, div, prelude::*,
 };
-use ssh_core::config::{AuthMethod, Host, parse_target};
-use ssh_core::secrets::Secret;
-use ssh_core::session::Credentials;
+use wiz_core::config::{AuthMethod, Host, parse_target};
+use wiz_core::secrets::Secret;
+use wiz_core::session::Credentials;
 
 use crate::theme::*;
 use crate::widgets::input::{Hide, TextInput};
@@ -99,7 +99,7 @@ impl QuickConnect {
                     .find(|p| p.is_file())
                     .ok_or("No key in ~/.ssh (id_ed25519, id_ecdsa, id_rsa). Pick one.")?
             } else {
-                ssh_core::config::expand_home(&typed)
+                wiz_core::config::expand_home(&typed)
             };
             if !path.is_file() {
                 return Err("Private key file not found.".into());
@@ -167,7 +167,7 @@ impl Render for QuickConnect {
                     cx.notify();
                 }))
         };
-        let store = ssh_core::secrets::store().label();
+        let store = wiz_core::secrets::store().label();
         div()
             .id("quick-connect")
             .track_focus(&self.focus)

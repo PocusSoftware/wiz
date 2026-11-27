@@ -5,8 +5,8 @@ use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use gpui::App;
-use ssh_core::Error;
-use ssh_core::update::{self, Release};
+use wiz_core::Error;
+use wiz_core::update::{self, Release};
 
 use crate::platform;
 
@@ -44,7 +44,7 @@ pub fn start(cx: &mut App) {
     .detach();
 }
 
-pub fn install(r: &Release) -> ssh_core::Result<()> {
+pub fn install(r: &Release) -> wiz_core::Result<()> {
     let target = platform::update_target()
         .ok_or_else(|| Error::Update("this build can't update itself".into()))?;
     let cant =

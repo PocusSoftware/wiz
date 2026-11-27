@@ -5,7 +5,7 @@ use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Render,
     SharedString, Window, div, prelude::*,
 };
-use ssh_core::secrets;
+use wiz_core::secrets;
 
 use crate::theme::*;
 use crate::widgets::input::TextInput;

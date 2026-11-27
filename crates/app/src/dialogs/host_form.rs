@@ -10,8 +10,8 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent,
     PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{AuthMethod, Config, Host};
-use ssh_core::secrets::{self, Kind};
+use wiz_core::config::{AuthMethod, Config, Host};
+use wiz_core::secrets::{self, Kind};
 
 use crate::theme::*;
 use crate::widgets::input::{Hide, InputEvent, TextInput};
@@ -111,7 +111,7 @@ impl HostForm {
         let logo = shown
             .as_ref()
             .and_then(|h| h.logo.as_deref())
-            .and_then(ssh_core::os::logo)
+            .and_then(wiz_core::os::logo)
             .map(|l| l.slug);
         if let Some(h) = shown {
             let shown_name = if copy_of.is_some() {
@@ -241,7 +241,7 @@ impl HostForm {
                 if p.is_empty() {
                     return Err("Choose a private key file.".into());
                 }
-                let p = ssh_core::config::expand_home(&p);
+                let p = wiz_core::config::expand_home(&p);
                 if !p.is_file() {
                     return Err("Private key file not found.".into());
                 }

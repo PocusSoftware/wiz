@@ -1,14 +1,14 @@
 //! Secret store (encrypted file and Keychain) and quick connect targets, end to end.
 //! The store is process-wide state, so everything runs in one test, in order.
-//! Keychain and SSH steps need SSHC_DOCKER_TESTS=1 and the servers from /docker.
+//! Keychain and SSH steps need WIZ_DOCKER_TESTS=1 and the servers from /docker.
 
 use std::sync::Arc;
 
-use ssh_core::Error;
-use ssh_core::config::{AuthMethod, Host, parse_target};
-use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::{self, Kind, Secret, Store};
-use ssh_core::session::{Connection, Credentials};
+use wiz_core::Error;
+use wiz_core::config::{AuthMethod, Host, parse_target};
+use wiz_core::hostkey::{HostKeyVerifier, TrustPrompt};
+use wiz_core::secrets::{self, Kind, Secret, Store};
+use wiz_core::session::{Connection, Credentials};
 
 struct TrustAll;
 impl TrustPrompt for TrustAll {
@@ -46,8 +46,8 @@ fn server() -> Host {
 async fn secret_store_flow() {
     let dir = tempfile::tempdir().unwrap();
     // SAFETY: set before anything reads the environment; this binary has a single test.
-    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
-    let docker = std::env::var("SSHC_DOCKER_TESTS").is_ok();
+    unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
+    let docker = std::env::var("WIZ_DOCKER_TESTS").is_ok();
     let host = server();
     let acct = host.account();
 
@@ -110,7 +110,7 @@ async fn secret_store_flow() {
     );
 
     if !docker {
-        eprintln!("Keychain and SSH steps skipped (set SSHC_DOCKER_TESTS=1)");
+        eprintln!("Keychain and SSH steps skipped (set WIZ_DOCKER_TESTS=1)");
         return;
     }
 

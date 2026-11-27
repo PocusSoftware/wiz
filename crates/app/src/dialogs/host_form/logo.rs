@@ -4,7 +4,7 @@ use gpui::{
     AnchoredPositionMode, App, ClickEvent, Context, Focusable, Window, anchored, deferred, div,
     point, prelude::*, px,
 };
-use ssh_core::os::{LOGOS, Logo, logo};
+use wiz_core::os::{LOGOS, Logo, logo};
 
 use super::HostForm;
 use crate::theme::*;

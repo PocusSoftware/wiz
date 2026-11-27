@@ -201,7 +201,7 @@ impl SftpView {
                 (Source::Remote(_), Source::Remote(_))
             ),
             rsync_prompts: [&from_src, &to_src].iter().any(|s| {
-                matches!(s, Source::Remote(r) if matches!(r.host.auth, ssh_core::config::AuthMethod::Password))
+                matches!(s, Source::Remote(r) if matches!(r.host.auth, wiz_core::config::AuthMethod::Password))
             }),
             via_rsync: Arc::new(AtomicBool::new(false)),
         });
@@ -269,7 +269,7 @@ impl SftpView {
                             let p = PathBuf::from(sp);
                             tokio::task::spawn_blocking(move || local::scan(&p))
                                 .await
-                                .map_err(|e| ssh_core::Error::Sftp(e.to_string()))??
+                                .map_err(|e| wiz_core::Error::Sftp(e.to_string()))??
                         }
                     };
                     bytes += b;
@@ -317,11 +317,11 @@ impl SftpView {
                                 local::copy(&PathBuf::from(sp), &PathBuf::from(dp), &p)
                             })
                             .await
-                            .map_err(|e| ssh_core::Error::Sftp(e.to_string()))??;
+                            .map_err(|e| wiz_core::Error::Sftp(e.to_string()))??;
                         }
                     }
                 }
-                Ok::<_, ssh_core::Error>(())
+                Ok::<_, wiz_core::Error>(())
             })
             .await;
             this.update(cx, |t, cx| {
@@ -329,7 +329,7 @@ impl SftpView {
                     tr.finished = Some(Instant::now());
                     tr.state = match r {
                         Ok(()) => TState::Done,
-                        Err(ssh_core::Error::Cancelled) => TState::Cancelled,
+                        Err(wiz_core::Error::Cancelled) => TState::Cancelled,
                         Err(e) => TState::Failed(e.to_string()),
                     };
                 }

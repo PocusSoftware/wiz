@@ -38,7 +38,7 @@ fn reset_restores_defaults_and_closes_the_prompt(cx: &mut TestAppContext) {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = tempfile::tempdir().unwrap();
     // SAFETY: GLOBALS is held, no other test reads the environment meanwhile.
-    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
     prefs::update(|s| s.max_splits = Some(8)).unwrap();
     let view = cx.new(SettingsView::new);
     view.update(cx, |v, cx| {
@@ -94,7 +94,7 @@ fn offers_the_1password_agent_once_its_socket_exists(cx: &mut TestAppContext) {
     let old_home = std::env::var_os("HOME");
     // SAFETY: GLOBALS is held, no other test reads the environment meanwhile.
     unsafe {
-        std::env::set_var("SSHC_CONFIG_DIR", dir.path());
+        std::env::set_var("WIZ_CONFIG_DIR", dir.path());
         std::env::set_var("HOME", dir.path());
     }
     prefs::update(|s| s.agent_socket = None).unwrap();
@@ -102,7 +102,7 @@ fn offers_the_1password_agent_once_its_socket_exists(cx: &mut TestAppContext) {
     let view = cx.new(SettingsView::new);
     view.read_with(cx, |v, _| assert_eq!(v.onepassword, None));
 
-    let path = ssh_core::config::expand_home(socket);
+    let path = wiz_core::config::expand_home(socket);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "").unwrap();
     let view = cx.new(SettingsView::new);

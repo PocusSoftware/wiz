@@ -19,10 +19,10 @@ use gpui::{
     Point, Render, ScrollEvent, SharedString, StrikethroughStyle, TextRun, UnderlineStyle, Window,
     canvas, div, fill, font, outline, point, prelude::*, px, size,
 };
-use ssh_core::secrets::Secret;
-use ssh_core::session::{Shell, ShellEvent, ShellInput};
-use ssh_core::terminal::{Link, Match, Terminal};
 use tokio::sync::mpsc;
+use wiz_core::secrets::Secret;
+use wiz_core::session::{Shell, ShellEvent, ShellInput};
+use wiz_core::terminal::{Link, Match, Terminal};
 
 use crate::theme::*;
 use crate::widgets::icon_button;
@@ -159,8 +159,8 @@ impl TerminalView {
         self.notice = None;
         self.retry_ready = false;
         // Start from a clean terminal: the old screen and scrollback belong to the dead shell.
-        self.term.advance(ssh_core::terminal::RESET_MODES);
-        self.term.advance(ssh_core::terminal::CLEAR_ALL);
+        self.term.advance(wiz_core::terminal::RESET_MODES);
+        self.term.advance(wiz_core::terminal::CLEAR_ALL);
         self.term.term.selection = None;
         self.term.term.scroll_display(Scroll::Bottom);
         // A server that is still booting prints a notice even to users it lets in.
@@ -184,7 +184,7 @@ impl TerminalView {
                 if let Some(until) = self.strip_boot_until {
                     if std::time::Instant::now() > until {
                         self.strip_boot_until = None;
-                    } else if let Some(clean) = ssh_core::terminal::strip_boot_notice(&d) {
+                    } else if let Some(clean) = wiz_core::terminal::strip_boot_notice(&d) {
                         d = clean;
                         self.strip_boot_until = None;
                     }

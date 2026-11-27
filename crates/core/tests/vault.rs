@@ -1,8 +1,8 @@
 //! The encrypted secrets file: encryption, wrong password, tampering, change of password.
 
-use ssh_core::Error;
-use ssh_core::secrets::Kind;
-use ssh_core::secrets::vault::Vault;
+use wiz_core::Error;
+use wiz_core::secrets::Kind;
+use wiz_core::secrets::vault::Vault;
 
 #[test]
 fn roundtrip_wrong_password_and_tamper() {

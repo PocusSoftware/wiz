@@ -1,6 +1,6 @@
 //! The snippets page: add, edit and delete the commands the snippet picker pastes.
 
-use ssh_core::config::{Snippet, Snippets};
+use wiz_core::config::{Snippet, Snippets};
 
 use super::*;
 

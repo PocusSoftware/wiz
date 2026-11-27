@@ -89,7 +89,7 @@ fn download_default_port() {
 }
 
 // End to end against the docker test server (`docker/`), with rsync installed there.
-// Run: cargo build && SSHC_DOCKER_TESTS=1 cargo test -p ssh-app rsync_over_connection
+// Run: cargo build && WIZ_DOCKER_TESTS=1 cargo test -p wiz rsync_over_connection
 
 #[test]
 fn server_to_server_runs_on_source() {

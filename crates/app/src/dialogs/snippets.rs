@@ -4,7 +4,7 @@ use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Render,
     SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{Snippet, Snippets};
+use wiz_core::config::{Snippet, Snippets};
 
 use crate::privacy;
 use crate::theme::*;
@@ -384,7 +384,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = tempfile::tempdir().unwrap();
         // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
-        unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+        unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
         let items = vec![snip("Disk usage", "df -h"), snip("Logs", "journalctl -f")];
         Snippets { items }
             .save(&Snippets::default_path().unwrap())
@@ -415,7 +415,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = tempfile::tempdir().unwrap();
         // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
-        unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+        unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
 
         let (picker, cx) = cx.add_window_view(|_, cx| SnippetPicker::new(cx));
         picker.update_in(cx, |p, window, cx| {
@@ -437,7 +437,7 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let dir = tempfile::tempdir().unwrap();
         // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
-        unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+        unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
         let items = vec![snip("Disk usage", "df -h"), snip("Logs", "journalctl -f")];
         Snippets { items }
             .save(&Snippets::default_path().unwrap())

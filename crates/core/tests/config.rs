@@ -1,6 +1,6 @@
 //! Saved hosts, settings and quick connect targets.
 
-use ssh_core::config::{
+use wiz_core::config::{
     Appearance, AuthMethod, Config, Contrast, Host, Settings, WindowControls, parse_target,
 };
 
@@ -253,7 +253,7 @@ fn parse_targets() {
 
 #[test]
 fn snippets_roundtrip_and_validate() {
-    use ssh_core::config::{Snippet, Snippets};
+    use wiz_core::config::{Snippet, Snippets};
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("snippets.toml");
     assert!(Snippets::load(&path).unwrap().items.is_empty());

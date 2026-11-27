@@ -54,7 +54,7 @@ pub fn window_options() -> WindowOptions {
             appears_transparent: true,
             traffic_light_position: None,
         }),
-        app_id: Some(ssh_core::APP_ID.into()),
+        app_id: Some(wiz_core::APP_ID.into()),
         window_decorations: Some(WindowDecorations::Client),
         ..Default::default()
     }
@@ -213,7 +213,7 @@ pub fn update_target() -> Option<PathBuf> {
 
 pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
-    let ok = ssh_core::process::command("tar")
+    let ok = wiz_core::process::command("tar")
         .arg("-xzf")
         .arg(file)
         .arg("-C")
@@ -230,7 +230,7 @@ pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
 }
 
 pub fn relaunch(target: &Path) -> std::io::Result<()> {
-    ssh_core::process::command("/bin/sh")
+    wiz_core::process::command("/bin/sh")
         .args([
             "-c",
             r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; "$2" >/dev/null 2>&1 &"#,

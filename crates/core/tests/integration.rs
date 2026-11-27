@@ -1,23 +1,23 @@
 //! Needs `docker compose up -d` in /docker and `docker/gen-keys.sh`.
-//! Run with: SSHC_DOCKER_TESTS=1 cargo test -p ssh-core --test integration
+//! Run with: WIZ_DOCKER_TESTS=1 cargo test -p wiz-core --test integration
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ssh_core::config::{AuthMethod, Host};
-use ssh_core::docker;
-use ssh_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
-use ssh_core::secrets::Secret;
+use wiz_core::config::{AuthMethod, Host};
+use wiz_core::docker;
+use wiz_core::hostkey::{HostKeyVerifier, RejectUnknown, TrustPrompt};
+use wiz_core::secrets::Secret;
 #[cfg(target_os = "macos")]
-use ssh_core::secrets::{Kind, keychain};
-use ssh_core::session::{Connection, Credentials, Options, Shell, ShellEvent};
-use ssh_core::{Error, terminal::Terminal};
+use wiz_core::secrets::{Kind, keychain};
+use wiz_core::session::{Connection, Credentials, Options, Shell, ShellEvent};
+use wiz_core::{Error, terminal::Terminal};
 
 macro_rules! gate {
     () => {
-        if std::env::var("SSHC_DOCKER_TESTS").is_err() {
-            eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        if std::env::var("WIZ_DOCKER_TESTS").is_err() {
+            eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
             return;
         }
     };
@@ -341,8 +341,8 @@ async fn remote_docker_list_and_exec_shell() {
     let list = docker::Backend::Remote(c.clone()).list().await.unwrap();
     let pw = list
         .iter()
-        .find(|x| x.name == "sshc-password")
-        .expect("sshc-password listed");
+        .find(|x| x.name == "wiz-password")
+        .expect("wiz-password listed");
     assert!(pw.is_running());
 
     let cmd = docker::exec_shell_command(&pw.id).unwrap();
@@ -356,12 +356,9 @@ async fn remote_docker_list_and_exec_shell() {
 async fn local_docker_list() {
     gate!();
     let list = docker::Backend::Local.list().await.unwrap();
-    assert!(list.iter().any(|c| c.name == "sshc-key"));
-    let logs = docker::Backend::Local
-        .logs("sshc-missing", 5)
-        .await
-        .unwrap();
-    assert!(logs.contains("sshc-missing"), "{logs}");
+    assert!(list.iter().any(|c| c.name == "wiz-key"));
+    let logs = docker::Backend::Local.logs("wiz-missing", 5).await.unwrap();
+    assert!(logs.contains("wiz-missing"), "{logs}");
 }
 
 #[cfg(target_os = "macos")]
@@ -417,7 +414,7 @@ async fn dropping_shell_ends_remote_process() {
 
 #[tokio::test]
 async fn sftp_roundtrip_rename_remove_cancel() {
-    use ssh_core::sftp::{self, Progress};
+    use wiz_core::sftp::{self, Progress};
     gate!();
     let d = tempfile::tempdir().unwrap();
     let h = host(2223, AuthMethod::Password);
@@ -496,7 +493,7 @@ async fn sftp_roundtrip_rename_remove_cancel() {
 
 #[tokio::test]
 async fn sftp_server_to_server_and_local_copy() {
-    use ssh_core::sftp::{self, Progress};
+    use wiz_core::sftp::{self, Progress};
     gate!();
     let d = tempfile::tempdir().unwrap();
     let v = verifier(&d, Arc::new(TrustAll));
@@ -605,8 +602,8 @@ async fn sftp_hides_names_that_would_leave_the_folder() {
 #[cfg(unix)]
 #[tokio::test]
 async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
-    use ssh_core::sftp::{self, Progress};
     use std::sync::atomic::Ordering::Relaxed;
+    use wiz_core::sftp::{self, Progress};
     gate!();
     let d = tempfile::tempdir().unwrap();
     let c = Connection::connect(
@@ -683,7 +680,7 @@ async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
 /// The terminal's reconnect logic relies on this: when the server goes away, the shell ends
 /// and the connection reports closed within a few seconds.
 #[tokio::test]
-#[ignore = "restarts sshc-password and breaks other tests running at once; run alone with --ignored"]
+#[ignore = "restarts wiz-password and breaks other tests running at once; run alone with --ignored"]
 async fn server_restart_ends_shell_and_closes_connection() {
     gate!();
     let d = tempfile::tempdir().unwrap();
@@ -701,7 +698,7 @@ async fn server_restart_ends_shell_and_closes_connection() {
     assert!(!c.is_closed());
 
     let restart = std::process::Command::new("docker")
-        .args(["restart", "-t", "0", "sshc-password"])
+        .args(["restart", "-t", "0", "wiz-password"])
         .status()
         .unwrap();
     assert!(restart.success());

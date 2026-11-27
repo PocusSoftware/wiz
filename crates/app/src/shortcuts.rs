@@ -160,7 +160,7 @@ pub fn apply(cx: &mut App) {
 mod tests {
     //! Shortcut lookup: defaults, the user's changes and clashes.
 
-    use ssh_core::config::Settings;
+    use wiz_core::config::Settings;
 
     use super::*;
     use crate::testing::GLOBALS;

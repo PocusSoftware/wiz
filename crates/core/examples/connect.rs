@@ -1,14 +1,14 @@
 //! Raw terminal passthrough harness: proves shell, resize and password prompts without a UI.
-//! Password host:  cargo run -p ssh-core --example connect -- tester@127.0.0.1:2222 --password hunter2
-//! Key host:       cargo run -p ssh-core --example connect -- tester@127.0.0.1:2223 --key docker/keys/ed25519
+//! Password host:  cargo run -p wiz-core --example connect -- tester@127.0.0.1:2222 --password hunter2
+//! Key host:       cargo run -p wiz-core --example connect -- tester@127.0.0.1:2223 --key docker/keys/ed25519
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use ssh_core::config::{AuthMethod, Host};
-use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::Secret;
-use ssh_core::session::{Connection, Credentials, ShellEvent, ShellInput};
+use wiz_core::config::{AuthMethod, Host};
+use wiz_core::hostkey::{HostKeyVerifier, TrustPrompt};
+use wiz_core::secrets::Secret;
+use wiz_core::session::{Connection, Credentials, ShellEvent, ShellInput};
 
 fn stty(args: &[&str]) -> Option<String> {
     let out = Command::new("stty")

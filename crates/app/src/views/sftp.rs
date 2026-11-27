@@ -21,8 +21,8 @@ use gpui::{
     NavigationDirection, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
     div, prelude::*, px, relative, uniform_list,
 };
-use ssh_core::config::Host;
-use ssh_core::sftp::{self, Entry, Progress, Sftp, local};
+use wiz_core::config::Host;
+use wiz_core::sftp::{self, Entry, Progress, Sftp, local};
 
 use crate::rsync;
 use crate::runtime;
@@ -68,7 +68,7 @@ pub struct RemoteRef {
     pub sftp: Arc<Sftp>,
     /// The SSH connection behind `sftp`, for running rsync over it.
     #[cfg_attr(not(unix), expect(dead_code, reason = "only the rsync runner uses it"))]
-    pub conn: Arc<ssh_core::session::Connection>,
+    pub conn: Arc<wiz_core::session::Connection>,
 }
 
 #[derive(Clone)]
@@ -111,11 +111,11 @@ impl Source {
                     host: r.host.host.clone(),
                     port: r.host.port,
                     key: match &r.host.auth {
-                        ssh_core::config::AuthMethod::Key { path } => {
+                        wiz_core::config::AuthMethod::Key { path } => {
                             Some(path.to_string_lossy().into_owned())
                         }
-                        ssh_core::config::AuthMethod::Password
-                        | ssh_core::config::AuthMethod::Agent => None,
+                        wiz_core::config::AuthMethod::Password
+                        | wiz_core::config::AuthMethod::Agent => None,
                     },
                 },
             },
@@ -409,7 +409,7 @@ fn human_size(n: u64) -> String {
     }
 }
 
-async fn fetch(source: Source, path: String) -> Result<(String, Vec<Entry>), ssh_core::Error> {
+async fn fetch(source: Source, path: String) -> Result<(String, Vec<Entry>), wiz_core::Error> {
     match source {
         Source::Local => {
             runtime::spawn(async move {
@@ -424,7 +424,7 @@ async fn fetch(source: Source, path: String) -> Result<(String, Vec<Entry>), ssh
                     Ok((canon.to_string_lossy().into_owned(), list))
                 })
                 .await
-                .map_err(|e| ssh_core::Error::Sftp(e.to_string()))?
+                .map_err(|e| wiz_core::Error::Sftp(e.to_string()))?
             })
             .await
         }

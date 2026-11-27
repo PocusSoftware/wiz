@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use gpui::{Hsla, SharedString, rgb, rgba};
-use ssh_core::config::{Appearance, Contrast};
+use wiz_core::config::{Appearance, Contrast};
 
 /// 0xRRGGBB, or 0xRRGGBBAA when the value does not fit in 24 bits.
 pub fn c(hex: u32) -> Hsla {
@@ -374,7 +374,7 @@ fn pick(want: Option<&str>, exists: &dyn Fn(&str) -> bool, fallback: &str) -> Sh
 /// Terminal font: settings.toml, else the Zed buffer font when installed (it has the Nerd
 /// Font icons), else the bundled JetBrains Mono.
 /// `exists` must be cheap: listing every installed font costs ~150 ms at startup on macOS.
-pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &ssh_core::config::Settings) {
+pub fn init_fonts(exists: &dyn Fn(&str) -> bool, s: &wiz_core::config::Settings) {
     let _ = UI.set(pick(s.ui_font.as_deref(), exists, UI_FONT));
     let nerd = "JetBrainsMono Nerd Font";
     let _ = MONO.set(pick(
@@ -401,7 +401,7 @@ pub fn zoomed(size: f32, step: f32) -> f32 {
 }
 
 pub fn zoom_percent(size: f32) -> u32 {
-    (size / ssh_core::config::Settings::default().terminal_font_size() * 100.).round() as u32
+    (size / wiz_core::config::Settings::default().terminal_font_size() * 100.).round() as u32
 }
 
 #[cfg(test)]

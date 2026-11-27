@@ -127,7 +127,7 @@ impl Workspace {
                     .text_color(c(palette().muted))
                     .child(format!(
                         "You have {}. Updating closes open sessions and restarts Wiz.",
-                        ssh_core::update::CURRENT
+                        wiz_core::update::CURRENT
                     )),
             )
             .when_some(error, |d, e| {

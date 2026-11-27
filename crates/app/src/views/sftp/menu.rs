@@ -330,7 +330,7 @@ impl SftpView {
                             sftp::search_local(std::path::Path::new(&root), &query, dots, &cancel)
                         })
                         .await
-                        .map_err(|e| ssh_core::Error::Sftp(e.to_string()))?
+                        .map_err(|e| wiz_core::Error::Sftp(e.to_string()))?
                     })
                     .await
                 }

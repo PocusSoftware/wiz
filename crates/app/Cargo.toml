@@ -1,5 +1,5 @@
 [package]
-name = "ssh-app"
+name = "wiz"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ gpui = { package = "gpui-fast", version = "=0.1.19" }
 # font-kit is the macOS text system; without it no text is drawn.
 gpui_platform = { package = "gpui-fast-platform", version = "=0.1.19", features = ["font-kit"] }
 jiff = "1.0.3"
-ssh-core = { path = "../core" }
+wiz-core = { path = "../core" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "net"] }
 zeroize = "1.9.2"
 

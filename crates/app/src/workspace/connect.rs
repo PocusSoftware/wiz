@@ -63,11 +63,11 @@ impl AuthPrompt for GuiAsk {
 /// Run `work` until it finishes, the cancel sender is dropped, or `timeout_secs` (0 = never)
 /// pass. Time spent in the host key prompt does not count. `None` means cancelled.
 async fn race<T>(
-    work: impl Future<Output = ssh_core::Result<T>>,
+    work: impl Future<Output = wiz_core::Result<T>>,
     cancel: &mut oneshot::Receiver<()>,
     timeout_secs: u32,
     prompting: &AtomicBool,
-) -> ssh_core::Result<Option<T>> {
+) -> wiz_core::Result<Option<T>> {
     const TICK: Duration = Duration::from_millis(250);
     let limit = Duration::from_secs(timeout_secs as u64);
     let mut waited = Duration::ZERO;
@@ -80,7 +80,7 @@ async fn race<T>(
                 if timeout_secs > 0 && !prompting.load(Ordering::Relaxed) {
                     waited += TICK;
                     if waited >= limit {
-                        return Err(ssh_core::Error::Timeout(timeout_secs));
+                        return Err(wiz_core::Error::Timeout(timeout_secs));
                     }
                 }
             }
@@ -222,7 +222,7 @@ impl Workspace {
                 let creds = match creds {
                     Some(c) => c,
                     None => tokio::select! {
-                        r = load(&h) => r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??,
+                        r = load(&h) => r.map_err(|e| wiz_core::Error::Remote(e.to_string()))??,
                         _ = &mut cancel_rx => return Ok(None),
                     },
                 };
@@ -233,7 +233,7 @@ impl Workspace {
                     let way = match live {
                         Some(conn) => Ok(conn),
                         None => tokio::select! {
-                            r = load(&hop) => Err(r.map_err(|e| ssh_core::Error::Remote(e.to_string()))??),
+                            r = load(&hop) => Err(r.map_err(|e| wiz_core::Error::Remote(e.to_string()))??),
                             _ = &mut cancel_rx => return Ok(None),
                         },
                     };
@@ -267,7 +267,7 @@ impl Workspace {
                     Connection::connect_with(&h, &creds, verifier, options(via)).await
                 };
                 let conn = race(work, &mut cancel_rx, timeout_secs, &prompting).await?;
-                Ok::<_, ssh_core::Error>(conn.map(|c| (c, pw)))
+                Ok::<_, wiz_core::Error>(conn.map(|c| (c, pw)))
             })
             .await;
             this.update_in(cx, |this, window, cx| {
@@ -318,7 +318,7 @@ impl Workspace {
                     Err(e) => {
                         this.dismiss_trust(id);
                         this.dismiss_codes(id);
-                        use ssh_core::Error as E;
+                        use wiz_core::Error as E;
                         // Wrong password or a changed host key will not fix itself: stop.
                         let fatal = matches!(
                             e,

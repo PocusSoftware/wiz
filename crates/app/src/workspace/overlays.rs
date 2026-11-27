@@ -3,7 +3,7 @@
 //! which needs an answer.
 
 use gpui::{MouseButton, MouseDownEvent};
-use ssh_core::config::WindowControls;
+use wiz_core::config::WindowControls;
 
 use crate::dialogs::snippets::SnippetEvent;
 

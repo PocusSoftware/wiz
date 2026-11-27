@@ -22,8 +22,8 @@ Download the latest build from [Releases](https://github.com/PocusSoftware/wiz/r
 ## Build
 
 ```sh
-cargo run -p ssh-app                 # development
-cargo build --release -p ssh-app     # release binary
+cargo run -p wiz                 # development
+cargo build --release -p wiz     # release binary
 scripts/bundle.sh                    # macOS: build Wiz.app and install it
 ```
 
@@ -31,7 +31,7 @@ scripts/bundle.sh                    # macOS: build Wiz.app and install it
 
 ```sh
 sh docker/gen-keys.sh && (cd docker && docker compose up -d --build)
-SSHC_DOCKER_TESTS=1 cargo test --workspace
+WIZ_DOCKER_TESTS=1 cargo test --workspace
 ```
 
 The test servers listen on 2222 (password `tester`/`hunter2`), 2223 (key only) and 2224 (FTP, no SFTP).

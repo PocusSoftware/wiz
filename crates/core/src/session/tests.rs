@@ -118,7 +118,7 @@ mod agent_login {
 
     #[tokio::test]
     async fn a_declined_key_moves_on_to_the_next() {
-        if std::env::var("SSHC_DOCKER_TESTS").is_err() {
+        if std::env::var("WIZ_DOCKER_TESTS").is_err() {
             return;
         }
         let (ed, rsa) = (
@@ -155,7 +155,7 @@ mod agent_login {
 
     #[tokio::test]
     async fn agent_logins_and_the_key_file_fallback() {
-        if std::env::var("SSHC_DOCKER_TESTS").is_err() {
+        if std::env::var("WIZ_DOCKER_TESTS").is_err() {
             return;
         }
         let dir = tempfile::tempdir().unwrap();

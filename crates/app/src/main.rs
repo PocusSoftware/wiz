@@ -17,7 +17,7 @@ mod widgets;
 mod workspace;
 
 use gpui::{App, Bounds, Menu, MenuItem, WindowBounds, WindowOptions, prelude::*, px, size};
-use ssh_core::{privacy, rsync};
+use wiz_core::{privacy, rsync};
 
 use workspace::{
     CloseTab, NewHost, OpenSettings, QuickConnect, Quit, Snippets, SplitPane, Workspace,
@@ -32,9 +32,9 @@ pub fn version() -> String {
     }
 }
 
-/// Print elapsed time since start when SSHC_TIMING is set.
+/// Print elapsed time since start when WIZ_TIMING is set.
 pub fn mark(what: &str) {
-    if std::env::var_os("SSHC_TIMING").is_some()
+    if std::env::var_os("WIZ_TIMING").is_some()
         && let Some(t) = START.get()
     {
         eprintln!("{what}: {:?}", t.elapsed());
@@ -56,7 +56,7 @@ fn main() {
         .run(|cx: &mut App| {
             mark("app run");
             mark("before fonts");
-            let settings = ssh_core::config::Settings::load();
+            let settings = wiz_core::config::Settings::load();
             prefs::init(settings.clone());
             let ts = cx.text_system().clone();
             // Before any lookup: the text system caches what a family resolves to.

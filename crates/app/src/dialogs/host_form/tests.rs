@@ -12,7 +12,7 @@ fn unlocked() -> (MutexGuard<'static, ()>, tempfile::TempDir) {
         .unwrap_or_else(PoisonError::into_inner);
     let dir = tempfile::tempdir().unwrap();
     // SAFETY: tests touching the environment hold GLOBALS, nothing else reads it meanwhile.
-    unsafe { std::env::set_var("SSHC_CONFIG_DIR", dir.path()) };
+    unsafe { std::env::set_var("WIZ_CONFIG_DIR", dir.path()) };
     secrets::unlock("masterpass1").unwrap();
     (guard, dir)
 }

@@ -2,7 +2,7 @@
 
 use gpui::WindowControlArea::{self, Close, Max, Min};
 use gpui::{KeyDownEvent, MouseButton, MouseDownEvent, point};
-use ssh_core::config::WindowControls;
+use wiz_core::config::WindowControls;
 
 use super::tab_menu::DraggedTab;
 use super::*;

@@ -4,7 +4,7 @@
 # Launchpad and Spotlight only see the installed app.
 set -e
 cd "$(dirname "$0")/.."
-cargo build --release -p ssh-app
+cargo build --release -p wiz
 APP=dist/Wiz.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

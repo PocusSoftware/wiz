@@ -351,8 +351,8 @@ mod tests {
 
     #[tokio::test]
     async fn rsync_over_connection() {
-        if std::env::var("SSHC_DOCKER_TESTS").is_err() {
-            eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        if std::env::var("WIZ_DOCKER_TESTS").is_err() {
+            eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
             return;
         }
         use crate::config::{AuthMethod, Host};

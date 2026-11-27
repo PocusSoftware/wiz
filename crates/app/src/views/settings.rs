@@ -12,8 +12,8 @@ use gpui::{
     ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, IntoElement,
     KeyDownEvent, PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
-use ssh_core::config::{Appearance, Contrast, Settings, Snippet, WindowControls};
-use ssh_core::secrets::{self, Store};
+use wiz_core::config::{Appearance, Contrast, Settings, Snippet, WindowControls};
+use wiz_core::secrets::{self, Store};
 
 use crate::prefs;
 use crate::privacy;
@@ -138,7 +138,7 @@ impl SettingsView {
             editor: make("System default", cx),
             agent_socket: make(crate::platform::AGENT_DEFAULT, cx),
             onepassword: crate::platform::ONEPASSWORD_AGENT
-                .filter(|p| ssh_core::config::expand_home(p).exists()),
+                .filter(|p| wiz_core::config::expand_home(p).exists()),
             shortcut_search: make("Search shortcuts", cx),
             accent: make("#f05a29", cx),
             picker: Default::default(),

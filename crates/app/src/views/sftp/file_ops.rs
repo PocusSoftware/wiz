@@ -83,7 +83,7 @@ impl SftpView {
         let source = self.pane(side).source.clone();
         let dir = self.pane(side).path.clone();
         cx.spawn(async move |this, cx| {
-            let r: Result<(), ssh_core::Error> = match source {
+            let r: Result<(), wiz_core::Error> = match source {
                 Source::Remote(rr) => {
                     let sftp = rr.sftp;
                     runtime::spawn(async move {
@@ -119,7 +119,7 @@ impl SftpView {
                             }
                         })
                         .await
-                        .map_err(|e| ssh_core::Error::Sftp(e.to_string()))?
+                        .map_err(|e| wiz_core::Error::Sftp(e.to_string()))?
                     })
                     .await
                 }

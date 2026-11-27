@@ -274,7 +274,7 @@ pub fn unpack_update(file: &Path, _: &Path) -> std::io::Result<PathBuf> {
 
 pub fn relaunch(target: &Path) -> std::io::Result<()> {
     let path = target.display().to_string().replace('\'', "''");
-    ssh_core::process::command("powershell")
+    wiz_core::process::command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command"])
         .arg(format!(
             "Wait-Process -Id {} -ErrorAction SilentlyContinue; Start-Process -FilePath '{path}'",

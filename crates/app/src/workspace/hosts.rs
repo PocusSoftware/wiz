@@ -184,7 +184,7 @@ impl Workspace {
             return;
         }
         cx.spawn(async move |this, cx| {
-            let Some(os) = runtime::spawn(async move { ssh_core::os::detect(&conn).await }).await
+            let Some(os) = runtime::spawn(async move { wiz_core::os::detect(&conn).await }).await
             else {
                 return;
             };
@@ -228,9 +228,9 @@ pub(super) fn card_icon(h: &Host, detected: bool) -> String {
 }
 
 /// The logo shown for a host: the picked one, else the detected one when `detected` is on.
-pub(super) fn logo(h: &Host, detected: bool) -> Option<&'static ssh_core::os::Logo> {
+pub(super) fn logo(h: &Host, detected: bool) -> Option<&'static wiz_core::os::Logo> {
     h.logo
         .as_deref()
         .or(h.os.as_deref().filter(|_| detected))
-        .and_then(ssh_core::os::logo)
+        .and_then(wiz_core::os::logo)
 }

@@ -7,7 +7,7 @@ use gpui::{
     ClickEvent, Context, EventEmitter, IntoElement, Render, SharedString, Window, div, prelude::*,
     px,
 };
-use ssh_core::docker::{Action, Backend, Container};
+use wiz_core::docker::{Action, Backend, Container};
 
 use crate::runtime;
 use crate::theme::*;

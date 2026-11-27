@@ -1,6 +1,6 @@
-//! The default config folder, without `SSHC_CONFIG_DIR`, matches where earlier versions kept it.
+//! The default config folder, without `WIZ_CONFIG_DIR`, matches where earlier versions kept it.
 
-use ssh_core::{APP_ID, config_dir};
+use wiz_core::{APP_ID, config_dir};
 
 #[test]
 fn default_config_dir_matches_platform_convention() {
@@ -8,7 +8,7 @@ fn default_config_dir_matches_platform_convention() {
     let home = dir.path();
     // SAFETY: this is the only test in this binary, so nothing else reads the environment.
     unsafe {
-        std::env::remove_var("SSHC_CONFIG_DIR");
+        std::env::remove_var("WIZ_CONFIG_DIR");
         std::env::set_var("HOME", home);
     }
     #[cfg(target_os = "macos")]

@@ -33,13 +33,13 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, FontWeight,
     IntoElement, Pixels, Render, SharedString, Stateful, Window, actions, div, prelude::*, px,
 };
-use ssh_core::config::{AuthMethod, Config, Host};
-use ssh_core::docker::{self, Backend};
-use ssh_core::hostkey::{HostKeyVerifier, TrustPrompt};
-use ssh_core::secrets::{self, Kind, Secret, Store};
-use ssh_core::session::{AuthPrompt, Connection, Credentials, Options, Question};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
+use wiz_core::config::{AuthMethod, Config, Host};
+use wiz_core::docker::{self, Backend};
+use wiz_core::hostkey::{HostKeyVerifier, TrustPrompt};
+use wiz_core::secrets::{self, Kind, Secret, Store};
+use wiz_core::session::{AuthPrompt, Connection, Credentials, Options, Question};
 
 use crate::dialogs::code::{CodeDialog, CodeEvent};
 use crate::dialogs::host_form::{FormEvent, HostForm, Start};
