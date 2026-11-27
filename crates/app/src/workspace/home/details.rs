@@ -119,7 +119,7 @@ impl Workspace {
                             .on_click(cx.listener(move |t, _, w, cx| t.duplicate_host(ix, w, cx))),
                     )
                     .child(
-                        icon_button("d-del", "trash", "Delete host", palette().red)
+                        icon_button("d-del", "trash", "Delete host", accent_text())
                             .on_click(cx.listener(move |t, _, w, cx| t.ask_delete_host(ix, w, cx))),
                     ),
             )
