@@ -41,7 +41,7 @@ jobs:
           cp target/release/wiz dist/wiz/
           cp crates/app/assets/linux/software.pocus.wiz.desktop dist/wiz/
           cp crates/app/assets/brand/icon-512.png dist/wiz/software.pocus.wiz.png
-          cp crates/app/assets/fonts/*.txt dist/wiz/
+          cp crates/app/assets/fonts/*.txt COPYING COPYING.LESSER dist/wiz/
           tar -czf dist/wiz-linux-x86_64.tar.gz -C dist wiz
       - uses: actions/upload-artifact@v4
         with:

@@ -33,6 +33,7 @@ jobs:
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item target/release/wiz.exe dist/Wiz.exe
           Copy-Item crates/app/assets/fonts/*-OFL.txt dist/
+          Copy-Item COPYING, COPYING.LESSER dist/
       - uses: actions/upload-artifact@v4
         with:
           name: wiz-windows-x64
