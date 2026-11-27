@@ -2,8 +2,8 @@
 
 use gpui::{Modifiers, px};
 
-use super::autoscroll_lines;
 use super::keys::key_bytes;
+use super::mouse::autoscroll_lines;
 
 fn alt() -> Modifiers {
     Modifiers {

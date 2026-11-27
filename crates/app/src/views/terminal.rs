@@ -1,6 +1,7 @@
 //! Terminal tab: paints the alacritty grid with gpui and maps keys and mouse back to the PTY.
 
 mod keys;
+mod mouse;
 mod paint;
 mod search;
 #[cfg(test)]
@@ -61,23 +62,8 @@ pub struct TerminalView {
     title: Option<SharedString>,
     saved_password: Option<Secret>,
     selecting: bool,
-}
-
-/// How often a drag past the top or bottom edge scrolls.
-const AUTOSCROLL_EVERY: std::time::Duration = std::time::Duration::from_millis(50);
-
-/// Lines to scroll while dragging a selection at height `y` over a grid starting at `top`
-/// and `height` tall: positive scrolls up into history, farther out scrolls faster.
-fn autoscroll_lines(y: Pixels, top: Pixels, height: Pixels, cell_h: Pixels) -> i32 {
-    let past = if y < top {
-        top - y
-    } else if y > top + height {
-        top + height - y
-    } else {
-        return 0;
-    };
-    let lines = (past / cell_h).abs().ceil().min(5.) as i32;
-    if past > px(0.) { lines } else { -lines }
+    mouse_held: Option<MouseButton>,
+    mouse_cell: Option<(usize, usize)>,
 }
 
 pub enum TerminalEvent {
@@ -115,6 +101,8 @@ impl TerminalView {
             title: None,
             saved_password,
             selecting: false,
+            mouse_held: None,
+            mouse_cell: None,
             lost: false,
             notice: None,
             retry_ready: false,
@@ -244,11 +232,17 @@ impl TerminalView {
         }
     }
 
-    fn grid_point(&self, p: Point<Pixels>) -> (GridPoint, Side) {
+    fn viewport_cell(&self, p: Point<Pixels>) -> (usize, usize) {
         let x = (p.x - self.origin.x).max(px(0.));
         let y = (p.y - self.origin.y).max(px(0.));
         let col = ((x / self.cell_w) as usize).min(self.cols as usize - 1);
         let row = ((y / self.cell_h) as usize).min(self.rows as usize - 1);
+        (col, row)
+    }
+
+    fn grid_point(&self, p: Point<Pixels>) -> (GridPoint, Side) {
+        let (col, row) = self.viewport_cell(p);
+        let x = (p.x - self.origin.x).max(px(0.));
         let off = self.term.term.grid().display_offset() as i32;
         let side = if (x % self.cell_w) < self.cell_w / 2. {
             Side::Left
@@ -256,50 +250,6 @@ impl TerminalView {
             Side::Right
         };
         (GridPoint::new(Line(row as i32 - off), Column(col)), side)
-    }
-
-    /// While a selection drag is held, scroll when the mouse is above or below the grid and
-    /// extend the selection. Mouse move events stop at the edge, so this polls the position.
-    fn autoscroll_selection(&self, window: &mut Window, cx: &mut Context<Self>) {
-        cx.spawn_in(window, async move |this, cx| {
-            loop {
-                cx.background_executor().timer(AUTOSCROLL_EVERY).await;
-                let Ok(true) = this.update_in(cx, |t, window, cx| {
-                    if !t.selecting {
-                        return false;
-                    }
-                    let pos = window.mouse_position();
-                    let height = t.cell_h * t.rows as f32;
-                    let lines = autoscroll_lines(pos.y, t.origin.y, height, t.cell_h);
-                    if lines != 0 {
-                        t.term.term.scroll_display(Scroll::Delta(lines));
-                        let (p, side) = t.grid_point(pos);
-                        if let Some(sel) = t.term.term.selection.as_mut() {
-                            sel.update(p, side);
-                        }
-                        cx.notify();
-                    }
-                    true
-                }) else {
-                    return;
-                };
-            }
-        })
-        .detach();
-    }
-
-    /// The left button went up: stop selecting and drop an empty selection (a plain click).
-    fn end_selection(&mut self, cx: &mut Context<Self>) {
-        self.selecting = false;
-        if self
-            .term
-            .term
-            .selection_to_string()
-            .is_none_or(|s| s.is_empty())
-        {
-            self.term.term.selection = None;
-        }
-        cx.notify();
     }
 
     fn link_under(&self, p: Point<Pixels>) -> Option<Link> {
@@ -393,6 +343,9 @@ impl Render for TerminalView {
                         cx.open_url(&l.url);
                         return;
                     }
+                    if this.mouse_press(ev, cx) {
+                        return;
+                    }
                     let (p, side) = this.grid_point(ev.position);
                     let ty = match ev.click_count {
                         2 => SelectionType::Semantic,
@@ -407,8 +360,11 @@ impl Render for TerminalView {
             )
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                cx.listener(|this, ev: &MouseDownEvent, window, cx| {
                     window.focus(&this.focus, cx);
+                    if this.mouse_press(ev, cx) {
+                        return;
+                    }
                     // Right click copies a selection, otherwise pastes.
                     if this.copy_selection(cx) {
                         this.term.term.selection = None;
@@ -416,6 +372,13 @@ impl Render for TerminalView {
                     } else {
                         this.paste_clipboard(cx);
                     }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|this, ev: &MouseDownEvent, window, cx| {
+                    window.focus(&this.focus, cx);
+                    this.mouse_press(ev, cx);
                 }),
             )
             .on_mouse_move(cx.listener(|this, ev: &MouseMoveEvent, _, cx| {
@@ -428,6 +391,9 @@ impl Render for TerminalView {
                     this.hover_link = link;
                     cx.notify();
                 }
+                if this.mouse_motion(ev, cx) {
+                    return;
+                }
                 if this.selecting && ev.pressed_button == Some(MouseButton::Left) {
                     let (p, side) = this.grid_point(ev.position);
                     if let Some(sel) = this.term.term.selection.as_mut() {
@@ -436,17 +402,24 @@ impl Render for TerminalView {
                     cx.notify();
                 }
             }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_selection(cx)),
-            )
+            .capture_any_mouse_up(cx.listener(|this, ev: &MouseUpEvent, _, cx| {
+                this.mouse_release(ev, cx);
+            }))
             .on_mouse_up_out(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_selection(cx)),
+                cx.listener(|this, ev: &MouseUpEvent, _, cx| this.mouse_release(ev, cx)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Right,
+                cx.listener(|this, ev: &MouseUpEvent, _, cx| this.mouse_release(ev, cx)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Middle,
+                cx.listener(|this, ev: &MouseUpEvent, _, cx| this.mouse_release(ev, cx)),
             )
             .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| {
                 let lines = (ev.delta.pixel_delta(this.cell_h).y / this.cell_h).round() as i32;
-                if lines == 0 {
+                if lines == 0 || this.mouse_wheel(ev, lines, cx) {
                     return;
                 }
                 let mode = *this.term.term.mode();

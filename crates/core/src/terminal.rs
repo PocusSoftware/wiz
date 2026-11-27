@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::term::{Config, Term};
+use alacritty_terminal::term::{Config, Term, TermMode};
 use alacritty_terminal::vte::ansi::Processor;
 
 use crate::locked;
@@ -65,7 +65,8 @@ pub struct Link {
 /// alternate screen, resets scroll region, cursor keys, keypad, origin mode, bracketed paste,
 /// charset). Unlike a full reset (`ESC c`) it keeps the scrollback.
 pub const RESET_MODES: &[u8] =
-    b"\x1b[?1049l\x1b[?25h\x1b[0m\x1b[r\x1b[?1l\x1b>\x1b[?6l\x1b[?7h\x1b[?2004l\x1b(B";
+    b"\x1b[?1049l\x1b[?25h\x1b[0m\x1b[r\x1b[?1l\x1b>\x1b[?6l\x1b[?7h\x1b[?2004l\x1b(B\
+\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l";
 
 /// Clear the screen and the scrollback and home the cursor.
 pub const CLEAR_ALL: &[u8] = b"\x1b[2J\x1b[3J\x1b[H";
@@ -91,6 +92,22 @@ pub fn strip_boot_notice(data: &[u8]) -> Option<Vec<u8>> {
     let mut out = data[..start].to_vec();
     out.extend_from_slice(&data[end..]);
     Some(out)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MouseButton {
+    Left,
+    Middle,
+    Right,
+    WheelUp,
+    WheelDown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MouseAction {
+    Press,
+    Release,
+    Motion,
 }
 
 /// Most hits kept, so a one-letter query on a huge scrollback stays cheap.
@@ -266,6 +283,60 @@ impl Terminal {
         })
     }
 
+    pub fn mouse_report(
+        &self,
+        button: Option<MouseButton>,
+        action: MouseAction,
+        col: usize,
+        row: usize,
+    ) -> Option<Vec<u8>> {
+        let mode = *self.term.mode();
+        let wanted = match action {
+            MouseAction::Press | MouseAction::Release => mode.intersects(TermMode::MOUSE_MODE),
+            MouseAction::Motion if button.is_some() => {
+                mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+            }
+            MouseAction::Motion => mode.contains(TermMode::MOUSE_MOTION),
+        };
+        if !wanted {
+            return None;
+        }
+        let mut code: u32 = match button {
+            Some(MouseButton::Left) => 0,
+            Some(MouseButton::Middle) => 1,
+            Some(MouseButton::Right) => 2,
+            Some(MouseButton::WheelUp) => 64,
+            Some(MouseButton::WheelDown) => 65,
+            None => 3,
+        };
+        if action == MouseAction::Motion {
+            code += 32;
+        }
+        let (x, y) = (u32::try_from(col + 1).ok()?, u32::try_from(row + 1).ok()?);
+        if mode.contains(TermMode::SGR_MOUSE) {
+            let end = if action == MouseAction::Release {
+                'm'
+            } else {
+                'M'
+            };
+            return Some(format!("\x1b[<{code};{x};{y}{end}").into_bytes());
+        }
+        if action == MouseAction::Release {
+            code = 3;
+        }
+        let mut out = b"\x1b[M".to_vec();
+        for v in [code, x, y] {
+            let v = v + 32;
+            if mode.contains(TermMode::UTF8_MOUSE) {
+                let c = char::from_u32(v).filter(|_| v < 0x800)?;
+                out.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes());
+            } else {
+                out.push(u8::try_from(v).ok()?);
+            }
+        }
+        Some(out)
+    }
+
     /// Visible screen as plain text, trailing blanks trimmed. Handy for tests.
     pub fn screen_text(&self) -> String {
         use alacritty_terminal::index::{Column, Line};
@@ -299,7 +370,6 @@ mod tests {
 
     #[test]
     fn reset_modes_clears_app_modes_and_clear_all_drops_history() {
-        use alacritty_terminal::term::TermMode;
         let mut t = Terminal::new(20, 3);
         t.advance(b"a\r\nb\r\nc\r\nd\r\n\x1b[?1h\x1b[?2004h\x1b[?1049h");
         assert!(t.term.mode().contains(TermMode::APP_CURSOR));
@@ -309,11 +379,84 @@ mod tests {
         assert!(!m.contains(TermMode::APP_CURSOR));
         assert!(!m.contains(TermMode::BRACKETED_PASTE));
         assert!(!m.contains(TermMode::ALT_SCREEN));
+        t.advance(b"\x1b[?1003;1006h");
+        t.advance(RESET_MODES);
+        assert!(
+            !t.term
+                .mode()
+                .intersects(TermMode::MOUSE_MODE | TermMode::SGR_MOUSE)
+        );
         // Primary screen scrollback is untouched.
         assert!(t.term.grid().history_size() > 0);
         t.advance(CLEAR_ALL);
         assert_eq!(t.term.grid().history_size(), 0);
         assert!(t.screen_text().trim().is_empty());
+    }
+
+    #[test]
+    fn reports_mouse_in_sgr_mode() {
+        use MouseAction::*;
+        fn r(t: &Terminal, b: Option<MouseButton>, a: MouseAction, c: usize) -> Option<String> {
+            t.mouse_report(b, a, c, 9)
+                .map(|v| String::from_utf8(v).unwrap())
+        }
+        let left = Some(MouseButton::Left);
+        let mut t = Terminal::new(300, 50);
+        assert_eq!(r(&t, left, Press, 4), None);
+        t.advance(b"\x1b[?1000;1006h");
+        assert_eq!(r(&t, left, Press, 4).unwrap(), "\x1b[<0;5;10M");
+        assert_eq!(r(&t, left, Release, 4).unwrap(), "\x1b[<0;5;10m");
+        assert_eq!(
+            r(&t, Some(MouseButton::Right), Press, 249).unwrap(),
+            "\x1b[<2;250;10M"
+        );
+        assert_eq!(
+            r(&t, Some(MouseButton::Middle), Press, 0).unwrap(),
+            "\x1b[<1;1;10M"
+        );
+        assert_eq!(
+            r(&t, Some(MouseButton::WheelUp), Press, 0).unwrap(),
+            "\x1b[<64;1;10M"
+        );
+        assert_eq!(
+            r(&t, Some(MouseButton::WheelDown), Press, 0).unwrap(),
+            "\x1b[<65;1;10M"
+        );
+        assert_eq!(r(&t, left, Motion, 1), None);
+        t.advance(b"\x1b[?1002h");
+        assert_eq!(r(&t, left, Motion, 1).unwrap(), "\x1b[<32;2;10M");
+        assert_eq!(r(&t, None, Motion, 1), None);
+        t.advance(b"\x1b[?1003h");
+        assert_eq!(r(&t, None, Motion, 1).unwrap(), "\x1b[<35;2;10M");
+        t.advance(b"\x1b[?1003l");
+        assert_eq!(r(&t, left, Press, 0), None);
+    }
+
+    #[test]
+    fn reports_mouse_in_legacy_modes() {
+        use MouseAction::*;
+        let mut t = Terminal::new(300, 50);
+        t.advance(b"\x1b[?1000h");
+        let left = Some(MouseButton::Left);
+        assert_eq!(
+            t.mouse_report(left, Press, 4, 9).unwrap(),
+            b"\x1b[M\x20\x25\x2a"
+        );
+        assert_eq!(
+            t.mouse_report(left, Release, 4, 9).unwrap(),
+            b"\x1b[M\x23\x25\x2a"
+        );
+        assert_eq!(
+            t.mouse_report(left, Press, 99, 0).unwrap(),
+            b"\x1b[M\x20\x84\x21"
+        );
+        assert_eq!(t.mouse_report(left, Press, 222, 0).unwrap()[4], 0xff);
+        assert_eq!(t.mouse_report(left, Press, 223, 0), None);
+        t.advance(b"\x1b[?1005h");
+        assert_eq!(
+            t.mouse_report(left, Press, 99, 0).unwrap(),
+            b"\x1b[M\x20\xc2\x84\x21"
+        );
     }
 
     #[test]
