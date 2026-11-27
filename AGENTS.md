@@ -62,8 +62,8 @@ the checks at the end pass.
 - **Docs:** every file starts with a `//!` line saying what it is for. Public items and
   non-obvious private ones get `///`.
 - **Modules:** a module with submodules is `foo.rs` next to a `foo/` folder (no `mod.rs`).
-  `mod` lines come first, then `use` (an inline `mod tests` goes at the bottom). Re-export (`pub use`) to keep public paths short,
-  as `ssh_core::config` does.
+  `mod` lines come first, then `use` (an inline `mod tests` goes at the bottom).
+  Re-export (`pub use`) to keep public paths short, as `ssh_core::config` does.
 - **Size:** split a file by concern once it passes roughly 500 lines (see
   `crates/app/src/views/sftp/`); inline tests don't count. Functions over about 80 lines
   usually hide a helper.
