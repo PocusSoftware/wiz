@@ -209,6 +209,8 @@ enum Open {
     SplitShell(u64),
     /// Connect a host and open its files as a new pane of the terminal tab with this id.
     SplitSftp(u64),
+    /// Connect a host and open its containers as a new pane of the terminal tab with this id.
+    SplitDocker(u64),
 }
 
 enum TabKind {

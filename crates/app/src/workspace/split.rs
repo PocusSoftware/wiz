@@ -200,8 +200,26 @@ impl Workspace {
     }
 
     pub(super) fn split_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((id, host, conn, _)) = self.focused_host(window, cx) {
+            self.open_sftp(host, conn, Some(id), window, cx);
+        }
+    }
+
+    pub(super) fn split_docker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((id, host, conn, password)) = self.focused_host(window, cx) {
+            self.open_docker(host, conn, password, Some(id), window, cx);
+        }
+    }
+
+    /// The active tab's id, and the host, connection and password of its focused shell,
+    /// when there is room for another pane and the connection is still open.
+    fn focused_host(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<(u64, Host, Arc<Connection>, Option<Secret>)> {
         if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
-            return;
+            return None;
         }
         let Some(Tab {
             id,
@@ -209,41 +227,26 @@ impl Workspace {
             ..
         }) = self.tabs.get(self.active)
         else {
-            return;
+            return None;
         };
-        let Some(pane) = t.focused_shell() else {
-            return;
-        };
+        let pane = t.focused_shell()?;
         if pane.conn.is_closed() {
             self.set_status("The connection for this pane has closed.", true);
             cx.notify();
-            return;
+            return None;
         }
-        let (id, conn) = (*id, pane.conn.clone());
         let host = match self.cfg.hosts.iter().find(|h| h.account() == pane.account) {
             Some(h) => h.clone(),
-            None => match self.quick.get(&pane.account) {
-                Some((h, _)) => h.clone(),
-                None => return,
-            },
+            None => self.quick.get(&pane.account)?.0.clone(),
         };
-        self.open_sftp(host, conn, Some(id), window, cx);
+        Some((*id, host, pane.conn.clone(), pane.password.clone()))
     }
 
-    /// Open a shell on saved host `host` as a new pane of the active tab.
-    pub(super) fn split_with(&mut self, host: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if self.page != Page::Tab || !self.room_for(self.active, 1, window, cx) {
-            return;
-        }
-        if let Some(id) = self.tabs.get(self.active).map(|t| t.id) {
-            self.open_host(host, Open::SplitShell(id), window, cx);
-        }
-    }
-
-    /// Open the files of saved host `host` as a new pane of the active tab.
-    pub(super) fn split_files_with(
+    /// Connect saved host `host` and open `what` for it as a new pane of the active tab.
+    pub(super) fn split_host(
         &mut self,
         host: usize,
+        what: fn(u64) -> Open,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -251,7 +254,7 @@ impl Workspace {
             return;
         }
         if let Some(id) = self.tabs.get(self.active).map(|t| t.id) {
-            self.open_host(host, Open::SplitSftp(id), window, cx);
+            self.open_host(host, what(id), window, cx);
         }
     }
 

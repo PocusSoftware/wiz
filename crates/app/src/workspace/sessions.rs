@@ -91,6 +91,7 @@ impl Workspace {
         host: Host,
         conn: Arc<Connection>,
         password: Option<Secret>,
+        split_into: Option<u64>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -110,7 +111,40 @@ impl Workspace {
             },
         )
         .detach();
-        self.push_tab(label, TabKind::Docker(view), Some(account), window, cx);
+        self.push_or_split(
+            label,
+            TabKind::Docker(view),
+            account,
+            split_into,
+            window,
+            cx,
+        );
+    }
+
+    /// Add `kind` as a new pane of terminal tab `split_into` when it has room, else as a tab.
+    fn push_or_split(
+        &mut self,
+        label: String,
+        kind: TabKind,
+        account: String,
+        split_into: Option<u64>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = split_into.and_then(|id| self.tabs.iter().position(|t| t.id == id));
+        if let Some(ix) = target
+            && let TabKind::Terminal(t) = &self.tabs[ix].kind
+            && t.panes.len() < split::max_panes()
+        {
+            let pane = self.new_tab(label, kind, Some(account), cx);
+            if let TabKind::Terminal(t) = &mut self.tabs[ix].kind {
+                t.panes.push(PaneView::View(Box::new(pane)));
+                t.focused = t.panes.len() - 1;
+            }
+            self.select_tab(ix, window, cx);
+            return;
+        }
+        self.push_tab(label, kind, Some(account), window, cx);
     }
 
     /// A files tab: this Mac on the left, the host on the right.
@@ -146,22 +180,14 @@ impl Workspace {
                     })
                     .detach();
                     view.update(cx, SftpView::load);
-                    let kind = TabKind::Sftp(view);
-                    let target =
-                        split_into.and_then(|id| this.tabs.iter().position(|t| t.id == id));
-                    if let Some(ix) = target
-                        && let TabKind::Terminal(t) = &this.tabs[ix].kind
-                        && t.panes.len() < split::max_panes()
-                    {
-                        let pane = this.new_tab(label, kind, Some(host.account()), cx);
-                        if let TabKind::Terminal(t) = &mut this.tabs[ix].kind {
-                            t.panes.push(PaneView::View(Box::new(pane)));
-                            t.focused = t.panes.len() - 1;
-                        }
-                        this.select_tab(ix, window, cx);
-                        return;
-                    }
-                    this.push_tab(label, kind, Some(host.account()), window, cx);
+                    this.push_or_split(
+                        label,
+                        TabKind::Sftp(view),
+                        host.account(),
+                        split_into,
+                        window,
+                        cx,
+                    );
                 }
                 Err(e) => {
                     this.set_status(format!("{}: {e}", host.name), true);

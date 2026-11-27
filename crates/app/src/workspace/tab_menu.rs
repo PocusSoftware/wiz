@@ -441,7 +441,7 @@ impl Workspace {
     }
 
     /// Where the next pane opens: the same server, or any saved host. A row opens a
-    /// terminal, its folder button the files.
+    /// terminal, its buttons the files or the containers.
     fn split_menu_view(&self, at: Point<Pixels>, cx: &mut Context<Self>) -> AnyElement {
         let same = Self::split_row(
             "sm-same",
@@ -449,13 +449,21 @@ impl Workspace {
             "Same server".into(),
             None,
             crate::shortcuts::label("split").into(),
-            Self::files_button("sm-files", "Files on same server".into()).on_click(cx.listener(
-                |t, _, w, cx| {
-                    cx.stop_propagation();
-                    t.close_tab_menu(w, cx);
-                    t.split_files(w, cx);
-                },
-            )),
+            [
+                Self::pane_button("sm-files", "folder", "Files on same server".into()).on_click(
+                    cx.listener(|t, _, w, cx| {
+                        cx.stop_propagation();
+                        t.close_tab_menu(w, cx);
+                        t.split_files(w, cx);
+                    }),
+                ),
+                Self::pane_button("sm-docker", "container", "Docker on same server".into())
+                    .on_click(cx.listener(|t, _, w, cx| {
+                        cx.stop_propagation();
+                        t.close_tab_menu(w, cx);
+                        t.split_docker(w, cx);
+                    })),
+            ],
         )
         .on_click(cx.listener(|t, _, w, cx| {
             t.close_tab_menu(w, cx);
@@ -483,13 +491,29 @@ impl Workspace {
         let logos = crate::prefs::get().show_os_logos();
         for (ix, h) in self.cfg.hosts.iter().enumerate() {
             let name = privacy::redact(&h.name).into_owned();
-            let files =
-                Self::files_button(("sm-host-files", ix), format!("Files on {name}").into())
-                    .on_click(cx.listener(move |t, _, w, cx| {
+            let button = |id: &'static str, icon_name: &str, tip: String, what: fn(u64) -> Open| {
+                Self::pane_button((id, ix), icon_name, tip.into()).on_click(cx.listener(
+                    move |t, _, w, cx| {
                         cx.stop_propagation();
                         t.close_tab_menu(w, cx);
-                        t.split_files_with(ix, w, cx);
-                    }));
+                        t.split_host(ix, what, w, cx);
+                    },
+                ))
+            };
+            let actions = [
+                button(
+                    "sm-host-files",
+                    "folder",
+                    format!("Files on {name}"),
+                    Open::SplitSftp,
+                ),
+                button(
+                    "sm-host-docker",
+                    "container",
+                    format!("Docker on {name}"),
+                    Open::SplitDocker,
+                ),
+            ];
             items.push(
                 Self::split_row(
                     ("sm-host", ix),
@@ -497,11 +521,11 @@ impl Workspace {
                     name.into(),
                     Some(address(h).into()),
                     SharedString::default(),
-                    files,
+                    actions,
                 )
                 .on_click(cx.listener(move |t, _, w, cx| {
                     t.close_tab_menu(w, cx);
-                    t.split_with(ix, w, cx);
+                    t.split_host(ix, Open::SplitShell, w, cx);
                 }))
                 .into_any_element(),
             );
@@ -510,14 +534,14 @@ impl Workspace {
     }
 
     /// A split menu row: icon, name with the address under it, a muted shortcut, and the
-    /// files button at the end.
+    /// action buttons at the end.
     fn split_row(
         id: impl Into<ElementId>,
         lead: impl IntoElement,
         title: SharedString,
         subtitle: Option<SharedString>,
         shortcut: SharedString,
-        files: Stateful<Div>,
+        actions: impl IntoIterator<Item = Stateful<Div>>,
     ) -> Stateful<Div> {
         keyboard(div().id(id))
             .focus(|s| s.bg(c(palette().hover)))
@@ -558,7 +582,7 @@ impl Workspace {
                         .child(shortcut),
                 )
             })
-            .child(files)
+            .children(actions)
     }
 
     /// A menu row: icon, text, and a muted note on the right.
@@ -592,7 +616,11 @@ impl Workspace {
             )
     }
 
-    fn files_button(id: impl Into<ElementId>, tooltip: SharedString) -> Stateful<Div> {
-        icon_button(id, "folder", tooltip, palette().muted).flex_shrink_0()
+    fn pane_button(
+        id: impl Into<ElementId>,
+        icon_name: &str,
+        tooltip: SharedString,
+    ) -> Stateful<Div> {
+        icon_button(id, icon_name, tooltip, palette().muted).flex_shrink_0()
     }
 }

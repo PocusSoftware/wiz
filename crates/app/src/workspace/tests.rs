@@ -1082,6 +1082,28 @@ fn files_open_beside_the_shell(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn docker_opens_beside_the_shell(cx: &mut TestAppContext) {
+    let _g = setup();
+    if !docker() {
+        eprintln!("skipped (set SSHC_DOCKER_TESTS=1)");
+        return;
+    }
+    let (root, cx) = open_root(cx);
+    quick_shell(&root, cx, 1);
+    root.update_in(cx, Workspace::split_docker);
+    root.read_with(cx, |r, _| {
+        let t = term(r).unwrap();
+        assert_eq!(t.panes.len(), 2);
+        assert!(matches!(
+            t.panes[1].tab().map(|t| &t.kind),
+            Some(TabKind::Docker(_))
+        ));
+        assert_eq!(t.focused, 1);
+        assert_eq!(r.tabs.len(), 1);
+    });
+}
+
+#[gpui::test]
 fn files_of_another_host_open_beside_the_shell(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {
@@ -1098,7 +1120,7 @@ fn files_of_another_host_open_beside_the_shell(cx: &mut TestAppContext) {
             ..test_host("tester")
         })
     });
-    root.update_in(cx, |r, w, cx| r.split_files_with(0, w, cx));
+    root.update_in(cx, |r, w, cx| r.split_host(0, Open::SplitSftp, w, cx));
     wait(cx, &root, "a files pane", |r, _| {
         term(r).is_some_and(|t| t.panes.len() == 2)
     });

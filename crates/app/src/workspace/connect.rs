@@ -439,7 +439,8 @@ impl Workspace {
             Open::SplitShell(tab) => {
                 self.spawn_shell(host.name, conn, password, None, Some(tab), window, cx)
             }
-            Open::Docker => self.open_docker(host, conn, password, window, cx),
+            Open::Docker => self.open_docker(host, conn, password, None, window, cx),
+            Open::SplitDocker(tab) => self.open_docker(host, conn, password, Some(tab), window, cx),
             Open::Sftp => self.open_sftp(host, conn, None, window, cx),
             Open::SplitSftp(tab) => self.open_sftp(host, conn, Some(tab), window, cx),
             Open::SftpSource(view, side) => self.attach_sftp(host, conn, view, side, window, cx),
