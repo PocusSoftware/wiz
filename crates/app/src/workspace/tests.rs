@@ -162,10 +162,13 @@ fn quick_connect_dialog_validates_input(cx: &mut TestAppContext) {
 fn a_second_dialog_does_not_cover_the_first(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
-    cx.dispatch_action(NewHost);
-    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Form(_)))));
     cx.dispatch_action(QuickConnect);
-    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Form(_)))));
+    assert!(root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))));
+    cx.dispatch_action(NewHost);
+    assert!(
+        root.read_with(cx, |r, _| matches!(r.overlay, Some(Overlay::Quick(_)))
+            && r.after_unlock.is_none())
+    );
     cx.simulate_keystrokes("escape");
     assert!(root.read_with(cx, |r, _| r.overlay.is_none()));
 }
