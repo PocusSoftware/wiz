@@ -38,6 +38,7 @@ fn server() -> Host {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Password,
     }
 }

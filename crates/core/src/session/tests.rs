@@ -174,6 +174,7 @@ mod agent_login {
             os: None,
             logo: None,
             tags: Vec::new(),
+            startup: None,
             auth: AuthMethod::Agent,
         };
         let connect = |creds: Credentials| {

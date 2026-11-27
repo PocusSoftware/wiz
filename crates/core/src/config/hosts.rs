@@ -43,6 +43,9 @@ pub struct Host {
     /// Free-form labels, searchable on the hosts page.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// Typed into the login shell once it opens, like a snippet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup: Option<String>,
     // Last: it serializes as a table, and TOML wants plain values before tables.
     pub auth: AuthMethod,
 }
@@ -104,6 +107,11 @@ impl Host {
             && (g.chars().count() > 40 || g.chars().any(char::is_control))
         {
             return Err("Folder must be 40 characters or fewer.".into());
+        }
+        if let Some(cmd) = &self.startup
+            && (cmd.chars().count() > 1000 || cmd.chars().any(char::is_control))
+        {
+            return Err("Startup command must be one line of 1000 characters or fewer.".into());
         }
         Ok(())
     }

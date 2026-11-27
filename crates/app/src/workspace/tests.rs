@@ -130,6 +130,7 @@ fn test_host(user: &str) -> Host {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Password,
     }
 }

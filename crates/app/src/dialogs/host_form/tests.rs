@@ -32,6 +32,7 @@ fn only_the_host_is_required(cx: &mut TestAppContext) {
     assert_eq!(host.user, "root");
     assert_eq!(host.port, 22);
     assert_eq!(host.name, "root@example.com");
+    assert_eq!(host.startup, None);
 }
 
 #[gpui::test]
@@ -48,6 +49,7 @@ fn os_logo_kept_only_for_the_same_address(cx: &mut TestAppContext) {
         os: Some("ubuntu".into()),
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| HostForm::new(Start::Edit(0, old), Vec::new(), Vec::new(), cx));
@@ -75,6 +77,7 @@ fn picked_logo_is_saved_and_unknown_ones_dropped(cx: &mut TestAppContext) {
         os: None,
         logo: Some("not-a-logo".into()),
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| HostForm::new(Start::Edit(0, old), Vec::new(), Vec::new(), cx));
@@ -148,6 +151,7 @@ fn copy_starts_as_a_new_host_with_the_same_settings(cx: &mut TestAppContext) {
         os: Some("ubuntu".into()),
         logo: Some("debian".into()),
         tags: vec!["eu".into()],
+        startup: Some("tmux attach".into()),
         auth: AuthMethod::Agent,
     };
     let form = cx.new(|cx| {
@@ -173,6 +177,7 @@ fn copy_starts_as_a_new_host_with_the_same_settings(cx: &mut TestAppContext) {
     assert_eq!(copy.user, "deploy");
     assert_eq!(copy.group.as_deref(), Some("Prod"));
     assert_eq!(copy.tags, ["eu"]);
+    assert_eq!(copy.startup.as_deref(), Some("tmux attach"));
     assert_eq!(copy.logo.as_deref(), Some("debian"));
     assert_eq!(copy.auth, AuthMethod::Agent);
     assert!(!copy.pinned);

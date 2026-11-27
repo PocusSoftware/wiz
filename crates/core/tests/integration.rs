@@ -46,6 +46,7 @@ fn host(port: u16, auth: AuthMethod) -> Host {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth,
     }
 }

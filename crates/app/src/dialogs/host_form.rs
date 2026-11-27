@@ -58,6 +58,8 @@ pub struct HostForm {
     user: Entity<TextInput>,
     /// Name of the saved host to connect through.
     jump: Entity<TextInput>,
+    /// Typed into the shell after connecting.
+    startup: Entity<TextInput>,
     password: Entity<TextInput>,
     key_path: Entity<TextInput>,
     passphrase: Entity<TextInput>,
@@ -85,9 +87,12 @@ impl HostForm {
         let port = cx.new(|cx| TextInput::new("22", false, cx));
         let user = cx.new(|cx| TextInput::new("root", false, cx));
         let jump = cx.new(|cx| TextInput::new("Optional, name of a saved host", false, cx));
+        let startup =
+            cx.new(|cx| TextInput::new("Optional, e.g. cd /srv && tmux attach", false, cx));
         // Host, user and port are bullets unless the field is being edited.
         name.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
         group.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
+        startup.update(cx, |t, _| t.set_hide_mode(Hide::Redact));
         host.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         user.update(cx, |t, _| t.set_hide_mode(Hide::Full));
         port.update(cx, |t, _| t.set_hide_mode(Hide::Port));
@@ -127,6 +132,9 @@ impl HostForm {
             host.update(cx, |t, _| t.set_value(&h.host));
             port.update(cx, |t, _| t.set_value(&h.port.to_string()));
             user.update(cx, |t, _| t.set_value(&h.user));
+            startup.update(cx, |t, _| {
+                t.set_value(h.startup.as_deref().unwrap_or_default())
+            });
             if let Some(j) = others.iter().find(|o| Some(o.account()) == h.jump) {
                 jump.update(cx, |t, _| t.set_value(&j.name));
             }
@@ -153,6 +161,7 @@ impl HostForm {
             port,
             user,
             jump,
+            startup,
             password,
             key_path,
             passphrase,
@@ -266,6 +275,7 @@ impl HostForm {
             os,
             logo: self.logo.map(Into::into),
             tags,
+            startup: Some(get(&self.startup)).filter(|s| !s.is_empty()),
             auth,
         };
         new.validate()?;
@@ -442,6 +452,7 @@ impl Render for HostForm {
                     .child(field("User", &self.user).flex_1().min_w_0())
                     .child(field("Jump host", &self.jump).flex_1().min_w_0()),
             )
+            .child(field("Startup command", &self.startup))
             .child(self.logo_field(cx))
             .child(
                 div()

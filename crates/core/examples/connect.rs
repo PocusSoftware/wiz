@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Password,
     };
     let creds = match creds {

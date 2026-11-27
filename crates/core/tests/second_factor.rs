@@ -157,6 +157,7 @@ async fn login(
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Password,
     };
     let verifier = HostKeyVerifier {

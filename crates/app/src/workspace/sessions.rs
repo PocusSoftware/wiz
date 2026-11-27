@@ -36,6 +36,12 @@ impl Workspace {
             .find(|(_, l)| Arc::ptr_eq(&l.conn, &conn))
             .map(|(k, _)| k.clone())
             .unwrap_or_default();
+        let startup = self
+            .cfg
+            .hosts
+            .iter()
+            .find(|h| command.is_none() && h.account() == account)
+            .and_then(|h| h.startup.clone());
         let saved_command = command.clone();
         cx.spawn_in(window, async move |this, cx| {
             let c = conn.clone();
@@ -46,6 +52,9 @@ impl Workspace {
                     let view = cx.new(|cx| {
                         let mut v = TerminalView::new(shell, password.clone(), cx);
                         v.command = saved_command;
+                        if let Some(line) = &startup {
+                            v.paste(&format!("{line}\n"), cx);
+                        }
                         v
                     });
                     this.watch_terminal(&view, window, cx);

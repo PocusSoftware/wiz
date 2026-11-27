@@ -85,6 +85,7 @@ fn roundtrip() {
                 os: None,
                 logo: None,
                 tags: Vec::new(),
+                startup: Some("cd /srv && ls".into()),
                 auth: AuthMethod::Password,
             },
             Host {
@@ -98,6 +99,7 @@ fn roundtrip() {
                 os: None,
                 logo: None,
                 tags: Vec::new(),
+                startup: None,
                 auth: AuthMethod::Key { path: "/k".into() },
             },
         ],
@@ -129,6 +131,7 @@ fn old_files_without_group_or_pin_still_load() {
     assert!(!cfg.hosts[0].pinned);
     assert_eq!(cfg.hosts[0].port, 22);
     assert_eq!(cfg.hosts[0].jump, None);
+    assert_eq!(cfg.hosts[0].startup, None);
 }
 
 #[test]
@@ -144,6 +147,7 @@ fn jump_chains() {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Agent,
     };
     let mut cfg = Config {
@@ -192,6 +196,7 @@ fn validate() {
         os: None,
         logo: None,
         tags: Vec::new(),
+        startup: None,
         auth: AuthMethod::Password,
     };
     for ok in [
@@ -225,6 +230,13 @@ fn validate() {
     assert!(h("example.com", "-oProxyCommand=x", 22).validate().is_err());
     assert!(h("example.com", "root", 0).validate().is_err());
     assert!(h("example.com", "deploy-user.1", 65535).validate().is_ok());
+    let startup = |cmd: &str| Host {
+        startup: Some(cmd.into()),
+        ..h("example.com", "root", 22)
+    };
+    assert!(startup("cd /srv && tmux attach").validate().is_ok());
+    assert!(startup("ls\nrm -rf /").validate().is_err());
+    assert!(startup(&"x".repeat(1001)).validate().is_err());
 }
 
 #[test]
