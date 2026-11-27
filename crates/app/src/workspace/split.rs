@@ -340,11 +340,14 @@ impl Workspace {
 
     /// Size of the content area below the tab bar, from the last frame.
     fn area(&self, window: &Window) -> (f32, f32) {
-        let b = self.content_bounds.get();
+        let (b, painted_in) = self.content_bounds.get();
+        let v = window.viewport_size();
         if b.size.width > px(0.) {
-            (f32::from(b.size.width), f32::from(b.size.height))
+            (
+                f32::from(b.size.width + v.width - painted_in.width),
+                f32::from(b.size.height + v.height - painted_in.height),
+            )
         } else {
-            let v = window.viewport_size();
             (f32::from(v.width), f32::from(v.height) - 36.)
         }
     }

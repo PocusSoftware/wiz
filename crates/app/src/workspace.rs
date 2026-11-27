@@ -277,8 +277,9 @@ pub struct Workspace {
     settings_from: Page,
     pending: Vec<Pending>,
     pane_drag: Option<PaneDrag>,
-    /// Where the page content (below the tab bar) was drawn last frame.
-    content_bounds: Rc<Cell<gpui::Bounds<Pixels>>>,
+    /// Where the page content (below the tab bar) was drawn last frame, and the window size
+    /// then, so a resize since can be accounted for.
+    content_bounds: Rc<Cell<(gpui::Bounds<Pixels>, gpui::Size<Pixels>)>>,
     /// Quit was refused because this many sessions are open.
     quit_notice: Option<usize>,
     tab_scroll: gpui::ScrollHandle,
@@ -420,7 +421,7 @@ impl Workspace {
             next_pending: 0,
             next_tab: 0,
             pane_drag: None,
-            content_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
+            content_bounds: Rc::new(Cell::new(Default::default())),
             quit_notice: None,
             tab_scroll: gpui::ScrollHandle::new(),
             selected: None,
@@ -714,9 +715,12 @@ impl Render for Workspace {
                             ))
                             // Records the content size, for split layout and divider drags.
                             .child(
-                                gpui::canvas(move |b, _, _| cell.set(b), |_, _, _, _| {})
-                                    .absolute()
-                                    .size_full(),
+                                gpui::canvas(
+                                    move |b, window, _| cell.set((b, window.viewport_size())),
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .size_full(),
                             )
                     })
                     .children(self.pending_rows(cx))
