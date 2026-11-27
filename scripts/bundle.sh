@@ -50,6 +50,7 @@ if [ -n "$NOTARY_PROFILE" ]; then
   rm dist/Wiz.zip
 fi
 echo "built $APP ($VERSION, build $BUILD)"
+[ "$1" = "--no-install" ] && exit 0
 rm -rf /Applications/Wiz.app
 ditto "$APP" /Applications/Wiz.app
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister

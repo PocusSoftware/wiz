@@ -51,6 +51,13 @@ impl Workspace {
         }
         let key = ev.keystroke.key.as_str();
         match self.overlay {
+            Some(Overlay::Update { .. }) => {
+                if key == "escape" {
+                    self.close_update(cx);
+                    cx.stop_propagation();
+                }
+                return;
+            }
             Some(Overlay::Help) => {
                 if key == "escape" {
                     self.close_help(window, cx);

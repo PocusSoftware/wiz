@@ -1,6 +1,6 @@
 //! macOS: Cmd shortcuts, the Dock icon, AppKit window dragging, `open` for files.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use gpui::{
     AnyElement, App, Div, Entity, InteractiveElement, KeyBinding, Modifiers, MouseButton,
@@ -295,4 +295,45 @@ pub fn system_look(_: &Window) -> (bool, bool) {
         .bestMatchFromAppearancesWithNames(&NSArray::from_slice(&[light, dark]));
     let high = NSWorkspace::sharedWorkspace().accessibilityDisplayShouldIncreaseContrast();
     (best.is_some_and(|name| *name == *dark), high)
+}
+
+pub fn update_target() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let app = exe.ancestors().nth(3)?;
+    app.extension()
+        .is_some_and(|e| e == "app")
+        .then(|| app.to_path_buf())
+}
+
+pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
+    let out = dir.join("unpacked");
+    std::fs::create_dir(&out)?;
+    let ok = ssh_core::process::command("/usr/bin/ditto")
+        .args(["-x", "-k"])
+        .arg(file)
+        .arg(&out)
+        .status()?
+        .success();
+    let app = out.join("Wiz.app");
+    if ok && app.join("Contents/MacOS/wiz").is_file() {
+        Ok(app)
+    } else {
+        Err(std::io::Error::other("the update has no Wiz.app inside"))
+    }
+}
+
+pub fn relaunch(target: &Path) -> std::io::Result<()> {
+    ssh_core::process::command("/bin/sh")
+        .args([
+            "-c",
+            r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; open "$2""#,
+            "sh",
+        ])
+        .arg(std::process::id().to_string())
+        .arg(target)
+        .spawn()
+        .map(drop)
 }

@@ -5,6 +5,7 @@ name: Linux build
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 # Tests build gpui with its test-support feature, the release without it, so they share
 # nothing: they run side by side instead of one after the other.

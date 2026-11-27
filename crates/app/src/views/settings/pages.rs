@@ -428,6 +428,15 @@ impl SettingsView {
                 cx,
             ))
             .child(self.toggle(
+                "n-updates",
+                "Check for updates",
+                "Looks for a new Wiz release on GitHub at start and every 6 hours, and offers \
+                 it in the tab bar.",
+                s.check_updates(),
+                |s, v| s.check_updates = Some(v),
+                cx,
+            ))
+            .child(self.toggle(
                 "n-reconnect",
                 "Reconnect lost terminals",
                 "When a connection drops or the server reboots, keep retrying \

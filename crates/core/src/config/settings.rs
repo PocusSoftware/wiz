@@ -118,6 +118,8 @@ pub struct Settings {
     pub keepalive_secs: Option<u32>,
     /// Ask before closing a tab or pane that holds an SSH session.
     pub confirm_close: Option<bool>,
+    /// Look for a newer release on GitHub now and then.
+    pub check_updates: Option<bool>,
     /// Reconnect a terminal on its own after the connection drops (network loss, reboot).
     pub auto_reconnect: Option<bool>,
     /// Close a terminal tab or pane when its shell exits (`exit`, Ctrl+D).
@@ -187,6 +189,7 @@ getters! {
     terminal_scrollback: u32 = 10_000;
     keepalive_secs: u32 = 30;
     confirm_close: bool = true;
+    check_updates: bool = true;
     block_quit: bool = true;
     auto_reconnect: bool = true;
     close_on_exit: bool = true;

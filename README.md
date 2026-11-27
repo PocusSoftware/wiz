@@ -29,7 +29,7 @@ Open the Settings tab with the sliders icon in the title bar or ⌘, (Ctrl+, on 
 | Appearance | `appearance` ("system", "light" or "dark"), `contrast` ("system", "standard" or "high"), `ui_font`, `terminal_font` (restart), `accent_color` ("#RRGGBB", when colorful), `window_controls` ("left" or "right"), `oled_black`, `show_os_logos` (the OS logo found when connecting; one picked in the host form always shows), `colorful` (off: the gray theme), `animations`, `show_latency` (off), `show_split_button`, `show_quick_connect_button`, `show_privacy_button` |
 | Keyboard | `shortcuts` (a table of command id to keystrokes, like `split = "cmd-alt-d"`; edited under Shortcuts in Settings) |
 | Files | `show_dotfiles`, `rsync_hint_files`, `rsync_hint_mb` |
-| Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_font_size` (zoom), `terminal_scrollback`, `keepalive_secs` |
+| Logs, Docker, terminal, network | `log_refresh_secs`, `log_tail_lines`, `docker_refresh_secs`, `terminal_font_size` (zoom), `terminal_scrollback`, `keepalive_secs`, `check_updates` (look for a new release on GitHub at start and every 6 hours) |
 | Experimental | `max_splits` (terminals per split tab, default 4) |
 | Credentials | `secret_store` (`keychain` or `file`), `agent_socket` (empty for `SSH_AUTH_SOCK`, or the OpenSSH agent pipe on Windows) |
 

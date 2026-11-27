@@ -256,6 +256,34 @@ pub fn system_look(window: &Window) -> (bool, bool) {
     )
 }
 
+pub fn update_target() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        None
+    } else {
+        std::env::current_exe().ok()
+    }
+}
+
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as on macOS and Linux, where unpacking can fail"
+)]
+pub fn unpack_update(file: &Path, _: &Path) -> std::io::Result<PathBuf> {
+    Ok(file.to_path_buf())
+}
+
+pub fn relaunch(target: &Path) -> std::io::Result<()> {
+    let path = target.display().to_string().replace('\'', "''");
+    ssh_core::process::command("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command"])
+        .arg(format!(
+            "Wait-Process -Id {} -ErrorAction SilentlyContinue; Start-Process -FilePath '{path}'",
+            std::process::id()
+        ))
+        .spawn()
+        .map(drop)
+}
+
 #[cfg(test)]
 mod tests {
     //! Tests for `platform::windows`.

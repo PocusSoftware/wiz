@@ -7,11 +7,13 @@ pub mod error;
 pub mod hostkey;
 pub mod os;
 pub mod privacy;
+pub mod process;
 pub mod rsync;
 pub mod secrets;
 pub mod session;
 pub mod sftp;
 pub mod terminal;
+pub mod update;
 
 pub use error::{Error, Result};
 

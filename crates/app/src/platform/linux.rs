@@ -203,6 +203,45 @@ pub fn system_look(window: &Window) -> (bool, bool) {
     (dark, false)
 }
 
+pub fn update_target() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        None
+    } else {
+        std::env::current_exe().ok()
+    }
+}
+
+pub fn unpack_update(file: &Path, dir: &Path) -> std::io::Result<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let ok = ssh_core::process::command("tar")
+        .arg("-xzf")
+        .arg(file)
+        .arg("-C")
+        .arg(dir)
+        .arg("wiz/wiz")
+        .status()?
+        .success();
+    let bin = dir.join("wiz/wiz");
+    if !ok || !bin.is_file() {
+        return Err(std::io::Error::other("the update has no wiz binary inside"));
+    }
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))?;
+    Ok(bin)
+}
+
+pub fn relaunch(target: &Path) -> std::io::Result<()> {
+    ssh_core::process::command("/bin/sh")
+        .args([
+            "-c",
+            r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; "$2" >/dev/null 2>&1 &"#,
+            "sh",
+        ])
+        .arg(std::process::id().to_string())
+        .arg(target)
+        .spawn()
+        .map(drop)
+}
+
 #[cfg(test)]
 mod tests {
     //! Tests for `platform::linux`.

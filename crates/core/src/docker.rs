@@ -2,7 +2,6 @@
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
 
 use serde::Deserialize;
@@ -152,14 +151,8 @@ fn remote_command(args: &[&str], merge: bool) -> String {
 }
 
 fn run_local(args: &[String], merge: bool) -> Result<ExecOutput> {
-    let mut cmd = Command::new(docker_bin());
-    cmd.args(args).stdin(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    let mut cmd = crate::process::command(docker_bin());
+    cmd.args(args);
     let not_found = |e: std::io::Error| match e.kind() {
         std::io::ErrorKind::NotFound => Error::Docker("docker command not found".into()),
         _ => e.into(),

@@ -18,6 +18,7 @@ mod tab_menu;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod update;
 mod windows;
 
 use std::cell::Cell;
@@ -253,6 +254,10 @@ enum Overlay {
     /// A host delete waiting for "are you sure": index into the host list.
     ConfirmDelete(usize),
     Help,
+    Update {
+        busy: bool,
+        error: Option<SharedString>,
+    },
 }
 
 pub struct Workspace {

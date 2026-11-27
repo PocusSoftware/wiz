@@ -1,0 +1,65 @@
+# Pushing a tag like v0.26.0 builds Wiz for macOS, Windows and Linux and opens a draft
+# release with the three files. Write the changelog in the draft and publish it: the app's
+# updater only sees published releases.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: blacksmith-4vcpu-ubuntu-2604
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        run: test "v$(scripts/version.sh)" = "$GITHUB_REF_NAME"
+
+  windows:
+    needs: version
+    uses: ./.github/workflows/windows.yml
+
+  linux:
+    needs: version
+    uses: ./.github/workflows/linux.yml
+
+  macos:
+    needs: version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Wiz.app
+        run: scripts/bundle.sh --no-install
+      - name: Package
+        run: ditto -c -k --keepParent dist/Wiz.app dist/Wiz-macOS-arm64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiz-macos-arm64
+          path: dist/Wiz-macOS-arm64.zip
+          if-no-files-found: error
+
+  release:
+    needs: [windows, linux, macos]
+    runs-on: blacksmith-4vcpu-ubuntu-2604
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp artifacts/wiz-windows-x64/Wiz.exe Wiz-windows-x64.exe
+          gh release create "$GITHUB_REF_NAME" --draft --generate-notes \
+            --title "Wiz ${GITHUB_REF_NAME#v}" \
+            Wiz-windows-x64.exe \
+            artifacts/wiz-linux-x86_64/wiz-linux-x86_64.tar.gz \
+            artifacts/wiz-macos-arm64/Wiz-macOS-arm64.zip

@@ -513,6 +513,7 @@ impl Workspace {
                             .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
                         )
                     })
+                    .children(self.update_chip(cx))
                     .child(
                         icon_button(
                             "help-btn",

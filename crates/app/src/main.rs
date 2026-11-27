@@ -11,6 +11,7 @@ mod shortcuts;
 #[cfg(test)]
 mod testing;
 mod theme;
+mod update;
 mod views;
 mod widgets;
 mod workspace;
@@ -95,6 +96,7 @@ fn main() {
                 ],
                 disabled: false,
             }]);
+            update::start(cx);
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();

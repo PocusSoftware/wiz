@@ -286,6 +286,11 @@ impl Workspace {
                 self.help_view(cx),
                 Some(Box::new(cx.listener(|t, _, w, cx| t.close_help(w, cx)))),
             )),
+            Overlay::Update { busy, error } => Some(overlay(
+                "update",
+                self.update_view(*busy, error.clone(), cx),
+                Some(Box::new(cx.listener(|t, _, _, cx| t.close_update(cx)))),
+            )),
         });
         // No dismissing by a click outside: that would cancel the login by accident.
         let code = self

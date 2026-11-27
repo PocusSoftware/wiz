@@ -17,6 +17,8 @@ pub enum Error {
     Keychain(#[from] security_framework::base::Error),
     #[error("docker: {0}")]
     Docker(String),
+    #[error("update: {0}")]
+    Update(String),
     #[error("config: {0}")]
     Config(String),
     #[error("authentication failed")]
