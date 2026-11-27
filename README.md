@@ -36,10 +36,6 @@ SSHC_DOCKER_TESTS=1 cargo test --workspace
 
 The test servers listen on 2222 (password `tester`/`hunter2`), 2223 (key only) and 2224 (FTP, no SFTP).
 
-## Release
-
-Set the version with `scripts/version.sh 0.27.0`, commit, then push a tag `v0.27.0`. CI builds all three platforms and opens a draft release; publish it to ship the update.
-
 ## License
 
 [LGPL-3.0](COPYING.LESSER). The bundled fonts, IBM Plex Sans and JetBrains Mono, are under the SIL Open Font License 1.1 (texts in `crates/app/assets/fonts/`).
