@@ -91,8 +91,8 @@ pub struct Settings {
     pub mask_ports: Option<bool>,
     /// Mask values of `PASSWORD=...` / `token: ...` style assignments in output.
     pub mask_secrets: Option<bool>,
-    /// Mask generated IDs: container and image hashes, random parts of container names.
-    pub mask_ids: Option<bool>,
+    /// Mask the names and IDs of containers seen in Docker tabs.
+    pub mask_containers: Option<bool>,
     /// Hide secret files (see `secret_file_patterns`) from file lists.
     pub hide_secret_files: Option<bool>,
     /// Extra words to mask everywhere.
@@ -174,7 +174,7 @@ getters! {
     mask_ipv6: bool = true;
     mask_ports: bool = true;
     mask_secrets: bool = true;
-    mask_ids: bool = true;
+    mask_containers: bool = true;
     hide_secret_files: bool = true;
     extra_mask: Vec<String> = Vec::new();
     secret_file_patterns: Vec<String> = DEFAULT_SECRET_FILES.iter().map(ToString::to_string).collect();

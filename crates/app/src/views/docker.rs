@@ -82,6 +82,16 @@ impl DockerView {
                                 .cmp(&a.is_running())
                                 .then(a.name.cmp(&b.name))
                         });
+                        crate::privacy::add_containers(items.iter().flat_map(|ct| {
+                            let image = ct.image.strip_prefix("sha256:").unwrap_or_default();
+                            [
+                                ct.name.clone(),
+                                ct.id.clone(),
+                                ct.id.chars().take(12).collect(),
+                                image.to_string(),
+                                image.chars().take(12).collect(),
+                            ]
+                        }));
                         t.items = items;
                         t.error = None;
                     }

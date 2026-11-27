@@ -237,12 +237,12 @@ impl SettingsView {
                 cx,
             ))
             .child(self.toggle(
-                "p-ids",
-                "IDs",
-                "Container and image IDs, and random parts of container names \
-                 (web.1.apzpmaybcuijjz4oceqvlcnbf).",
-                s.mask_ids(),
-                |s, v| s.mask_ids = Some(v),
+                "p-containers",
+                "Containers",
+                "Names and IDs of the containers listed in Docker tabs, wherever \
+                 they appear.",
+                s.mask_containers(),
+                |s, v| s.mask_containers = Some(v),
                 cx,
             ))
             .child(self.text(

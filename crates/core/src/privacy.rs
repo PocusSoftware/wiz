@@ -23,7 +23,7 @@ struct Config {
     ipv6: bool,
     ports: bool,
     secrets: bool,
-    ids: bool,
+    containers: bool,
     hosts: bool,
     users: bool,
     names: bool,
@@ -31,6 +31,7 @@ struct Config {
     host_tokens: Vec<Vec<char>>,
     user_tokens: Vec<Vec<char>>,
     name_tokens: Vec<Vec<char>>,
+    container_tokens: Vec<Vec<char>>,
     extra: Vec<Vec<char>>,
     patterns: Vec<String>,
 }
@@ -42,7 +43,7 @@ impl Config {
             ipv6: true,
             ports: true,
             secrets: true,
-            ids: true,
+            containers: true,
             hosts: true,
             users: true,
             names: false,
@@ -50,6 +51,7 @@ impl Config {
             host_tokens: Vec::new(),
             user_tokens: Vec::new(),
             name_tokens: Vec::new(),
+            container_tokens: Vec::new(),
             extra: Vec::new(),
             patterns: Vec::new(),
         }
@@ -68,7 +70,7 @@ pub fn configure(s: &Settings) {
     c.ipv6 = s.mask_ipv6();
     c.ports = s.mask_ports();
     c.secrets = s.mask_secrets();
-    c.ids = s.mask_ids();
+    c.containers = s.mask_containers();
     c.hosts = s.mask_hosts();
     c.users = s.mask_users();
     c.names = s.mask_names();
@@ -96,6 +98,17 @@ pub fn set_known(hosts: Vec<String>, users: Vec<String>, names: Vec<String>) {
     c.host_tokens = tokens(hosts);
     c.user_tokens = tokens(users);
     c.name_tokens = tokens(names);
+}
+
+/// Names and IDs of containers seen in a Docker tab, masked whole from then on. Kept for
+/// the rest of the run, so a container that was removed stays masked in old output.
+pub fn add_containers(items: impl IntoIterator<Item = String>) {
+    let mut c = CONFIG.write().unwrap_or_else(PoisonError::into_inner);
+    let mut all = std::mem::take(&mut c.container_tokens);
+    all.extend(tokens(items));
+    all.sort();
+    all.dedup();
+    c.container_tokens = all;
 }
 
 fn is_word(c: char) -> bool {
@@ -324,33 +337,6 @@ fn key_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || "_.-".contains(c)
 }
 
-/// Generated IDs: container and image hashes (`4a066c8b481f`, 12+ hex digits) and random
-/// tokens (`apzpmaybcuijjz4oceqvlcnbf`, 20+ letters and digits), like the task part of a
-/// Swarm container name. Both need a digit and a letter, so words and numbers stay.
-fn id_ranges(chars: &[char]) -> Vec<Range<usize>> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        let end = i + chars[i..]
-            .iter()
-            .take_while(|c| c.is_ascii_alphanumeric())
-            .count();
-        if end == i {
-            i += 1;
-            continue;
-        }
-        let run = &chars[i..end];
-        let mixed =
-            run.iter().any(char::is_ascii_digit) && run.iter().any(char::is_ascii_alphabetic);
-        let hex = run.len() >= 12 && run.iter().all(char::is_ascii_hexdigit);
-        if mixed && (hex || run.len() >= 20) {
-            out.push(i..end);
-        }
-        i = end;
-    }
-    out
-}
-
 /// Values of `PASSWORD=hunter2`, `token: abc`, `"api_key": "xyz"` style assignments.
 fn secret_ranges(chars: &[char]) -> Vec<Range<usize>> {
     let mut out = Vec::new();
@@ -435,6 +421,7 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
                 (cfg.hosts, true, &cfg.host_tokens),
                 (cfg.users, false, &cfg.user_tokens),
                 (cfg.names, false, &cfg.name_tokens),
+                (cfg.containers, false, &cfg.container_tokens),
                 (true, false, &cfg.extra),
             ];
             for (on, is_addr, list) in lists {
@@ -478,9 +465,6 @@ pub fn ranges(chars: &[char]) -> Vec<Range<usize>> {
     }
     if cfg.secrets {
         out.extend(secret_ranges(chars));
-    }
-    if cfg.ids {
-        out.extend(id_ranges(chars));
     }
     out.sort_by_key(|r| r.start);
     // Merge overlaps so each char is masked once.
@@ -742,24 +726,19 @@ mod tests {
         );
 
         setup(|_| {});
+        let task = "a_media_automod_discord.1.apzpmaybcuijjz4oceqvlcnbf";
+        assert_eq!(redact(task), task);
+        add_containers([task.to_string(), "4a066c8b481f".to_string()]);
         assert_eq!(
-            redact("a_media_automod_discord.1.apzpmaybcuijjz4oceqvlcnbf 4a066c8b481f"),
-            format!("a_media_automod_discord.1.{} {}", b(25), b(12))
+            redact(&format!("{task} 4a066c8b481f Exited (1)")),
+            format!("{} {} Exited (1)", b(48), b(12))
         );
         assert_eq!(
-            redact("sha256:4a066c8b481f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d"),
-            format!("sha256:{}", b(64))
+            redact("a_media_automod_discord.2"),
+            "a_media_automod_discord.2"
         );
-        for kept in [
-            "internationalization",
-            "1700000000000",
-            "deadbeefcafe",
-            "nginx:1.25",
-        ] {
-            assert_eq!(redact(kept), kept);
-        }
-        setup(|s| s.mask_ids = Some(false));
-        assert_eq!(redact("4a066c8b481f"), "4a066c8b481f");
+        setup(|s| s.mask_containers = Some(false));
+        assert_eq!(redact(task), task);
 
         // The mask never reveals the hidden length.
         setup(|_| {});
