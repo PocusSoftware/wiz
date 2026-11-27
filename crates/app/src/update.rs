@@ -94,6 +94,86 @@ fn clean_up(target: &Path) {
     remove_any(&stage_dir(target));
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NoteKind {
+    Heading,
+    Bullet,
+    Text,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoteLine {
+    pub kind: NoteKind,
+    pub text: String,
+    pub bold: Vec<std::ops::Range<usize>>,
+    pub code: Vec<std::ops::Range<usize>>,
+}
+
+pub fn note_lines(markdown: &str) -> Vec<NoteLine> {
+    let mut out = Vec::new();
+    let mut skipping = false;
+    for raw in markdown.lines() {
+        let line = raw.trim_end();
+        let (kind, rest) = if let Some(h) = line.trim_start().strip_prefix('#') {
+            (NoteKind::Heading, h.trim_start_matches('#').trim())
+        } else if let Some(b) = line
+            .trim_start()
+            .strip_prefix("- ")
+            .or_else(|| line.trim_start().strip_prefix("* "))
+        {
+            (NoteKind::Bullet, b.trim())
+        } else {
+            (NoteKind::Text, line.trim())
+        };
+        if kind == NoteKind::Heading {
+            skipping = rest.eq_ignore_ascii_case("downloads");
+        }
+        if skipping || rest.is_empty() {
+            continue;
+        }
+        out.push(inline(kind, rest));
+    }
+    out
+}
+
+fn inline(kind: NoteKind, src: &str) -> NoteLine {
+    let mut text = String::new();
+    let (mut bold, mut code) = (Vec::new(), Vec::new());
+    let (mut bold_at, mut code_at) = (None, None);
+    let mut rest = src;
+    while let Some(ch) = rest.chars().next() {
+        if code_at.is_none() && rest.starts_with("**") {
+            match bold_at.take() {
+                Some(start) => bold.push(start..text.len()),
+                None => bold_at = Some(text.len()),
+            }
+            rest = &rest[2..];
+        } else if ch == '`' {
+            match code_at.take() {
+                Some(start) => code.push(start..text.len()),
+                None => code_at = Some(text.len()),
+            }
+            rest = &rest[1..];
+        } else if ch == '['
+            && code_at.is_none()
+            && let Some((label, after)) = rest[1..].split_once("](")
+            && let Some((_, tail)) = after.split_once(')')
+        {
+            text.push_str(label);
+            rest = tail;
+        } else {
+            text.push(ch);
+            rest = &rest[ch.len_utf8()..];
+        }
+    }
+    NoteLine {
+        kind,
+        text,
+        bold,
+        code,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,6 +210,35 @@ mod tests {
         swap(&target, &new).unwrap();
         assert!(target.join("Contents/v2").exists());
         assert!(!old_path(&target).exists());
+    }
+
+    #[test]
+    fn notes_lose_their_markdown_and_the_downloads_list() {
+        let md = "## Fixed\n- **Mouse in terminal programs**: clicks reach `btop`, see [the docs](https://x).\n\n## Downloads\n- macOS: `Wiz-macOS-arm64.zip`\n\nRunning 0.26.0? Update.\n## New\nPlain text";
+        let lines = note_lines(md);
+        let texts: Vec<_> = lines.iter().map(|l| (l.kind, l.text.as_str())).collect();
+        assert_eq!(
+            texts,
+            [
+                (NoteKind::Heading, "Fixed"),
+                (
+                    NoteKind::Bullet,
+                    "Mouse in terminal programs: clicks reach btop, see the docs."
+                ),
+                (NoteKind::Heading, "New"),
+                (NoteKind::Text, "Plain text"),
+            ]
+        );
+        let b = &lines[1];
+        assert_eq!(&b.text[b.bold[0].clone()], "Mouse in terminal programs");
+        assert_eq!(&b.text[b.code[0].clone()], "btop");
+    }
+
+    #[test]
+    fn unclosed_markers_are_kept_as_plain_text() {
+        let l = &note_lines("a **b and `c")[0];
+        assert_eq!(l.text, "a b and c");
+        assert!(l.bold.is_empty() && l.code.is_empty());
     }
 
     #[test]

@@ -1,6 +1,9 @@
 //! The update notice in the tab bar and the dialog that installs a new release.
 
+use gpui::{HighlightStyle, StyledText};
+
 use super::*;
+use crate::update::{NoteKind, NoteLine};
 use crate::widgets::{close_button, dialog, dialog_header};
 
 impl Workspace {
@@ -89,12 +92,19 @@ impl Workspace {
             return div().into_any_element();
         };
         let page = r.page.clone();
+        let lines = crate::update::note_lines(&r.notes);
+        let close = if busy {
+            div().into_any_element()
+        } else {
+            close_button("update-close", "Later (Esc)")
+                .on_click(cx.listener(|t, _, _, cx| t.close_update(cx)))
+                .into_any_element()
+        };
         div()
             .map(|d| dialog(d, 460.))
             .child(dialog_header(
                 format!("Wiz {} is available", r.version),
-                close_button("update-close", "Later (Esc)")
-                    .on_click(cx.listener(|t, _, _, cx| t.close_update(cx))),
+                close,
             ))
             .child(
                 div()
@@ -104,13 +114,12 @@ impl Workspace {
                     .p_2()
                     .rounded(px(3.))
                     .bg(c(palette().panel))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
                     .text_xs()
-                    .whitespace_normal()
-                    .child(if r.notes.trim().is_empty() {
-                        "No notes for this release.".to_string()
-                    } else {
-                        r.notes
-                    }),
+                    .when(lines.is_empty(), |d| d.child("No notes for this release."))
+                    .children(lines.into_iter().map(note_line)),
             )
             .child(
                 div()
@@ -134,10 +143,12 @@ impl Workspace {
                             .on_click(move |_, _, cx| cx.open_url(&page)),
                     )
                     .child(div().flex_1())
-                    .child(
-                        button("update-later", "Later")
-                            .on_click(cx.listener(|t, _, _, cx| t.close_update(cx))),
-                    )
+                    .when(!busy, |d| {
+                        d.child(
+                            button("update-later", "Later")
+                                .on_click(cx.listener(|t, _, _, cx| t.close_update(cx))),
+                        )
+                    })
                     .child(if busy {
                         button("update-go", "Updating...")
                     } else {
@@ -146,5 +157,49 @@ impl Workspace {
                     }),
             )
             .into_any_element()
+    }
+}
+
+fn note_line(line: NoteLine) -> Div {
+    let mut cuts: Vec<usize> = line
+        .bold
+        .iter()
+        .chain(&line.code)
+        .flat_map(|r| [r.start, r.end])
+        .collect();
+    cuts.sort_unstable();
+    cuts.dedup();
+    let styles = cuts.windows(2).filter_map(|w| {
+        let range = w[0]..w[1];
+        let inside = |rs: &[std::ops::Range<usize>]| {
+            rs.iter()
+                .any(|r| r.start <= range.start && range.end <= r.end)
+        };
+        let (bold, code) = (inside(&line.bold), inside(&line.code));
+        (bold || code).then(|| {
+            (
+                range,
+                HighlightStyle {
+                    font_weight: bold.then_some(FontWeight::SEMIBOLD),
+                    color: code.then(|| c(accent_text())),
+                    background_color: code.then(|| c(palette().hover)),
+                    ..Default::default()
+                },
+            )
+        })
+    });
+    let text = StyledText::new(line.text.clone()).with_highlights(styles);
+    match line.kind {
+        NoteKind::Heading => div()
+            .mt_1()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .child(text),
+        NoteKind::Bullet => div()
+            .flex()
+            .gap_2()
+            .child(div().text_color(c(palette().muted)).child("•"))
+            .child(div().flex_1().min_w_0().child(text)),
+        NoteKind::Text => div().child(text),
     }
 }
