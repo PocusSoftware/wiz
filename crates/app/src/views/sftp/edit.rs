@@ -5,6 +5,21 @@ use super::*;
 /// Largest file opened for editing; bigger ones are better downloaded.
 const EDIT_MAX: u64 = 64 << 20;
 
+const BINARY: &[&str] = &[
+    "7z", "a", "apk", "avi", "bin", "bmp", "bz2", "class", "db", "deb", "dll", "dmg", "doc",
+    "docx", "dylib", "exe", "flac", "gif", "gz", "heic", "ico", "img", "iso", "jar", "jpeg", "jpg",
+    "lz", "lzma", "m4a", "mkv", "mov", "mp3", "mp4", "msi", "o", "odt", "ogg", "otf", "pdf", "pkg",
+    "png", "ppt", "pptx", "pyc", "rar", "rpm", "so", "sqlite", "tar", "tgz", "tif", "tiff", "ttf",
+    "war", "wasm", "wav", "webm", "webp", "woff", "woff2", "xls", "xlsx", "xz", "z", "zip", "zst",
+];
+
+fn is_binary(name: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| BINARY.contains(&e.to_ascii_lowercase().as_str()))
+}
+
 impl SftpView {
     /// Open `path` in the configured editor; a failure (no such program) shows on `side`.
     fn launch_editor(&mut self, side: Side, path: &std::path::Path, cx: &mut Context<Self>) {
@@ -25,6 +40,13 @@ impl SftpView {
         size: u64,
         cx: &mut Context<Self>,
     ) {
+        if is_binary(&name) {
+            self.pane_mut(side).error = Some(
+                format!("{name} is not a text file, so it doesn't open in the editor.").into(),
+            );
+            cx.notify();
+            return;
+        }
         let remote = match &self.pane(side).source {
             Source::Local => {
                 self.launch_editor(side, std::path::Path::new(&path), cx);

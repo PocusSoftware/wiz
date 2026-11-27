@@ -302,6 +302,28 @@ fn delete_asks_with_the_button_focused(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn archives_and_other_binaries_do_not_open_in_the_editor(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["backup.zip", "logs.TAR.GZ"]);
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    for ix in 0..2 {
+        view.update(cx, |v, cx| {
+            v.left.error = None;
+            v.open_dir(Side::Left, ix, cx);
+        });
+        view.read_with(cx, |v, _| {
+            let err = v.left.error.as_deref().unwrap_or_default();
+            assert!(err.contains("not a text file"), "{err}");
+            assert!(v.edits.is_empty());
+        });
+    }
+}
+
+#[gpui::test]
 fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let dir = tempfile::tempdir().unwrap();
