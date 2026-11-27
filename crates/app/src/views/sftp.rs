@@ -15,10 +15,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use gpui::{
-    ClickEvent, Context, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, FontWeight,
-    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, NavigationDirection, Render,
-    ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, prelude::*, px,
-    uniform_list,
+    ClickEvent, Context, DragMoveEvent, Entity, EventEmitter, ExternalPaths, FocusHandle,
+    Focusable, FontWeight, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
+    NavigationDirection, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    div, prelude::*, px, relative, uniform_list,
 };
 use ssh_core::config::Host;
 use ssh_core::sftp::{self, Entry, Progress, Sftp, local};
@@ -318,7 +318,18 @@ pub struct SftpView {
     transfers: Vec<Transfer>,
     next_id: u64,
     edits: Vec<Edit>,
+    split: f32,
 }
+
+struct SplitDrag;
+
+impl Render for SplitDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
+
+const MIN_SPLIT: f32 = 0.2;
 
 enum EState {
     Downloading,
@@ -417,6 +428,7 @@ impl SftpView {
             transfers: vec![],
             next_id: 1,
             edits: vec![],
+            split: 0.5,
         };
         // Speed and auto-dismiss ticker.
         cx.spawn(async move |this, cx| {
@@ -527,34 +539,23 @@ impl Focusable for SftpView {
 
 impl Render for SftpView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mid = div()
-            .w(px(30.))
+        let divider = div()
+            .id("sftp-split")
+            .w(px(5.))
             .h_full()
             .flex_none()
             .flex()
-            .flex_col()
-            .items_center()
             .justify_center()
-            .gap_1()
-            .bg(c(palette().panel))
-            .child(
-                icon_button(
-                    "xfer-up",
-                    "arrow-right",
-                    "Copy selected to the right pane (F5)",
-                    accent_text(),
-                )
-                .on_click(cx.listener(|t, _, _, cx| t.begin_transfer(Side::Left, cx))),
-            )
-            .child(
-                icon_button(
-                    "xfer-down",
-                    "arrow-left",
-                    "Copy selected to the left pane (F5)",
-                    accent_text(),
-                )
-                .on_click(cx.listener(|t, _, _, cx| t.begin_transfer(Side::Right, cx))),
-            );
+            .cursor_col_resize()
+            .hover(|s| s.bg(c(palette().hover)))
+            .child(div().w(px(1.)).h_full().bg(c(palette().border)))
+            .on_drag(SplitDrag, |_, _, _, cx| cx.new(|_| SplitDrag))
+            .on_click(cx.listener(|t, ev: &ClickEvent, _, cx| {
+                if ev.click_count() >= 2 {
+                    t.split = 0.5;
+                    cx.notify();
+                }
+            }));
         div()
             .size_full()
             .flex()
@@ -564,9 +565,32 @@ impl Render for SftpView {
                     .flex_1()
                     .min_h_0()
                     .flex()
-                    .child(self.pane_view(Side::Left, cx))
-                    .child(mid)
-                    .child(self.pane_view(Side::Right, cx)),
+                    .on_drag_move::<SplitDrag>(cx.listener(
+                        |t, ev: &DragMoveEvent<SplitDrag>, _, cx| {
+                            let b = ev.bounds;
+                            let at = (ev.event.position.x - b.left()) / b.size.width;
+                            t.split = at.clamp(MIN_SPLIT, 1. - MIN_SPLIT);
+                            cx.notify();
+                        },
+                    ))
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex_basis(relative(self.split))
+                            .min_w_0()
+                            .h_full()
+                            .flex()
+                            .child(self.pane_view(Side::Left, cx)),
+                    )
+                    .child(divider)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .flex()
+                            .child(self.pane_view(Side::Right, cx)),
+                    ),
             )
             .children(self.prompt_bar(cx))
             .children(self.edit_bar(cx))

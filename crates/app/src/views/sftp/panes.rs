@@ -295,7 +295,20 @@ impl SftpView {
                     palette().muted,
                 )
                 .on_click(cx.listener(move |t, _, w, cx| t.ask_new_folder(side, w, cx))),
-            );
+            )
+            .child({
+                let (arrow, to) = match side {
+                    Side::Left => ("arrow-right", "right"),
+                    Side::Right => ("arrow-left", "left"),
+                };
+                icon_button(
+                    (side.tag(), 1006usize),
+                    arrow,
+                    format!("Copy selected to the {to} pane (F5)"),
+                    accent_text(),
+                )
+                .on_click(cx.listener(move |t, _, _, cx| t.begin_transfer(side, cx)))
+            });
 
         let list = uniform_list(
             (side.tag(), 2000usize),

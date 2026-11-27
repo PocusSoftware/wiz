@@ -403,7 +403,7 @@ impl SftpView {
                     div().w(px(140.)).h(px(6.)).flex_none().bg(c(palette().active)).child(
                         div()
                             .h_full()
-                            .w(gpui::relative(if matches!(tr.state, TState::Done) {
+                            .w(relative(if matches!(tr.state, TState::Done) {
                                 1.0
                             } else {
                                 frac

@@ -66,6 +66,46 @@ fn keys_and_clicks_reach_the_right_pane(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_line_between_the_panes_can_be_dragged(cx: &mut TestAppContext) {
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    cx.simulate_resize(size(px(1000.), px(600.)));
+    cx.run_until_parked();
+    let none = Modifiers::default();
+    let at = |x: f32| point(px(x), px(300.));
+    cx.simulate_mouse_down(at(500.), MouseButton::Left, none);
+    for x in [480., 400., 300.] {
+        cx.simulate_mouse_move(at(x), MouseButton::Left, none);
+    }
+    cx.simulate_mouse_up(at(300.), MouseButton::Left, none);
+    let split = view.read_with(cx, |v, _| v.split);
+    assert!((split - 0.3).abs() < 0.02, "{split}");
+    // It stops before a pane gets too narrow to use.
+    cx.simulate_mouse_down(at(300.), MouseButton::Left, none);
+    for x in [280., 100., 0.] {
+        cx.simulate_mouse_move(at(x), MouseButton::Left, none);
+    }
+    cx.simulate_mouse_up(at(0.), MouseButton::Left, none);
+    assert_eq!(view.read_with(cx, |v, _| v.split), MIN_SPLIT);
+    // A double click puts it back in the middle.
+    cx.simulate_click(at(200.), none);
+    cx.simulate_event(MouseDownEvent {
+        position: at(200.),
+        button: MouseButton::Left,
+        modifiers: none,
+        click_count: 2,
+        first_mouse: false,
+    });
+    cx.simulate_event(gpui::MouseUpEvent {
+        position: at(200.),
+        button: MouseButton::Left,
+        modifiers: none,
+        click_count: 2,
+    });
+    assert_eq!(view.read_with(cx, |v, _| v.split), 0.5);
+}
+
+#[gpui::test]
 fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let dir = tempfile::tempdir().unwrap();
