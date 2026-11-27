@@ -107,7 +107,7 @@ pub(super) fn sections() -> Vec<(&'static str, Vec<Row>)> {
             named("Jump to a name", &["Type it"]),
             row("Select all", &[view_shortcut(false, "A")]),
             row("Refresh", &[view_shortcut(false, "R")]),
-            row("Filter this folder", &[view_shortcut(false, "F")]),
+            row("Search this folder", &[view_shortcut(false, "F")]),
             row("New folder", &[view_shortcut(true, "N")]),
             named("Rename", &["F2"]),
             named("Copy to the other side", &["F5"]),

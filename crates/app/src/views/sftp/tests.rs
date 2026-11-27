@@ -207,6 +207,24 @@ fn settle_search(cx: &mut gpui::VisualTestContext, view: &Entity<SftpView>) {
 }
 
 #[gpui::test]
+fn the_search_button_opens_and_closes_the_search_bar(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["alpha"]);
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    view.update_in(cx, |v, w, cx| v.toggle_filter(Side::Left, w, cx));
+    assert!(view.read_with(cx, |v, _| v.left.filter.is_some()));
+    cx.simulate_input("alp");
+    view.update_in(cx, |v, w, cx| v.toggle_filter(Side::Left, w, cx));
+    view.read_with(cx, |v, _| {
+        assert!(v.left.filter.is_none() && v.left.query.is_empty());
+    });
+}
+
+#[gpui::test]
 fn the_filter_searches_subfolders(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let dir = folder_with(&["alpha", "beta"]);

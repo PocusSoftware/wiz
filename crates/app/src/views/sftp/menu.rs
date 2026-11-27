@@ -137,7 +137,7 @@ impl SftpView {
                 item(
                     "ctx-filter",
                     "search",
-                    "Filter this folder",
+                    "Search this folder",
                     crate::platform::view_shortcut(false, "F").into(),
                     Self::open_filter,
                 )
@@ -192,7 +192,7 @@ impl SftpView {
         let input = match &self.pane(side).filter {
             Some(input) => input.clone(),
             None => {
-                let input = cx.new(|cx| TextInput::new("Filter this folder", false, cx));
+                let input = cx.new(|cx| TextInput::new("Search this folder", false, cx));
                 cx.subscribe(&input, move |t, input, _: &InputEvent, cx| {
                     let q = input.read(cx).value().to_lowercase();
                     let p = t.pane_mut(side);
@@ -210,6 +210,20 @@ impl SftpView {
         };
         window.focus(&input.focus_handle(cx), cx);
         cx.notify();
+    }
+
+    /// The search button: opens the search bar, or closes it when open.
+    pub(super) fn toggle_filter(
+        &mut self,
+        side: Side,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pane(side).filter.is_some() {
+            self.close_filter(side, window, cx);
+        } else {
+            self.open_filter(side, window, cx);
+        }
     }
 
     fn close_filter(&mut self, side: Side, window: &mut Window, cx: &mut Context<Self>) {
@@ -276,7 +290,7 @@ impl SftpView {
                     icon_button(
                         (side.tag(), 1007usize),
                         "x",
-                        "Clear filter (Esc)",
+                        "Close search (Esc)",
                         palette().muted,
                     )
                     .on_click(cx.listener(move |t, _, w, cx| t.close_filter(side, w, cx))),

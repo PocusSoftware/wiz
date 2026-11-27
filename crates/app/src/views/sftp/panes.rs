@@ -268,6 +268,19 @@ impl SftpView {
             .child(div().flex_1().min_w_0().child(p.input.clone()))
             .child(
                 icon_button(
+                    (side.tag(), 1009usize),
+                    "search",
+                    format!("Search ({})", crate::platform::view_shortcut(false, "F")),
+                    if p.filter.is_some() {
+                        accent_text()
+                    } else {
+                        palette().muted
+                    },
+                )
+                .on_click(cx.listener(move |t, _, w, cx| t.toggle_filter(side, w, cx))),
+            )
+            .child(
+                icon_button(
                     (side.tag(), 1003usize),
                     "refresh",
                     format!("Refresh ({})", crate::platform::view_shortcut(false, "R")),
