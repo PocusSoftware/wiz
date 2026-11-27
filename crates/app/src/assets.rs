@@ -15,6 +15,9 @@ macro_rules! icons {
 
 icons!(
     "plus",
+    "rotate-ccw",
+    "zap",
+    "download",
     "x",
     "pencil",
     "copy",
