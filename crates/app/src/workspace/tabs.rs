@@ -456,96 +456,127 @@ impl Workspace {
                     .items_center()
                     // Touching buttons share their edge pixel, and a click there hit both.
                     .gap(px(1.))
-                    .children(self.latency_label())
-                    .when(
-                        prefs.show_split_button()
-                            && self.page == Page::Tab
-                            && matches!(
-                                self.tabs.get(self.active).map(|t| &t.kind),
-                                Some(TabKind::Terminal(_))
-                            ),
-                        |d| {
-                            d.child(
-                                icon_button(
-                                    "split-btn",
-                                    "columns",
-                                    format!(
-                                        "Split terminal ({} splits the same server, {} picks one)",
-                                        crate::shortcuts::label("split"),
-                                        crate::shortcuts::label("split_menu")
-                                    ),
-                                    palette().muted,
-                                )
-                                .on_click(cx.listener(
-                                    |t, ev: &ClickEvent, w, cx| {
-                                        t.open_split_menu(Some(ev.position()), w, cx)
-                                    },
-                                )),
-                            )
-                        },
-                    )
-                    .when(prefs.show_quick_connect_button(), |d| {
-                        d.child(
-                            icon_button(
-                                "quick-btn",
-                                "arrow-right",
-                                format!(
-                                    "Quick connect ({})",
-                                    crate::shortcuts::label("quick_connect")
-                                ),
-                                palette().muted,
-                            )
-                            .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx))),
-                        )
-                    })
-                    .when(prefs.show_privacy_button(), |d| {
-                        d.child(
-                            icon_button(
-                                "hide-btn",
-                                if privacy::hide() { "eye-off" } else { "eye" },
-                                "Hide sensitive information",
-                                if privacy::hide() {
-                                    accent_text()
-                                } else {
-                                    palette().muted
-                                },
-                            )
-                            .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx))),
-                        )
-                    })
-                    .children(self.update_chip(cx))
-                    .child(
-                        icon_button(
-                            "help-btn",
-                            "keyboard",
-                            format!("Keyboard shortcuts ({})", crate::shortcuts::label("help")),
-                            if matches!(self.overlay, Some(Overlay::Help)) {
-                                accent_text()
-                            } else {
-                                palette().muted
-                            },
-                        )
-                        .on_click(cx.listener(|t, _, w, cx| t.toggle_help(w, cx))),
-                    )
-                    .child(
-                        icon_button(
-                            "settings-btn",
-                            "sliders",
-                            if self.page == Page::Settings {
-                                "Close settings (Esc)".to_string()
-                            } else {
-                                format!("Settings ({})", crate::shortcuts::label("settings"))
-                            },
-                            if self.page == Page::Settings {
-                                accent_text()
-                            } else {
-                                palette().muted
-                            },
-                        )
-                        .on_click(cx.listener(|t, _, w, cx| t.toggle_settings(w, cx))),
-                    ),
+                    .children(self.titlebar_buttons(cx)),
             )
             .children(trail)
+    }
+
+    /// The buttons at the right of the tab bar, in groups split by a thin line: the
+    /// terminal in front, the whole window, then the app.
+    fn titlebar_buttons(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let prefs = crate::prefs::get();
+        let mut session: Vec<AnyElement> = self.latency_label().into_iter().collect();
+        if prefs.show_split_button()
+            && self.page == Page::Tab
+            && matches!(
+                self.tabs.get(self.active).map(|t| &t.kind),
+                Some(TabKind::Terminal(_))
+            )
+        {
+            session.push(
+                icon_button(
+                    "split-btn",
+                    "columns",
+                    format!(
+                        "Split terminal ({} splits the same server, {} picks one)",
+                        crate::shortcuts::label("split"),
+                        crate::shortcuts::label("split_menu")
+                    ),
+                    palette().muted,
+                )
+                .on_click(cx.listener(|t, ev: &ClickEvent, w, cx| {
+                    t.open_split_menu(Some(ev.position()), w, cx)
+                }))
+                .into_any_element(),
+            );
+        }
+        let mut window = Vec::new();
+        if prefs.show_quick_connect_button() {
+            window.push(
+                icon_button(
+                    "quick-btn",
+                    "zap",
+                    format!(
+                        "Quick connect ({})",
+                        crate::shortcuts::label("quick_connect")
+                    ),
+                    palette().muted,
+                )
+                .on_click(cx.listener(|t, _, w, cx| t.open_quick(w, cx)))
+                .into_any_element(),
+            );
+        }
+        if prefs.show_privacy_button() {
+            window.push(
+                icon_button(
+                    "hide-btn",
+                    if privacy::hide() { "eye-off" } else { "eye" },
+                    "Hide sensitive information",
+                    if privacy::hide() {
+                        accent_text()
+                    } else {
+                        palette().muted
+                    },
+                )
+                .on_click(cx.listener(|t, _, _, cx| t.toggle_hide(cx)))
+                .into_any_element(),
+            );
+        }
+        let mut app: Vec<AnyElement> = self
+            .update_chip(cx)
+            .map(IntoElement::into_any_element)
+            .into_iter()
+            .collect();
+        app.push(
+            icon_button(
+                "help-btn",
+                "keyboard",
+                format!("Keyboard shortcuts ({})", crate::shortcuts::label("help")),
+                if matches!(self.overlay, Some(Overlay::Help)) {
+                    accent_text()
+                } else {
+                    palette().muted
+                },
+            )
+            .on_click(cx.listener(|t, _, w, cx| t.toggle_help(w, cx)))
+            .into_any_element(),
+        );
+        app.push(
+            icon_button(
+                "settings-btn",
+                "sliders",
+                if self.page == Page::Settings {
+                    "Close settings (Esc)".to_string()
+                } else {
+                    format!("Settings ({})", crate::shortcuts::label("settings"))
+                },
+                if self.page == Page::Settings {
+                    accent_text()
+                } else {
+                    palette().muted
+                },
+            )
+            .on_click(cx.listener(|t, _, w, cx| t.toggle_settings(w, cx)))
+            .into_any_element(),
+        );
+        let mut out = Vec::new();
+        for group in [session, window, app] {
+            if group.is_empty() {
+                continue;
+            }
+            if !out.is_empty() {
+                out.push(
+                    div()
+                        .w(px(1.))
+                        .h(px(14.))
+                        .mx(px(4.))
+                        .bg(c(palette().border_variant))
+                        .into_any_element(),
+                );
+            }
+            out.extend(group);
+        }
+        out
     }
 
     /// The window buttons, at the end of the tab bar picked in settings. They sit above the
