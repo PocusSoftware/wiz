@@ -78,6 +78,32 @@ impl SettingsView {
                     .child(
                         button("open-file", "Open settings file")
                             .on_click(cx.listener(|t, _, _, cx| t.open_file(cx))),
+                    )
+                    .child(
+                        match self.update_check.clone().or_else(|| {
+                            crate::update::available().map(|r| UpdateCheck::Found(r.version))
+                        }) {
+                            Some(UpdateCheck::Checking) => button("check-update", "Checking..."),
+                            Some(UpdateCheck::Found(v)) => {
+                                primary_button("check-update", &format!("Update to {v}")).on_click(
+                                    cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::OpenUpdate)),
+                                )
+                            }
+                            _ => button("check-update", "Check for updates")
+                                .on_click(cx.listener(|t, _, _, cx| t.check_for_updates(cx))),
+                        },
+                    )
+                    .when_some(
+                        match &self.update_check {
+                            Some(UpdateCheck::UpToDate) => {
+                                Some(("Wiz is up to date".to_string(), palette().muted))
+                            }
+                            Some(UpdateCheck::Failed(e)) => Some((e.clone(), danger())),
+                            _ => None,
+                        },
+                        |d, (text, color)| {
+                            d.child(div().px_2().text_xs().text_color(c(color)).child(text))
+                        },
                     ),
             )
             .child(
@@ -92,6 +118,31 @@ impl SettingsView {
                     .child(format!("Wiz {}", crate::version()))
                     .child("Changes save automatically"),
             )
+    }
+
+    fn check_for_updates(&mut self, cx: &mut Context<Self>) {
+        self.update_check = Some(UpdateCheck::Checking);
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let r = cx
+                .background_executor()
+                .spawn(async { wiz_core::update::newer_release() })
+                .await;
+            this.update(cx, |t, cx| {
+                t.update_check = Some(match r {
+                    Ok(Some(release)) => {
+                        let version = release.version.clone();
+                        crate::update::set_available(release, cx);
+                        UpdateCheck::Found(version)
+                    }
+                    Ok(None) => UpdateCheck::UpToDate,
+                    Err(e) => UpdateCheck::Failed(e.to_string()),
+                });
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Back to the defaults. The secret store stays: switching it means moving secrets.

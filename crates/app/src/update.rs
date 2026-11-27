@@ -18,6 +18,11 @@ pub fn available() -> Option<Release> {
     FOUND.lock().unwrap_or_else(PoisonError::into_inner).clone()
 }
 
+pub fn set_available(r: Release, cx: &mut App) {
+    *FOUND.lock().unwrap_or_else(PoisonError::into_inner) = Some(r);
+    cx.refresh_windows();
+}
+
 pub fn start(cx: &mut App) {
     let Some(target) = platform::update_target() else {
         return;
@@ -36,8 +41,7 @@ pub fn start(cx: &mut App) {
                 .spawn(async { update::newer_release() })
                 .await
             {
-                *FOUND.lock().unwrap_or_else(PoisonError::into_inner) = Some(r);
-                cx.update(App::refresh_windows);
+                cx.update(|cx| set_available(r, cx));
             }
         }
     })

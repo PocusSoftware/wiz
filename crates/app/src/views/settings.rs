@@ -31,6 +31,15 @@ pub enum SettingsEvent {
     ChangeMaster,
     /// Escape: back to the page Settings was opened from.
     Close,
+    OpenUpdate,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum UpdateCheck {
+    Checking,
+    UpToDate,
+    Found(String),
+    Failed(String),
 }
 
 impl EventEmitter<SettingsEvent> for SettingsView {}
@@ -93,6 +102,7 @@ pub struct SettingsView {
     picker: accent::Picker,
     /// "Reset to defaults" was clicked and waits for a yes.
     confirm_reset: bool,
+    update_check: Option<UpdateCheck>,
     /// The accent color as #RRGGBB.
     accent: Entity<TextInput>,
     /// Known editors that are installed (`platform::installed_editors`).
@@ -143,6 +153,7 @@ impl SettingsView {
             accent: make("#f05a29", cx),
             picker: Default::default(),
             confirm_reset: false,
+            update_check: None,
             editors: crate::platform::installed_editors(),
             error: None,
             recording: None,

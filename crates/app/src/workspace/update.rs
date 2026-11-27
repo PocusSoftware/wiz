@@ -32,7 +32,7 @@ impl Workspace {
         )
     }
 
-    fn open_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.overlay.is_some() {
             return;
         }

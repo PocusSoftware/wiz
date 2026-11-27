@@ -550,6 +550,7 @@ impl Workspace {
                         this.set_status("Secrets file locked.", false);
                     }
                     SettingsEvent::ChangeMaster => this.show_unlock(UnlockMode::Change, window, cx),
+                    SettingsEvent::OpenUpdate => this.open_update(window, cx),
                 }
                 this.settings_changed(cx)
             })
