@@ -150,7 +150,7 @@ impl SettingsView {
             onepassword: crate::platform::ONEPASSWORD_AGENT
                 .filter(|p| wiz_core::config::expand_home(p).exists()),
             shortcut_search: make("Search shortcuts", cx),
-            accent: make("#f05a29", cx),
+            accent: make("#3a63ec", cx),
             picker: Default::default(),
             confirm_reset: false,
             update_check: None,

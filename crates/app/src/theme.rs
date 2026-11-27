@@ -148,12 +148,8 @@ static PALETTES: [Palette; 4] = [DARK, DARK_HIGH, LIGHT, LIGHT_HIGH];
 
 pub const TITLEBAR_H: f32 = 30.0;
 
-/// Orange, the colorful accent unless settings.toml picks another (`accent_color`).
-pub const DEFAULT_ACCENT: u32 = 0xf05a29;
-/// The default's hand-picked shades on the dark theme: for text and icons, and for the
-/// terminal selection.
-const DEFAULT_ACCENT_TEXT: u32 = 0xf87c49;
-const DEFAULT_SELECTION: u32 = 0x4a2a1e;
+/// Blue, the colorful accent unless settings.toml picks another (`accent_color`).
+pub const DEFAULT_ACCENT: u32 = 0x3a63ec;
 
 /// What the palette is picked from: the settings, and what the system uses.
 struct Look {
@@ -295,13 +291,10 @@ pub fn accent() -> u32 {
 }
 
 /// Accent text and icons: lighter on dark colors and darker on light ones, so they read on
-/// the background. The default orange keeps its hand-picked shade on the dark theme.
+/// the background.
 pub fn accent_text() -> u32 {
     let rgb = accent();
     let dark = is_dark();
-    if rgb == DEFAULT_ACCENT && dark && !is_high() {
-        return DEFAULT_ACCENT_TEXT;
-    }
     let amount = if is_high() { 0.4 } else { 0.2 };
     mix(rgb, if dark { 0xffffff } else { 0x000000 }, amount)
 }
@@ -320,11 +313,7 @@ pub fn on_accent() -> u32 {
 
 /// Selected text in the terminal: the accent mixed into the background.
 pub fn selection() -> u32 {
-    let rgb = accent();
-    if rgb == DEFAULT_ACCENT && is_dark() && !is_high() {
-        return DEFAULT_SELECTION;
-    }
-    mix(rgb, palette().bg, if is_high() { 0.6 } else { 0.72 })
+    mix(accent(), palette().bg, if is_high() { 0.6 } else { 0.72 })
 }
 
 /// The accent see-through: focus borders, selected rows and text, drop targets.
@@ -425,12 +414,8 @@ mod tests {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         set_monochrome(false);
-        // The default keeps its hand-picked shades.
+        // Mixed: lighter toward white, darker toward the background.
         set_accent(DEFAULT_ACCENT);
-        assert_eq!(accent_text(), 0xf87c49);
-        assert_eq!(selection(), 0x4a2a1e);
-        // Others are mixed: lighter toward white, darker toward the background.
-        set_accent(0x3a63ec);
         assert_eq!(accent(), 0x3a63ec);
         assert_eq!(accent_text(), 0x6182f0);
         assert_eq!(selection(), 0x17234a);
@@ -470,8 +455,8 @@ mod tests {
         set_look(Appearance::Light, Contrast::Standard);
         set_monochrome(false);
         set_accent(DEFAULT_ACCENT);
-        assert_eq!(accent_text(), 0xc04821);
-        assert_eq!(selection(), 0xf2c7b8);
+        assert_eq!(accent_text(), 0x2e4fbd);
+        assert_eq!(selection(), 0xbfcaee);
         // The gray theme's accent turns dark, so it shows on white.
         set_monochrome(true);
         assert_eq!(accent(), 0x2f2f31);

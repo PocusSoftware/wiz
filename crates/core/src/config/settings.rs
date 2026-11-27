@@ -155,8 +155,8 @@ getters! {
     contrast: Contrast = Contrast::System;
     terminal_font_size: f32 = 13.0;
     animations: bool = true;
-    colorful: bool = false;
-    accent_color: String = "#f05a29".into();
+    colorful: bool = true;
+    accent_color: String = "#3a63ec".into();
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
     show_os_logos: bool = true;
@@ -223,17 +223,11 @@ impl Settings {
             .unwrap_or_default()
     }
 
-    /// Read `settings.toml` text. Files from before the gray theme was the default keep
-    /// their look: `monochrome_icons` decides, and otherwise a picked accent means colorful.
+    /// Read `settings.toml` text. Files from before `colorful` keep their look through
+    /// `monochrome_icons`.
     pub fn parse(text: &str) -> Option<Self> {
         let mut s: Self = toml::from_str(text).ok()?;
-        if s.colorful.is_none() {
-            s.colorful = match s.monochrome_icons {
-                Some(mono) => Some(!mono),
-                None => s.accent_color.is_some().then_some(true),
-            };
-        }
-        s.monochrome_icons = None;
+        s.colorful = s.colorful.or(s.monochrome_icons.take().map(|mono| !mono));
         Some(s)
     }
 }

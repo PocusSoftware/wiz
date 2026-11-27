@@ -16,11 +16,11 @@ const HUE_H: f32 = 14.;
 
 /// Colors offered as swatches, the default first.
 const SWATCHES: &[(&str, u32)] = &[
-    ("Orange", DEFAULT_ACCENT),
+    ("Blue", DEFAULT_ACCENT),
+    ("Orange", 0xf05a29),
     ("Red", 0xe5484d),
     ("Pink", 0xd6409f),
     ("Purple", 0x8e4ec6),
-    ("Blue", 0x3a63ec),
     ("Sky", 0x0090ff),
     ("Teal", 0x12a594),
     ("Green", 0x46a758),

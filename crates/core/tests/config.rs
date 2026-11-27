@@ -18,7 +18,7 @@ fn settings_defaults_and_roundtrip() {
     );
     assert!(d.secret_file_patterns().iter().any(|p| p == ".env"));
     assert_eq!(d.window_controls(), WindowControls::Right);
-    assert_eq!(d.accent_color(), "#f05a29");
+    assert_eq!(d.accent_color(), "#3a63ec");
     assert!(!d.oled_black());
     assert!(!d.show_latency() && d.show_split_button() && d.show_privacy_button());
 
@@ -53,16 +53,15 @@ fn settings_defaults_and_roundtrip() {
 }
 
 #[test]
-fn gray_theme_is_the_default_and_old_files_keep_their_look() {
+fn colorful_is_the_default_and_old_files_keep_their_look() {
     let colorful = |text: &str| Settings::parse(text).unwrap().colorful();
-    assert!(!Settings::default().colorful());
-    assert!(!colorful(""));
-    // From before `colorful`: monochrome icons decide, else a picked accent means color.
+    assert!(Settings::default().colorful());
+    assert!(colorful(""));
+    // From before `colorful`: monochrome icons decide.
     assert!(!colorful(
         "monochrome_icons = true\naccent_color = \"#ffffff\""
     ));
     assert!(colorful("monochrome_icons = false"));
-    assert!(colorful("accent_color = \"#3e63dd\""));
     // Once written, `colorful` wins.
     assert!(!colorful("colorful = false\naccent_color = \"#3e63dd\""));
     assert!(colorful("colorful = true\nmonochrome_icons = true"));
