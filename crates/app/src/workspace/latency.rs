@@ -30,9 +30,10 @@ impl Workspace {
         cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor().timer(EVERY).await;
-                let Ok(conn) = this.update(cx, |t, _| {
-                    t.focused_conn()
-                        .filter(|_| crate::prefs::get().show_latency())
+                let Ok(conn) = this.update_in(cx, |t, window, _| {
+                    t.focused_conn().filter(|_| {
+                        window.is_window_active() && crate::prefs::get().latency_shown()
+                    })
                 }) else {
                     return; // the window closed
                 };
@@ -66,7 +67,7 @@ impl Workspace {
     pub(super) fn latency_label(&self) -> Option<AnyElement> {
         let ms = self
             .latency
-            .filter(|_| crate::prefs::get().show_latency() && self.focused_conn().is_some())?;
+            .filter(|_| crate::prefs::get().latency_shown() && self.focused_conn().is_some())?;
         Some(
             div()
                 .id("latency")

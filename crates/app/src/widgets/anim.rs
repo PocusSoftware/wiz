@@ -4,7 +4,7 @@ use std::time::Duration;
 
 /// Duration in ms, or effectively instant when animations are switched off.
 fn ms(n: u64) -> Duration {
-    if crate::prefs::get().animations() {
+    if crate::prefs::get().animate() {
         Duration::from_millis(n)
     } else {
         Duration::from_millis(1)
@@ -95,7 +95,7 @@ impl Spring {
         self.velocity += (-k * (self.value - self.target) - c * self.velocity) * dt;
         self.value += self.velocity * dt;
         let settled = (self.value - self.target).abs() < 1e-3 && self.velocity.abs() < 1e-2;
-        if settled || !crate::prefs::get().animations() {
+        if settled || !crate::prefs::get().animate() {
             *self = Self::new(self.target);
             return false;
         }

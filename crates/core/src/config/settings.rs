@@ -61,6 +61,9 @@ pub struct Settings {
     pub terminal_font: Option<String>,
     pub terminal_font_size: Option<f32>,
     pub animations: Option<bool>,
+    /// Turns off animations, blur and the latency display, and reloads Docker and logs
+    /// less often, without changing those settings.
+    pub energy_saver: Option<bool>,
     /// The accent color and colored icons and status dots. Off is the gray and white theme.
     pub colorful: Option<bool>,
     /// Color of buttons, the active tab, the cursor and focus when colorful, as "#RRGGBB".
@@ -159,6 +162,7 @@ getters! {
     contrast: Contrast = Contrast::System;
     terminal_font_size: f32 = 13.0;
     animations: bool = true;
+    energy_saver: bool = false;
     colorful: bool = true;
     accent_color: String = "#3a63ec".into();
     window_controls: WindowControls = WindowControls::Right;
@@ -204,6 +208,31 @@ getters! {
     shortcuts: BTreeMap<String, String> = BTreeMap::new();
     secret_store: String = "keychain".into();
     agent_socket: String = String::new();
+}
+
+/// What energy saver turns off or slows down, on top of the saved settings.
+impl Settings {
+    pub fn animate(&self) -> bool {
+        self.animations() && !self.energy_saver()
+    }
+
+    pub fn latency_shown(&self) -> bool {
+        self.show_latency() && !self.energy_saver()
+    }
+
+    pub fn blur_shown(&self) -> bool {
+        self.blur() && !self.energy_saver()
+    }
+
+    pub fn docker_poll_secs(&self) -> u32 {
+        self.docker_refresh_secs()
+            .max(if self.energy_saver() { 15 } else { 1 })
+    }
+
+    pub fn log_poll_secs(&self) -> u32 {
+        self.log_refresh_secs()
+            .max(if self.energy_saver() { 5 } else { 1 })
+    }
 }
 
 impl Settings {

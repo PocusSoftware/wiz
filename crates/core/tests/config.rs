@@ -19,7 +19,7 @@ fn settings_defaults_and_roundtrip() {
     assert!(d.secret_file_patterns().iter().any(|p| p == ".env"));
     assert_eq!(d.window_controls(), WindowControls::Right);
     assert_eq!(d.accent_color(), "#3a63ec");
-    assert!(!d.oled_black() && !d.blur());
+    assert!(!d.oled_black() && !d.blur() && !d.energy_saver());
     assert!(!d.show_latency() && d.show_split_button() && d.show_privacy_button());
 
     let s = Settings {
@@ -50,6 +50,25 @@ fn settings_defaults_and_roundtrip() {
     );
     // Unset fields keep their defaults.
     assert!(back.mask_ipv4() && back.mask_ports() && back.log_tail_lines() == 2000);
+}
+
+#[test]
+fn energy_saver_overrides_without_changing_the_saved_settings() {
+    let mut s = Settings {
+        show_latency: Some(true),
+        blur: Some(true),
+        docker_refresh_secs: Some(3),
+        log_refresh_secs: Some(1),
+        ..Default::default()
+    };
+    assert!(s.animate() && s.latency_shown() && s.blur_shown());
+    assert_eq!((s.docker_poll_secs(), s.log_poll_secs()), (3, 1));
+    s.energy_saver = Some(true);
+    assert!(!s.animate() && !s.latency_shown() && !s.blur_shown());
+    assert_eq!((s.docker_poll_secs(), s.log_poll_secs()), (15, 5));
+    assert!(s.animations() && s.show_latency() && s.blur());
+    s.docker_refresh_secs = Some(30);
+    assert_eq!(s.docker_poll_secs(), 30);
 }
 
 #[test]

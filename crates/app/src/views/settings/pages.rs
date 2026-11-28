@@ -131,6 +131,15 @@ impl SettingsView {
                 |s, v| s.animations = Some(v),
                 cx,
             ))
+            .child(self.toggle(
+                "a-energy",
+                "Energy saver",
+                "Turns off animations, blur and the latency display, and reloads \
+                 Docker and logs less often. Those settings stay as they are.",
+                s.energy_saver(),
+                |s, v| s.energy_saver = Some(v),
+                cx,
+            ))
             .child(self.text(
                 "Interface font",
                 "Family name. Applies after a restart.",

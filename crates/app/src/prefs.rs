@@ -13,7 +13,7 @@ fn apply(s: &Settings) {
     privacy::configure(s);
     theme::set_look(s.appearance(), s.contrast());
     theme::set_oled(s.oled_black());
-    theme::set_blur(s.blur());
+    theme::set_blur(s.blur_shown());
     theme::set_monochrome(!s.colorful());
     theme::set_accent(theme::parse_hex(&s.accent_color()).unwrap_or(theme::DEFAULT_ACCENT));
     wiz_core::secrets::set_store(wiz_core::secrets::Store::from_setting(&s.secret_store()));
