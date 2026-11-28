@@ -89,8 +89,7 @@ impl SettingsView {
             .child(self.toggle(
                 "a-blur",
                 "Blurred background",
-                "A see-through window for the dark theme, with the desktop \
-                 blurred behind it.",
+                "A see-through window with the desktop blurred behind it.",
                 s.blur(),
                 |s, v| s.blur = Some(v),
                 cx,

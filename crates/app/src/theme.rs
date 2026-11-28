@@ -223,14 +223,14 @@ pub fn set_oled(on: bool) {
     OLED.store(on, Ordering::Relaxed);
 }
 
-/// See-through window of the dark theme, with the desktop blurred behind it.
+/// See-through window, with the desktop blurred behind it.
 pub fn set_blur(on: bool) {
     BLUR.store(on, Ordering::Relaxed);
 }
 
 /// Whether the window shows the blurred desktop behind it.
 pub fn blurred() -> bool {
-    BLUR.load(Ordering::Relaxed) && is_dark()
+    BLUR.load(Ordering::Relaxed)
 }
 
 /// Draw icons and status dots without color, and the accent in gray (the gray theme).
@@ -295,7 +295,7 @@ pub fn bg() -> u32 {
 /// The fill of the window itself: the background, tinted over the desktop when blurred.
 pub fn backdrop() -> Hsla {
     if blurred() {
-        with_alpha(bg(), 0.6)
+        with_alpha(bg(), if is_dark() { 0.6 } else { 0.7 })
     } else {
         c(bg())
     }
@@ -544,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn blur_tints_only_the_window_of_the_dark_theme() {
+    fn blur_tints_only_the_window() {
         let _g = crate::testing::GLOBALS
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
@@ -555,10 +555,12 @@ mod tests {
         assert_eq!(bg_fill().a, 0.);
         assert_eq!(bg(), DARK.bg);
         set_look(Appearance::Light, Contrast::Standard);
-        assert!(!blurred());
+        assert_eq!(backdrop().a, 0.7);
+        assert_eq!(bg_fill().a, 0.);
+        assert_eq!(bg(), LIGHT.bg);
+        set_blur(false);
         assert_eq!(backdrop(), c(LIGHT.bg));
         assert_eq!(bg_fill(), c(LIGHT.bg));
-        set_blur(false);
         set_look(Appearance::System, Contrast::System);
     }
 

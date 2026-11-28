@@ -68,7 +68,7 @@ pub struct Settings {
     pub window_controls: Option<WindowControls>,
     /// Pure black window and terminal background for OLED screens.
     pub oled_black: Option<bool>,
-    /// See-through dark window with the desktop blurred behind it.
+    /// See-through window with the desktop blurred behind it.
     pub blur: Option<bool>,
     /// Show each saved host's operating system logo on its card, found when connecting.
     pub show_os_logos: Option<bool>,
