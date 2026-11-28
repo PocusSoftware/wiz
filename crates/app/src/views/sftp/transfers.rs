@@ -205,6 +205,7 @@ impl SftpView {
             }),
             via_rsync: Arc::new(AtomicBool::new(false)),
         });
+        self.tick_while_busy(cx);
         self.pump(cx);
     }
 

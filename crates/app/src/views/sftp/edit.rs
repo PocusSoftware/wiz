@@ -95,6 +95,7 @@ impl SftpView {
             state: EState::Downloading,
             synced_at: None,
         });
+        self.tick_while_busy(cx);
         cx.notify();
         cx.spawn(async move |this, cx| {
             let r = runtime::spawn(async move {

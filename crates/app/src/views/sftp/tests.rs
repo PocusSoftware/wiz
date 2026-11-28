@@ -366,6 +366,18 @@ fn a_failed_operation_keeps_its_error_after_the_reload(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn an_idle_tab_stops_ticking(cx: &mut TestAppContext) {
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    assert!(!view.read_with(cx, |v, _| v.ticking));
+    view.update(cx, SftpView::tick_while_busy);
+    assert!(view.read_with(cx, |v, _| v.ticking));
+    cx.executor().advance_clock(Duration::from_millis(600));
+    cx.run_until_parked();
+    assert!(!view.read_with(cx, |v, _| v.ticking));
+}
+
+#[gpui::test]
 fn mouse_buttons_go_back_and_forward_in_history(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let dir = tempfile::tempdir().unwrap();

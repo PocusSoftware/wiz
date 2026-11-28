@@ -355,6 +355,8 @@ pub struct SftpView {
     next_id: u64,
     edits: Vec<Edit>,
     split: f32,
+    /// Whether the half-second ticker is running.
+    ticking: bool,
 }
 
 struct SplitDrag;
@@ -453,7 +455,7 @@ impl SftpView {
         hosts: Vec<(String, String)>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let this = Self {
+        Self {
             left: Pane::new(left, cx),
             right: Pane::new(right, cx),
             hosts,
@@ -466,43 +468,50 @@ impl SftpView {
             next_id: 1,
             edits: vec![],
             split: 0.5,
-        };
-        // Speed and auto-dismiss ticker.
+            ticking: false,
+        }
+    }
+
+    /// Update transfer speeds, drop finished transfers and watch edited files, every half
+    /// second while there are any. It stops once both lists are empty, so an idle tab never
+    /// wakes up.
+    pub(super) fn tick_while_busy(&mut self, cx: &mut Context<Self>) {
+        if self.ticking {
+            return;
+        }
+        self.ticking = true;
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(500))
                     .await;
-                let alive = this
-                    .update(cx, |t, cx| {
-                        let now = Instant::now();
-                        let before = t.transfers.len();
-                        for tr in t.transfers.iter_mut() {
-                            if matches!(tr.state, TState::Running) {
-                                let done = tr.progress.done.load(Ordering::Relaxed);
-                                tr.speed = (done - tr.last_done) as f64 * 2.0;
-                                tr.last_done = done;
-                            }
+                let busy = this.update(cx, |t, cx| {
+                    let now = Instant::now();
+                    let before = t.transfers.len();
+                    for tr in t.transfers.iter_mut() {
+                        if matches!(tr.state, TState::Running) {
+                            let done = tr.progress.done.load(Ordering::Relaxed);
+                            tr.speed = (done - tr.last_done) as f64 * 2.0;
+                            tr.last_done = done;
                         }
-                        t.transfers.retain(|tr| match (&tr.state, tr.finished) {
-                            (TState::Done, Some(f)) => {
-                                now.duration_since(f) < Duration::from_secs(6)
-                            }
-                            _ => true,
-                        });
-                        t.poll_edits(cx);
-                        if !t.transfers.is_empty() || before != t.transfers.len() {
-                            cx.notify();
-                        }
-                    })
-                    .is_ok();
-                if !alive {
+                    }
+                    t.transfers.retain(|tr| match (&tr.state, tr.finished) {
+                        (TState::Done, Some(f)) => now.duration_since(f) < Duration::from_secs(6),
+                        _ => true,
+                    });
+                    t.poll_edits(cx);
+                    if !t.transfers.is_empty() || before != t.transfers.len() {
+                        cx.notify();
+                    }
+                    t.ticking = !t.transfers.is_empty() || !t.edits.is_empty();
+                    t.ticking
+                });
+                if !busy.unwrap_or(false) {
                     break;
                 }
             }
         })
         .detach();
-        this
     }
 
     /// Start browsing both panes at their home directories.

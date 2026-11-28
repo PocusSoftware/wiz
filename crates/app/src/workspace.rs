@@ -346,8 +346,22 @@ impl Workspace {
         read_system_look(window);
         cx.observe_window_appearance(window, |_, window, _| read_system_look(window))
             .detach();
-        cx.observe_window_activation(window, |_, window, _| read_system_look(window))
-            .detach();
+        cx.observe_window_activation(window, |this, window, cx| {
+            read_system_look(window);
+            this.set_views_active(window.is_window_active(), cx);
+        })
+        .detach();
+    }
+
+    /// Docker and log tabs poll only while the window is in front.
+    fn set_views_active(&self, active: bool, cx: &mut App) {
+        for tab in &self.tabs {
+            match &tab.kind {
+                TabKind::Docker(v) => v.update(cx, |v, cx| v.set_active(active, cx)),
+                TabKind::Logs(v) => v.update(cx, |v, cx| v.set_active(active, cx)),
+                TabKind::Terminal(_) | TabKind::Sftp(_) => {}
+            }
+        }
     }
 
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {

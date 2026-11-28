@@ -29,6 +29,8 @@ pub struct LogView {
     id: String,
     lines: Vec<String>,
     auto: bool,
+    /// The window is in the background, so followed logs do not reload.
+    paused: bool,
     error: Option<SharedString>,
     scroll: UniformListScrollHandle,
     focus: FocusHandle,
@@ -101,6 +103,7 @@ impl LogView {
             id,
             lines: vec![],
             auto: true,
+            paused: false,
             error: None,
             scroll: UniformListScrollHandle::new(),
             // Reachable with Tab.
@@ -114,12 +117,12 @@ impl LogView {
         this.refresh(cx);
         cx.spawn(async move |this, cx| {
             loop {
-                let secs = crate::prefs::get().log_refresh_secs().max(1) as u64;
+                let secs = crate::prefs::get().log_poll_secs() as u64;
                 cx.background_executor()
                     .timer(Duration::from_secs(secs))
                     .await;
                 if this
-                    .update(cx, |t, cx| t.auto.then(|| t.refresh(cx)))
+                    .update(cx, |t, cx| (t.auto && !t.paused).then(|| t.refresh(cx)))
                     .is_err()
                 {
                     break;
@@ -128,6 +131,14 @@ impl LogView {
         })
         .detach();
         this
+    }
+
+    /// Reload only while the window is in front, and catch up as soon as it is again.
+    pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
+        if active && self.paused && self.auto {
+            self.refresh(cx);
+        }
+        self.paused = !active;
     }
 
     fn refresh(&self, cx: &mut Context<Self>) {

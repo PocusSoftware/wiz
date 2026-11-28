@@ -35,6 +35,8 @@ pub struct DockerView {
     confirm_remove: Option<String>,
     error: Option<SharedString>,
     loaded: bool,
+    /// The window is in the background, so the list does not reload.
+    paused: bool,
 }
 
 impl DockerView {
@@ -52,21 +54,33 @@ impl DockerView {
             confirm_remove: None,
             error: None,
             loaded: false,
+            paused: false,
         };
         this.refresh(cx);
         cx.spawn(async move |this, cx| {
             loop {
-                let secs = crate::prefs::get().docker_refresh_secs().max(1) as u64;
+                let secs = crate::prefs::get().docker_poll_secs() as u64;
                 cx.background_executor()
                     .timer(Duration::from_secs(secs))
                     .await;
-                if this.update(cx, |t, cx| t.refresh(cx)).is_err() {
+                if this
+                    .update(cx, |t, cx| (!t.paused).then(|| t.refresh(cx)))
+                    .is_err()
+                {
                     break;
                 }
             }
         })
         .detach();
         this
+    }
+
+    /// Reload only while the window is in front, and catch up as soon as it is again.
+    pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
+        if active && self.paused {
+            self.refresh(cx);
+        }
+        self.paused = !active;
     }
 
     fn refresh(&self, cx: &mut Context<Self>) {
