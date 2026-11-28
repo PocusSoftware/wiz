@@ -321,10 +321,19 @@ impl Workspace {
                         if n == 1 { "it" } else { "them" },
                     )))
                     .child(
-                        div().flex().justify_end().gap_2().child(
-                            primary_button("quit-ok", "OK")
-                                .on_click(cx.listener(|t, _, w, cx| t.dismiss_quit_notice(w, cx))),
-                        ),
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(
+                                button("quit-all", "Close all and quit")
+                                    .on_click(cx.listener(|t, _, _, cx| t.close_all_and_quit(cx))),
+                            )
+                            .child(
+                                primary_button("quit-ok", "OK").on_click(
+                                    cx.listener(|t, _, w, cx| t.dismiss_quit_notice(w, cx)),
+                                ),
+                            ),
                     )
                     .into_any_element(),
                 Some(Box::new(

@@ -186,6 +186,31 @@ fn snippets_need_a_terminal_in_front(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn close_all_ends_the_sessions_that_block_quitting(cx: &mut TestAppContext) {
+    let _g = setup();
+    if !docker() {
+        eprintln!("skipped (set WIZ_DOCKER_TESTS=1)");
+        return;
+    }
+    let (root, cx) = open_root(cx);
+    cx.dispatch_action(QuickConnect);
+    type_text(cx, "tester@127.0.0.1:2222");
+    cx.simulate_keystrokes("tab");
+    type_text(cx, "hunter2");
+    cx.simulate_keystrokes("enter");
+    wait(cx, &root, "the quick connect shell", |r, _| {
+        term(r).is_some()
+    });
+    root.update_in(cx, Workspace::request_quit);
+    assert_eq!(root.read_with(cx, |r, _| r.quit_notice), Some(1));
+    root.update(cx, Workspace::close_all_and_quit);
+    root.update(cx, |r, cx| {
+        assert!(r.quit_notice.is_none() && r.tabs.is_empty());
+        assert_eq!(r.open_sessions(cx), 0);
+    });
+}
+
+#[gpui::test]
 fn quick_connect_opens_shell_then_split_grid(cx: &mut TestAppContext) {
     let _g = setup();
     if !docker() {

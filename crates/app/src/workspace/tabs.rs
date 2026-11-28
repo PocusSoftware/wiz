@@ -177,6 +177,14 @@ impl Workspace {
         }
     }
 
+    /// Close every tab, which ends its sessions, then quit.
+    pub(super) fn close_all_and_quit(&mut self, cx: &mut Context<Self>) {
+        self.quit_notice = None;
+        self.tabs.clear();
+        self.active = 0;
+        cx.quit();
+    }
+
     pub(super) fn dismiss_quit_notice(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.quit_notice = None;
         if self.page == Page::Tab {
