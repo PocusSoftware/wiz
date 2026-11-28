@@ -59,7 +59,11 @@ impl PaneView {
             PaneView::Shell(p) => p.view.clone().into_any_element(),
             PaneView::View(t) => match &t.kind {
                 TabKind::Terminal(_) => div().into_any_element(),
-                TabKind::Docker(v) => v.clone().into_any_element(),
+                TabKind::Docker(v) => div()
+                    .size_full()
+                    .track_focus(&t.focus)
+                    .child(v.clone())
+                    .into_any_element(),
                 TabKind::Sftp(v) => v.clone().into_any_element(),
                 TabKind::Logs(v) => v.clone().into_any_element(),
             },

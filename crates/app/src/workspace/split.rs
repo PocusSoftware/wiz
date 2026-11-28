@@ -465,6 +465,7 @@ impl Workspace {
     ) -> Div {
         let title = p.title(cx);
         let focus = p.focus_handle(cx);
+        let body_focus = focus.clone();
         let tab = self.tabs[tab_ix].id;
         div()
             .min_w_0()
@@ -536,6 +537,12 @@ impl Workspace {
                     .min_h_0()
                     // Dim the panes that don't have the keyboard.
                     .when(!focused, |d| d.opacity(0.6))
+                    .capture_any_mouse_down(cx.listener(move |_, _, w, cx| {
+                        if !body_focus.contains_focused(w, cx) {
+                            w.focus(&body_focus, cx);
+                            cx.notify();
+                        }
+                    }))
                     .child(p.element()),
             )
     }

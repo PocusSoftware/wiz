@@ -647,6 +647,31 @@ fn any_tabs_merge_into_a_split_and_come_apart_again(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_click_inside_a_docker_pane_focuses_it(cx: &mut TestAppContext) {
+    let _g = setup();
+    crate::prefs::update(|s| s.animations = Some(false)).unwrap();
+    let (root, cx) = open_root(cx);
+    logs_tab(&root, cx, "web");
+    root.update_in(cx, |r, w, cx| {
+        let view = cx.new(|cx| DockerView::new(Backend::Local, false, cx));
+        r.push_tab("docker".into(), TabKind::Docker(view), None, w, cx);
+    });
+    let (web, dock) = root.read_with(cx, |r, _| (r.tabs[0].id, r.tabs[1].id));
+    root.update_in(cx, |r, w, cx| r.merge_tab(dock, web, w, cx));
+    let logs = root.update(cx, |r, cx| term(r).unwrap().panes[0].focus_handle(cx));
+    cx.update(|w, cx| w.focus(&logs, cx));
+    cx.run_until_parked();
+    let pane = |cx: &mut VisualTestContext| {
+        root.update_in(cx, |r, w, cx| {
+            Workspace::focused_pane(term(r).unwrap(), w, cx)
+        })
+    };
+    assert_eq!(pane(cx), 0);
+    cx.simulate_click(gpui::point(px(1050.), px(700.)), gpui::Modifiers::none());
+    assert_eq!(pane(cx), 1);
+}
+
+#[gpui::test]
 fn a_tab_moves_into_its_own_window_and_back(cx: &mut TestAppContext) {
     let _g = setup();
     let (root, cx) = open_root(cx);
