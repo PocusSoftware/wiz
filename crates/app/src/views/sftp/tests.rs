@@ -2,6 +2,7 @@
 
 use gpui::{Modifiers, TestAppContext, point, px, size};
 
+use super::file_ops::FsOp;
 use super::transfers::{group_by_folder, self_copy_error};
 use super::*;
 
@@ -339,6 +340,29 @@ fn archives_and_other_binaries_do_not_open_in_the_editor(cx: &mut TestAppContext
             assert!(v.edits.is_empty());
         });
     }
+}
+
+#[gpui::test]
+fn a_failed_operation_keeps_its_error_after_the_reload(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let dir = folder_with(&["dup"]);
+    let (view, cx) =
+        cx.add_window_view(|_, cx| SftpView::new(Source::Local, Source::Local, vec![], cx));
+    let path = dir.path().to_string_lossy().into_owned();
+    view.update(cx, |v, cx| v.go(Side::Left, path, Nav::New, cx));
+    settle(cx, &view);
+    view.update(cx, |v, cx| {
+        v.fs_op(Side::Left, FsOp::Mkdir("dup".into()), cx)
+    });
+    for _ in 0..500 {
+        cx.run_until_parked();
+        if view.read_with(cx, |v, _| v.left.error.is_some()) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    settle(cx, &view);
+    assert!(view.read_with(cx, |v, _| v.left.error.is_some()));
 }
 
 #[gpui::test]

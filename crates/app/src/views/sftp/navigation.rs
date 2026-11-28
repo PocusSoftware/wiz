@@ -32,6 +32,9 @@ impl SftpView {
                                 Nav::Reload => {}
                             }
                         }
+                        if how != Nav::Reload || p.path != canon {
+                            p.error = None;
+                        }
                         if p.path != canon {
                             p.filter = None;
                             p.query.clear();
@@ -40,7 +43,6 @@ impl SftpView {
                         }
                         p.path = canon.clone();
                         p.raw = list;
-                        p.error = None;
                         p.selected.clear();
                         p.cursor = 0;
                         p.anchor = 0;

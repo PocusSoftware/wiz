@@ -2,7 +2,7 @@
 
 use super::*;
 
-enum FsOp {
+pub(super) enum FsOp {
     Mkdir(String),
     Rename(String, String),
     Delete(Vec<String>),
@@ -79,7 +79,8 @@ impl SftpView {
 
     // ---------- file operations ----------
 
-    fn fs_op(&mut self, side: Side, op: FsOp, cx: &mut Context<Self>) {
+    pub(super) fn fs_op(&mut self, side: Side, op: FsOp, cx: &mut Context<Self>) {
+        self.pane_mut(side).error = None;
         let source = self.pane(side).source.clone();
         let dir = self.pane(side).path.clone();
         cx.spawn(async move |this, cx| {
