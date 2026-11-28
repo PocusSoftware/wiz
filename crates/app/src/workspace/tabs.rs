@@ -295,7 +295,7 @@ impl Workspace {
                             .bg(c(accent())),
                     )
                 })
-                .bg(c(bg()))
+                .bg(bg_fill())
                 .text_color(c(if active {
                     palette().text
                 } else {
@@ -385,7 +385,7 @@ impl Workspace {
             .h(px(TITLEBAR_H))
             .flex_none()
             .flex()
-            .bg(c(bg()))
+            .bg(bg_fill())
             .border_b_1()
             .border_color(c(palette().border_variant))
             .children(lead)
@@ -606,7 +606,7 @@ impl Workspace {
             .flex()
             .map(|d| if left { d.border_r_1() } else { d.border_l_1() })
             .border_color(c(palette().border_variant))
-            .bg(c(bg()))
+            .bg(bg_fill())
             // A click here is not a click outside an open dialog.
             .occlude()
             .children(if left {

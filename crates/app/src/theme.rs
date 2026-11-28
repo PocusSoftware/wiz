@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
-use gpui::{Hsla, SharedString, rgb, rgba};
+use gpui::{Hsla, SharedString, rgb, rgba, transparent_black};
 use wiz_core::config::{Appearance, Contrast};
 
 /// 0xRRGGBB, or 0xRRGGBBAA when the value does not fit in 24 bits.
@@ -167,6 +167,7 @@ static LOOK: Mutex<Look> = Mutex::new(Look {
 });
 static PALETTE: AtomicU8 = AtomicU8::new(0);
 static OLED: AtomicBool = AtomicBool::new(false);
+static BLUR: AtomicBool = AtomicBool::new(false);
 static ACCENT: AtomicU32 = AtomicU32::new(DEFAULT_ACCENT);
 static MONOCHROME: AtomicBool = AtomicBool::new(false);
 
@@ -220,6 +221,16 @@ pub fn set_accent(rgb: u32) {
 /// those pixels off. Panels and inputs keep their grays to stay apart from it.
 pub fn set_oled(on: bool) {
     OLED.store(on, Ordering::Relaxed);
+}
+
+/// See-through window of the dark theme, with the desktop blurred behind it.
+pub fn set_blur(on: bool) {
+    BLUR.store(on, Ordering::Relaxed);
+}
+
+/// Whether the window shows the blurred desktop behind it.
+pub fn blurred() -> bool {
+    BLUR.load(Ordering::Relaxed) && is_dark()
 }
 
 /// Draw icons and status dots without color, and the accent in gray (the gray theme).
@@ -278,6 +289,25 @@ pub fn bg() -> u32 {
         0x000000
     } else {
         palette().bg
+    }
+}
+
+/// The fill of the window itself: the background, tinted over the desktop when blurred.
+pub fn backdrop() -> Hsla {
+    if blurred() {
+        with_alpha(bg(), 0.6)
+    } else {
+        c(bg())
+    }
+}
+
+/// The fill of views on the window background: none when blurred, so they show the window's
+/// tint instead of stacking their own on it.
+pub fn bg_fill() -> Hsla {
+    if blurred() {
+        transparent_black()
+    } else {
+        c(bg())
     }
 }
 
@@ -511,6 +541,25 @@ mod tests {
         assert_eq!(bg(), 0x000000);
         set_oled(false);
         assert_eq!(bg(), DARK.bg);
+    }
+
+    #[test]
+    fn blur_tints_only_the_window_of_the_dark_theme() {
+        let _g = crate::testing::GLOBALS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        set_look(Appearance::Dark, Contrast::Standard);
+        set_blur(true);
+        assert!(blurred());
+        assert_eq!(backdrop().a, 0.6);
+        assert_eq!(bg_fill().a, 0.);
+        assert_eq!(bg(), DARK.bg);
+        set_look(Appearance::Light, Contrast::Standard);
+        assert!(!blurred());
+        assert_eq!(backdrop(), c(LIGHT.bg));
+        assert_eq!(bg_fill(), c(LIGHT.bg));
+        set_blur(false);
+        set_look(Appearance::System, Contrast::System);
     }
 
     #[test]

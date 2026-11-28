@@ -490,7 +490,11 @@ impl Workspace {
                     .gap(px(6.))
                     .border_b_1()
                     .border_color(c(palette().border_variant))
-                    .bg(c(if focused { palette().panel } else { bg() }))
+                    .bg(if focused {
+                        c(palette().panel)
+                    } else {
+                        bg_fill()
+                    })
                     .text_xs()
                     .text_color(c(if focused {
                         palette().text

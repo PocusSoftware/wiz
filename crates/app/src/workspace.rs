@@ -31,7 +31,8 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, Pixels, Render, SharedString, Stateful, Window, actions, div, prelude::*, px,
+    IntoElement, Pixels, Render, SharedString, Stateful, Window, WindowBackgroundAppearance,
+    actions, div, prelude::*, px,
 };
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
@@ -288,6 +289,8 @@ pub struct Workspace {
     /// The page Settings was opened from, shown again when it closes.
     settings_from: Page,
     pending: Vec<Pending>,
+    /// Whether the window was last set to show the blurred desktop.
+    blurred: bool,
     pane_drag: Option<PaneDrag>,
     /// Where the page content (below the tab bar) was drawn last frame, and the window size
     /// then, so a resize since can be accounted for.
@@ -430,6 +433,7 @@ impl Workspace {
             settings: None,
             settings_from: Page::Home,
             pending: Vec::new(),
+            blurred: false,
             next_pending: 0,
             next_tab: 0,
             pane_drag: None,
@@ -635,6 +639,14 @@ impl Focusable for Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.hide_status_later(cx);
+        if self.blurred != blurred() {
+            self.blurred = blurred();
+            window.set_background_appearance(if self.blurred {
+                WindowBackgroundAppearance::Blurred
+            } else {
+                WindowBackgroundAppearance::Opaque
+            });
+        }
         if self.code.is_none() && !self.codes.is_empty() {
             self.show_code(window, cx);
         }
@@ -705,7 +717,7 @@ impl Render for Workspace {
             .flex()
             .font_family(ui())
             .text_size(px(12.))
-            .bg(c(bg()))
+            .bg(backdrop())
             .text_color(c(palette().text))
             .child(
                 div()

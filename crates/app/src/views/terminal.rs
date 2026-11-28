@@ -481,7 +481,7 @@ impl Render for TerminalView {
             .relative()
             .flex()
             .flex_col()
-            .bg(c(bg()))
+            .bg(bg_fill())
             .child(div().flex_1().px(px(6.)).py(px(2.)).child(grid))
             .children(search_bar)
             .when_some(notice, |d, text| {

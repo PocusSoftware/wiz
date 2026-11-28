@@ -19,7 +19,7 @@ fn settings_defaults_and_roundtrip() {
     assert!(d.secret_file_patterns().iter().any(|p| p == ".env"));
     assert_eq!(d.window_controls(), WindowControls::Right);
     assert_eq!(d.accent_color(), "#3a63ec");
-    assert!(!d.oled_black());
+    assert!(!d.oled_black() && !d.blur());
     assert!(!d.show_latency() && d.show_split_button() && d.show_privacy_button());
 
     let s = Settings {

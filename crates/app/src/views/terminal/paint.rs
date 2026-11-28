@@ -199,7 +199,7 @@ pub(super) fn paint_grid(
         cursor_pt,
         cursor_visible,
     } = snap;
-    window.paint_quad(fill(bounds, c(bg())));
+    window.paint_quad(fill(bounds, bg_fill()));
     let ts = window.text_system().clone();
     let fs = px(mono_size());
 

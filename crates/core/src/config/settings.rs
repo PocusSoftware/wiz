@@ -68,6 +68,8 @@ pub struct Settings {
     pub window_controls: Option<WindowControls>,
     /// Pure black window and terminal background for OLED screens.
     pub oled_black: Option<bool>,
+    /// See-through dark window with the desktop blurred behind it.
+    pub blur: Option<bool>,
     /// Show each saved host's operating system logo on its card, found when connecting.
     pub show_os_logos: Option<bool>,
     /// The setting `colorful` replaced (inverted). Only read, to carry it over.
@@ -161,6 +163,7 @@ getters! {
     accent_color: String = "#3a63ec".into();
     window_controls: WindowControls = WindowControls::Right;
     oled_black: bool = false;
+    blur: bool = false;
     show_os_logos: bool = true;
     show_latency: bool = false;
     show_split_button: bool = true;
