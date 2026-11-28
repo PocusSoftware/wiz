@@ -100,7 +100,10 @@ impl SftpView {
         cx.spawn(async move |this, cx| {
             let r = runtime::spawn(async move {
                 tokio::fs::create_dir_all(&task_dir).await?;
-                let r = remote.sftp.download(&path, &local, &Progress::new()).await;
+                let r = remote
+                    .sftp
+                    .download(&[(path, local)], &Progress::new())
+                    .await;
                 if r.is_err() {
                     // Never leave a partial file around that could be uploaded.
                     let _ = tokio::fs::remove_dir_all(&task_dir).await;
@@ -162,11 +165,10 @@ impl SftpView {
         let (remote, path, local) = (e.remote.clone(), e.remote_path.clone(), e.local.clone());
         cx.notify();
         cx.spawn(async move |this, cx| {
-            let r =
-                runtime::spawn(
-                    async move { remote.sftp.upload(&local, &path, &Progress::new()).await },
-                )
-                .await;
+            let r = runtime::spawn(async move {
+                remote.sftp.upload(&[(local, path)], &Progress::new()).await
+            })
+            .await;
             this.update(cx, |t, cx| {
                 if let Some(e) = t.edits.iter_mut().find(|e| e.id == id) {
                     match r {

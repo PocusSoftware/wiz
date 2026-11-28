@@ -300,29 +300,33 @@ impl SftpView {
                             .await;
                     }
                 }
-                for n in names {
-                    let (sp, dp) = (from_src.join(&src_dir, &n), to_src.join(&dst_dir, &n));
-                    match (&from_src, &to_src) {
-                        (Source::Local, Source::Remote(r)) => {
-                            r.sftp.upload(&PathBuf::from(&sp), &dp, &progress).await?
-                        }
-                        (Source::Remote(r), Source::Local) => {
-                            r.sftp.download(&sp, &PathBuf::from(&dp), &progress).await?
-                        }
-                        (Source::Remote(a), Source::Remote(b)) => {
-                            a.sftp.copy_to(&sp, &b.sftp, &dp, &progress).await?
-                        }
-                        (Source::Local, Source::Local) => {
-                            let p = progress.clone();
-                            tokio::task::spawn_blocking(move || {
-                                local::copy(&PathBuf::from(sp), &PathBuf::from(dp), &p)
+                let pairs = names
+                    .iter()
+                    .map(|n| (from_src.join(&src_dir, n), to_src.join(&dst_dir, n)));
+                match (&from_src, &to_src) {
+                    (Source::Local, Source::Remote(r)) => {
+                        let items: Vec<_> = pairs.map(|(sp, dp)| (PathBuf::from(sp), dp)).collect();
+                        r.sftp.upload(&items, &progress).await
+                    }
+                    (Source::Remote(r), Source::Local) => {
+                        let items: Vec<_> = pairs.map(|(sp, dp)| (sp, PathBuf::from(dp))).collect();
+                        r.sftp.download(&items, &progress).await
+                    }
+                    (Source::Remote(a), Source::Remote(b)) => {
+                        let items: Vec<_> = pairs.collect();
+                        a.sftp.copy_to(&items, &b.sftp, &progress).await
+                    }
+                    (Source::Local, Source::Local) => {
+                        let items: Vec<_> = pairs.collect();
+                        tokio::task::spawn_blocking(move || {
+                            items.iter().try_for_each(|(sp, dp)| {
+                                local::copy(&PathBuf::from(sp), &PathBuf::from(dp), &progress)
                             })
-                            .await
-                            .map_err(|e| wiz_core::Error::Sftp(e.to_string()))??;
-                        }
+                        })
+                        .await
+                        .map_err(|e| wiz_core::Error::Sftp(e.to_string()))?
                     }
                 }
-                Ok::<_, wiz_core::Error>(())
             })
             .await;
             this.update(cx, |t, cx| {

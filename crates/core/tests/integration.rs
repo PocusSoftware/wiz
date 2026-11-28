@@ -447,7 +447,9 @@ async fn sftp_roundtrip_rename_remove_cancel() {
 
     let up = Progress::new();
     let remote_tree = sftp::join(&base, "tree");
-    sftp.upload(&tree, &remote_tree, &up).await.unwrap();
+    sftp.upload(&[(tree.clone(), remote_tree.clone())], &up)
+        .await
+        .unwrap();
     assert_eq!(
         up.done.load(std::sync::atomic::Ordering::Relaxed),
         5 + 300_000 + 4
@@ -463,7 +465,7 @@ async fn sftp_roundtrip_rename_remove_cancel() {
     assert_eq!(listing[1].size, 5);
 
     let back = src.path().join("back");
-    sftp.download(&remote_tree, &back, &Progress::new())
+    sftp.download(&[(remote_tree.clone(), back.clone())], &Progress::new())
         .await
         .unwrap();
     assert_eq!(std::fs::read(back.join("sub/b.bin")).unwrap(), blob);
@@ -483,9 +485,32 @@ async fn sftp_roundtrip_rename_remove_cancel() {
     std::fs::write(&big, vec![7u8; 8_000_000]).unwrap();
     let p = Progress::new();
     p.cancel();
-    let r = sftp.upload(&big, &sftp::join(&base, "big.bin"), &p).await;
+    let r = sftp
+        .upload(&[(big, sftp::join(&base, "big.bin"))], &p)
+        .await;
     assert!(matches!(r, Err(Error::Cancelled)), "{r:?}");
     assert!(!sftp.exists(&sftp::join(&base, "big.bin")).await.unwrap());
+
+    // cancel with several files in flight leaves none of them half written
+    let many = src.path().join("many");
+    std::fs::create_dir(&many).unwrap();
+    for i in 0..8 {
+        std::fs::write(many.join(format!("f{i}")), vec![1u8; 2_000_000]).unwrap();
+    }
+    let p = Progress::new();
+    p.limit
+        .store(4_000_000, std::sync::atomic::Ordering::Relaxed);
+    let stop = p.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+    let remote_many = sftp::join(&base, "many");
+    let r = sftp.upload(&[(many, remote_many.clone())], &p).await;
+    assert!(matches!(r, Err(Error::Cancelled)), "{r:?}");
+    for ent in sftp.list(&remote_many).await.unwrap() {
+        assert_eq!(ent.size, 2_000_000, "{} is half written", ent.name);
+    }
 
     // recursive remove
     sftp.remove(&base).await.unwrap();
@@ -534,20 +559,24 @@ async fn sftp_server_to_server_and_local_copy() {
     let blob: Vec<u8> = (0..400_000u32).map(|i| (i % 253) as u8).collect();
     std::fs::write(tree.join("x/big.bin"), &blob).unwrap();
     std::fs::write(tree.join("x/y/small.txt"), "tiny").unwrap();
-    sa.upload(&tree, &sftp::join(root_a, "t"), &Progress::new())
+    sa.upload(&[(tree, sftp::join(root_a, "t"))], &Progress::new())
         .await
         .unwrap();
 
     let p = Progress::new();
-    sa.copy_to(&sftp::join(root_a, "t"), &sb, &sftp::join(root_b, "t"), &p)
-        .await
-        .unwrap();
+    sa.copy_to(
+        &[(sftp::join(root_a, "t"), sftp::join(root_b, "t"))],
+        &sb,
+        &p,
+    )
+    .await
+    .unwrap();
     assert_eq!(p.files.load(std::sync::atomic::Ordering::Relaxed), 2);
     assert_eq!(p.done.load(std::sync::atomic::Ordering::Relaxed), 400_004);
 
     // Verify on B by downloading.
     let back = src.path().join("back");
-    sb.download(&sftp::join(root_b, "t"), &back, &Progress::new())
+    sb.download(&[(sftp::join(root_b, "t"), back.clone())], &Progress::new())
         .await
         .unwrap();
     assert_eq!(std::fs::read(back.join("x/big.bin")).unwrap(), blob);
@@ -626,7 +655,7 @@ async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
     // Remote -> local: the loop link is skipped, the file link is followed, totals match.
     let local = tempfile::tempdir().unwrap();
     let p = Progress::new();
-    sftp.download(&sftp::join(base, "t"), &local.path().join("t"), &p)
+    sftp.download(&[(sftp::join(base, "t"), local.path().join("t"))], &p)
         .await
         .unwrap();
     assert_eq!(
@@ -643,9 +672,8 @@ async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
     let sftp2 = c.open_sftp().await.unwrap();
     let p = Progress::new();
     sftp.copy_to(
-        &sftp::join(base, "t"),
+        &[(sftp::join(base, "t"), sftp::join(base, "t-copy"))],
         &sftp2,
-        &sftp::join(base, "t-copy"),
         &p,
     )
     .await
@@ -664,7 +692,7 @@ async fn sftp_symlink_loops_terminate_and_progress_is_exact() {
     std::fs::write(src.path().join("a/f"), "x").unwrap();
     std::os::unix::fs::symlink(src.path(), src.path().join("a/loop")).unwrap();
     let p = Progress::new();
-    sftp.upload(&src.path().join("a"), &sftp::join(base, "up-a"), &p)
+    sftp.upload(&[(src.path().join("a"), sftp::join(base, "up-a"))], &p)
         .await
         .unwrap();
     assert_eq!(p.done.load(Relaxed), p.total.load(Relaxed));

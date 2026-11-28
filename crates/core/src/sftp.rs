@@ -300,176 +300,253 @@ impl Sftp {
         Ok((total, files))
     }
 
-    /// Download `remote` (file or directory) to the exact local path `dest`.
-    pub async fn download(&self, remote: &str, dest: &Path, progress: &Progress) -> Result<()> {
-        let (total, files) = self.remote_size(remote).await?;
-        progress.add_totals(total, files);
-        self.download_inner(remote, dest, progress).await
+    /// Download each `(remote, dest)` (file or directory) to the exact local path `dest`.
+    pub async fn download(&self, items: &[(String, PathBuf)], progress: &Progress) -> Result<()> {
+        let mut files = Vec::new();
+        for (remote, dest) in items {
+            let (total, count) = self.remote_size(remote).await?;
+            progress.add_totals(total, count);
+            self.download_walk(remote, dest, progress, &mut files)
+                .await?;
+        }
+        copy_files(files, progress, |(remote, dest)| async move {
+            self.download_file(&remote, &dest, progress).await
+        })
+        .await
     }
 
-    fn download_inner<'a>(
+    /// Create the local folders under `remote` and list the files to download.
+    fn download_walk<'a>(
         &'a self,
         remote: &'a str,
         dest: &'a Path,
         progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        files: &'a mut Vec<(String, PathBuf)>,
+    ) -> Walk<'a> {
         Box::pin(async move {
             progress.check()?;
-            let md = self.inner.metadata(remote).await.map_err(e)?;
-            if md.is_dir() {
-                tokio::fs::create_dir_all(dest).await?;
-                for ent in self.list(remote).await? {
-                    if ent.is_dir && ent.is_symlink {
-                        continue; // never follow directory links: they can loop
-                    }
-                    self.download_inner(&join(remote, &ent.name), &dest.join(&ent.name), progress)
-                        .await?;
-                }
+            if !self.inner.metadata(remote).await.map_err(e)?.is_dir() {
+                files.push((remote.to_string(), dest.to_path_buf()));
                 return Ok(());
             }
-            progress.set_current(remote.rsplit('/').next().unwrap_or(remote));
-            let mut src = self.inner.open(remote).await.map_err(e)?;
-            let mut out = tokio::fs::File::create(dest).await?;
-            let mut buf = vec![0u8; CHUNK];
-            loop {
-                if let Err(err) = progress.check() {
-                    drop(out);
-                    let _ = tokio::fs::remove_file(dest).await;
-                    return Err(err);
+            tokio::fs::create_dir_all(dest).await?;
+            for ent in self.list(remote).await? {
+                if ent.is_dir && ent.is_symlink {
+                    continue; // never follow directory links: they can loop
                 }
-                progress.wait_resume().await;
-                let n = src.read(&mut buf).await?;
-                if n == 0 {
-                    break;
-                }
-                out.write_all(&buf[..n]).await?;
-                progress.done.fetch_add(n as u64, Ordering::Relaxed);
-                tokio::time::sleep(progress.pace(n as u64)).await;
+                let (src, dst) = (join(remote, &ent.name), dest.join(&ent.name));
+                self.download_walk(&src, &dst, progress, files).await?;
             }
-            out.flush().await?;
             Ok(())
         })
     }
 
-    /// Copy `src` on this server to `dest` on another one, streaming chunk by chunk
-    /// through this process (no temporary file). Works for files and directories.
+    async fn download_file(&self, remote: &str, dest: &Path, progress: &Progress) -> Result<()> {
+        progress.set_current(remote.rsplit('/').next().unwrap_or(remote));
+        let mut src = self.inner.open(remote).await.map_err(e)?;
+        let mut out = tokio::fs::File::create(dest).await?;
+        let mut buf = vec![0u8; CHUNK];
+        loop {
+            if let Err(err) = progress.check() {
+                drop(out);
+                let _ = tokio::fs::remove_file(dest).await;
+                return Err(err);
+            }
+            progress.wait_resume().await;
+            let n = src.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).await?;
+            progress.done.fetch_add(n as u64, Ordering::Relaxed);
+            tokio::time::sleep(progress.pace(n as u64)).await;
+        }
+        out.flush().await?;
+        Ok(())
+    }
+
+    /// Copy each `(src, dest)` on this server to `dest` on another one, streaming chunk by
+    /// chunk through this process (no temporary file). Works for files and directories.
     pub async fn copy_to(
+        &self,
+        items: &[(String, String)],
+        other: &Sftp,
+        progress: &Progress,
+    ) -> Result<()> {
+        let mut files = Vec::new();
+        for (src, dest) in items {
+            let (total, count) = self.remote_size(src).await?;
+            progress.add_totals(total, count);
+            self.copy_walk(src, other, dest, progress, &mut files)
+                .await?;
+        }
+        copy_files(files, progress, |(src, dest)| async move {
+            self.copy_file(&src, other, &dest, progress).await
+        })
+        .await
+    }
+
+    /// Create the folders under `src` on `other` and list the files to copy.
+    fn copy_walk<'a>(
+        &'a self,
+        src: &'a str,
+        other: &'a Sftp,
+        dest: &'a str,
+        progress: &'a Progress,
+        files: &'a mut Vec<(String, String)>,
+    ) -> Walk<'a> {
+        Box::pin(async move {
+            progress.check()?;
+            if !self.inner.metadata(src).await.map_err(e)?.is_dir() {
+                files.push((src.to_string(), dest.to_string()));
+                return Ok(());
+            }
+            if !other.exists(dest).await? {
+                other.mkdir(dest).await?;
+            }
+            for ent in self.list(src).await? {
+                if ent.is_dir && ent.is_symlink {
+                    continue;
+                }
+                let (from, to) = (join(src, &ent.name), join(dest, &ent.name));
+                self.copy_walk(&from, other, &to, progress, files).await?;
+            }
+            Ok(())
+        })
+    }
+
+    async fn copy_file(
         &self,
         src: &str,
         other: &Sftp,
         dest: &str,
         progress: &Progress,
     ) -> Result<()> {
-        let (total, files) = self.remote_size(src).await?;
-        progress.add_totals(total, files);
-        self.copy_inner(src, other, dest, progress).await
+        progress.set_current(src.rsplit('/').next().unwrap_or(src));
+        let mut input = self.inner.open(src).await.map_err(e)?;
+        let mut out = other.inner.create(dest).await.map_err(e)?;
+        let mut buf = vec![0u8; CHUNK];
+        loop {
+            if let Err(err) = progress.check() {
+                drop(out);
+                let _ = other.inner.remove_file(dest).await;
+                return Err(err);
+            }
+            progress.wait_resume().await;
+            let n = input.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).await?;
+            progress.done.fetch_add(n as u64, Ordering::Relaxed);
+            tokio::time::sleep(progress.pace(n as u64)).await;
+        }
+        out.shutdown().await?;
+        Ok(())
     }
 
-    fn copy_inner<'a>(
-        &'a self,
-        src: &'a str,
-        other: &'a Sftp,
-        dest: &'a str,
-        progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
-        Box::pin(async move {
-            progress.check()?;
-            let md = self.inner.metadata(src).await.map_err(e)?;
-            if md.is_dir() {
-                if !other.exists(dest).await? {
-                    other.mkdir(dest).await?;
-                }
-                for ent in self.list(src).await? {
-                    if ent.is_dir && ent.is_symlink {
-                        continue;
-                    }
-                    self.copy_inner(
-                        &join(src, &ent.name),
-                        other,
-                        &join(dest, &ent.name),
-                        progress,
-                    )
-                    .await?;
-                }
-                return Ok(());
-            }
-            progress.set_current(src.rsplit('/').next().unwrap_or(src));
-            let mut input = self.inner.open(src).await.map_err(e)?;
-            let mut out = other.inner.create(dest).await.map_err(e)?;
-            let mut buf = vec![0u8; CHUNK];
-            loop {
-                if let Err(err) = progress.check() {
-                    drop(out);
-                    let _ = other.inner.remove_file(dest).await;
-                    return Err(err);
-                }
-                progress.wait_resume().await;
-                let n = input.read(&mut buf).await?;
-                if n == 0 {
-                    break;
-                }
-                out.write_all(&buf[..n]).await?;
-                progress.done.fetch_add(n as u64, Ordering::Relaxed);
-                tokio::time::sleep(progress.pace(n as u64)).await;
-            }
-            out.shutdown().await?;
-            Ok(())
+    /// Upload each `(local, dest)` (file or directory) to the exact remote path `dest`.
+    pub async fn upload(&self, items: &[(PathBuf, String)], progress: &Progress) -> Result<()> {
+        let mut files = Vec::new();
+        for (local, dest) in items {
+            let (total, count) = local_size(local)?;
+            progress.add_totals(total, count);
+            self.upload_walk(local, dest, progress, &mut files).await?;
+        }
+        copy_files(files, progress, |(local, dest)| async move {
+            self.upload_file(&local, &dest, progress).await
         })
+        .await
     }
 
-    /// Upload `local` (file or directory) to the exact remote path `dest`.
-    pub async fn upload(&self, local: &Path, dest: &str, progress: &Progress) -> Result<()> {
-        let (total, files) = local_size(local)?;
-        progress.add_totals(total, files);
-        self.upload_inner(local, dest, progress).await
-    }
-
-    fn upload_inner<'a>(
+    /// Create the remote folders under `local` and list the files to upload.
+    fn upload_walk<'a>(
         &'a self,
         local: &'a Path,
         dest: &'a str,
         progress: &'a Progress,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        files: &'a mut Vec<(PathBuf, String)>,
+    ) -> Walk<'a> {
         Box::pin(async move {
             progress.check()?;
-            let md = tokio::fs::metadata(local).await?;
-            if md.is_dir() {
-                if !self.exists(dest).await? {
-                    self.mkdir(dest).await?;
-                }
-                let mut rd = tokio::fs::read_dir(local).await?;
-                while let Some(ent) = rd.next_entry().await? {
-                    if is_dir_link(&ent.path()) {
-                        continue;
-                    }
-                    let name = ent.file_name().to_string_lossy().into_owned();
-                    self.upload_inner(&ent.path(), &join(dest, &name), progress)
-                        .await?;
-                }
+            if !tokio::fs::metadata(local).await?.is_dir() {
+                files.push((local.to_path_buf(), dest.to_string()));
                 return Ok(());
             }
-            progress.set_current(&local.file_name().unwrap_or_default().to_string_lossy());
-            let mut src = tokio::fs::File::open(local).await?;
-            let mut out = self.inner.create(dest).await.map_err(e)?;
-            let mut buf = vec![0u8; CHUNK];
-            loop {
-                if let Err(err) = progress.check() {
-                    drop(out);
-                    let _ = self.inner.remove_file(dest).await;
-                    return Err(err);
-                }
-                progress.wait_resume().await;
-                let n = src.read(&mut buf).await?;
-                if n == 0 {
-                    break;
-                }
-                out.write_all(&buf[..n]).await?;
-                progress.done.fetch_add(n as u64, Ordering::Relaxed);
-                tokio::time::sleep(progress.pace(n as u64)).await;
+            if !self.exists(dest).await? {
+                self.mkdir(dest).await?;
             }
-            out.shutdown().await?;
+            let mut rd = tokio::fs::read_dir(local).await?;
+            while let Some(ent) = rd.next_entry().await? {
+                if is_dir_link(&ent.path()) {
+                    continue;
+                }
+                let name = ent.file_name().to_string_lossy().into_owned();
+                self.upload_walk(&ent.path(), &join(dest, &name), progress, files)
+                    .await?;
+            }
             Ok(())
         })
+    }
+
+    async fn upload_file(&self, local: &Path, dest: &str, progress: &Progress) -> Result<()> {
+        progress.set_current(&local.file_name().unwrap_or_default().to_string_lossy());
+        let mut src = tokio::fs::File::open(local).await?;
+        let mut out = self.inner.create(dest).await.map_err(e)?;
+        let mut buf = vec![0u8; CHUNK];
+        loop {
+            if let Err(err) = progress.check() {
+                drop(out);
+                let _ = self.inner.remove_file(dest).await;
+                return Err(err);
+            }
+            progress.wait_resume().await;
+            let n = src.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).await?;
+            progress.done.fetch_add(n as u64, Ordering::Relaxed);
+            tokio::time::sleep(progress.pace(n as u64)).await;
+        }
+        out.shutdown().await?;
+        Ok(())
+    }
+}
+
+/// A walk over a folder tree, boxed because it recurses.
+type Walk<'a> = std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+
+/// Copy `files` four at a time with `copy`. Each SFTP chunk waits a round trip to the
+/// server, so several files in flight hide most of that wait when there are many small
+/// ones. After the first error no new file starts and the running ones are cancelled, but
+/// each still removes its own partial file. The first error other than `Cancelled` wins.
+async fn copy_files<T, F, Fut>(files: Vec<T>, progress: &Progress, copy: F) -> Result<()>
+where
+    F: Fn(T) -> Fut,
+    Fut: Future<Output = Result<()>>,
+{
+    let queue = std::sync::Mutex::new(files.into_iter());
+    let failed = std::sync::Mutex::new(None::<Error>);
+    let (queue, failed, copy) = (&queue, &failed, &copy);
+    let worker = || async move {
+        while locked(failed).is_none() {
+            let Some(file) = locked(queue).next() else {
+                return;
+            };
+            if let Err(err) = copy(file).await {
+                progress.cancel();
+                let mut first = locked(failed);
+                if !matches!(*first, Some(ref e) if !matches!(e, Error::Cancelled)) {
+                    *first = Some(err);
+                }
+            }
+        }
+    };
+    tokio::join!(worker(), worker(), worker(), worker());
+    match locked(failed).take() {
+        Some(err) => Err(err),
+        None => Ok(()),
     }
 }
 
@@ -610,6 +687,52 @@ mod tests {
         let d = p.pace(50_000);
         assert!(d > std::time::Duration::from_millis(400), "{d:?}");
         assert!(d <= std::time::Duration::from_millis(500), "{d:?}");
+    }
+
+    #[tokio::test]
+    async fn copies_four_files_at_once() {
+        let (running, most, finished) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
+        let p = Progress::new();
+        let r = copy_files((0..10).collect(), &p, |_: u32| async {
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            most.fetch_max(now, Ordering::SeqCst);
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            running.fetch_sub(1, Ordering::SeqCst);
+            finished.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .await;
+        assert!(r.is_ok());
+        assert_eq!(most.load(Ordering::SeqCst), 4);
+        assert_eq!(finished.load(Ordering::SeqCst), 10);
+    }
+
+    #[tokio::test]
+    async fn an_error_cancels_the_files_in_flight_and_starts_no_more() {
+        let (started, cleaned) = (AtomicU64::new(0), AtomicU64::new(0));
+        let p = Progress::new();
+        let r = copy_files((0..20).collect(), &p, |i: u32| {
+            let (started, cleaned, p) = (&started, &cleaned, &p);
+            async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                if i == 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    return Err(Error::Sftp("boom".into()));
+                }
+                for _ in 0..20 {
+                    if let Err(err) = p.check() {
+                        cleaned.fetch_add(1, Ordering::SeqCst);
+                        return Err(err);
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+                Ok(())
+            }
+        })
+        .await;
+        assert!(matches!(r, Err(Error::Sftp(ref m)) if m == "boom"), "{r:?}");
+        assert_eq!(started.load(Ordering::SeqCst), 4);
+        assert_eq!(cleaned.load(Ordering::SeqCst), 3);
     }
 
     #[test]
